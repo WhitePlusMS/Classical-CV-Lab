@@ -16,11 +16,13 @@ export default function FormulaWithExplanation({
   return (
     <div className="bg-blue-50 border border-blue-200 rounded-lg overflow-hidden">
       <div 
-        className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-blue-100/50 transition-colors"
+        className="flex items-start justify-between gap-3 px-3 py-2 cursor-pointer hover:bg-blue-100/50 transition-colors"
         onClick={() => setIsExpanded(!isExpanded)}
       >
-        <code className="text-sm text-blue-800 font-mono">{formula}</code>
-        <button className="text-blue-600 hover:text-blue-800">
+        <code className="flex-1 min-w-0 text-sm text-blue-800 font-mono leading-relaxed whitespace-normal break-all">
+          {formula}
+        </code>
+        <button className="text-blue-600 hover:text-blue-800 shrink-0">
           <svg 
             className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
             viewBox="0 0 24 24" 

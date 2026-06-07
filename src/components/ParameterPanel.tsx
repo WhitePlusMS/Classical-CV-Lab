@@ -30,8 +30,14 @@ export function SliderParam({
   unit = '',
 }: SliderParamProps) {
   return (
-    <div className="flex items-center gap-3">
-      <span className="text-sm font-medium text-slate-700 min-w-[80px]">{label}</span>
+    <div className="w-full min-w-0 space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm font-medium text-slate-700">{label}</span>
+        <span className="text-sm font-mono text-slate-600 tabular-nums">
+          {value}
+          {unit}
+        </span>
+      </div>
       <input
         type="range"
         min={min}
@@ -39,12 +45,8 @@ export function SliderParam({
         step={step}
         value={value}
         onChange={e => onChange(Number(e.target.value))}
-        className="w-32 h-1.5 bg-slate-200 rounded-full appearance-none cursor-pointer accent-blue-600"
+        className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-slate-200 accent-blue-600"
       />
-      <span className="text-sm font-mono text-slate-600 min-w-[50px] tabular-nums">
-        {value}
-        {unit}
-      </span>
     </div>
   );
 }
