@@ -8,13 +8,13 @@ import {
   KernelEditor,
   ImageCanvas,
 } from '@/components';
-import { convolve2D, convolve2DSteps, createKernel } from '@/lib/algorithms/convolution';
+import { convolve2D, createKernel, getConvolutionStepAt } from '@/lib/algorithms/convolution';
 import { Kernel } from '@/lib/algorithms/types';
 import {
   convolutionTeachingImages,
   ConvolutionTeachingImageType,
 } from '@/lib/utils/convolutionTeachingImages';
-import { normalizeImage } from '@/lib/utils/imageProcessing';
+import { loadImageAsGrayscale, normalizeImage } from '@/lib/utils/imageProcessing';
 
 const CONVOLUTION_CODE_TS = `function convolve2D(
   image: number[][],
@@ -45,13 +45,204 @@ const CONVOLUTION_CODE_TS = `function convolve2D(
   return result;
 }`;
 
-interface ConvStep {
-  x: number;
-  y: number;
-  inputRegion: number[][];
-  kernel: number[][];
-  outputValue: number;
+type KernelPresetFamilyKey = 'identity' | 'box' | 'gaussian' | 'laplacian' | 'sobelx' | 'sobely';
+
+interface KernelPresetFamily {
+  key: KernelPresetFamilyKey;
+  label: string;
+  supportedSizes: number[];
+  createKernel: (size: number) => number[][];
+  summary: string;
+  principle: string;
+  origin: string;
+  formulaMathML: string;
+  formulaNote: string;
+  visualTitle: string;
+  visualLabels: string[];
 }
+
+const PRESET_SMOOTHING_SIZES = [3, 5, 7, 9, 11];
+const PRESET_DERIVATIVE_SIZES = [3, 5, 7];
+
+function buildInlineMathML(texLikeBody: string): string {
+  return `<math xmlns="http://www.w3.org/1998/Math/MathML">${texLikeBody}</math>`;
+}
+
+function buildPascalRow(order: number): number[] {
+  const row = [1];
+  for (let i = 0; i < order; i++) {
+    row.unshift(0);
+    for (let j = 0; j < row.length - 1; j++) {
+      row[j] = row[j] + row[j + 1];
+    }
+  }
+  return row;
+}
+
+function convolve1D(signal: number[], kernel: number[]): number[] {
+  const result = Array.from({ length: signal.length + kernel.length - 1 }, () => 0);
+  for (let i = 0; i < signal.length; i++) {
+    for (let j = 0; j < kernel.length; j++) {
+      result[i + j] += signal[i] * kernel[j];
+    }
+  }
+  return result;
+}
+
+function outerProduct(row: number[], column: number[]): number[][] {
+  return column.map(columnValue => row.map(rowValue => rowValue * columnValue));
+}
+
+function sumMatrices(a: number[][], b: number[][]): number[][] {
+  return a.map((row, y) => row.map((value, x) => value + b[y][x]));
+}
+
+function createIdentityKernel(size: number): number[][] {
+  const kernel = Array.from({ length: size }, () => Array.from({ length: size }, () => 0));
+  kernel[Math.floor(size / 2)][Math.floor(size / 2)] = 1;
+  return kernel;
+}
+
+function createBoxKernel(size: number): number[][] {
+  return Array.from({ length: size }, () => Array.from({ length: size }, () => 1));
+}
+
+function createGaussianKernel(size: number): number[][] {
+  const row = buildPascalRow(size - 1);
+  return outerProduct(row, row);
+}
+
+function createSobelDerivativeRow(size: number): number[] {
+  if (size === 3) return [-1, 0, 1];
+  return convolve1D(buildPascalRow(size - 3), [-1, 0, 1]);
+}
+
+function createSobelXKernel(size: number): number[][] {
+  const smoothingRow = buildPascalRow(size - 1);
+  const derivativeRow = createSobelDerivativeRow(size);
+  return outerProduct(derivativeRow, smoothingRow);
+}
+
+function createSobelYKernel(size: number): number[][] {
+  const smoothingRow = buildPascalRow(size - 1);
+  const derivativeRow = createSobelDerivativeRow(size);
+  return outerProduct(smoothingRow, derivativeRow);
+}
+
+function createLaplacianKernel(size: number): number[][] {
+  if (size === 3) {
+    return [
+      [0, 1, 0],
+      [1, -4, 1],
+      [0, 1, 0],
+    ];
+  }
+
+  const smoothingRow = buildPascalRow(size - 1);
+  const secondDerivativeRow = convolve1D(buildPascalRow(size - 3), [1, -2, 1]);
+  return sumMatrices(
+    outerProduct(secondDerivativeRow, smoothingRow),
+    outerProduct(smoothingRow, secondDerivativeRow)
+  );
+}
+
+function findNearestSupportedSize(targetSize: number, supportedSizes: number[]): number {
+  return supportedSizes.reduce((best, size) => {
+    const currentDistance = Math.abs(size - targetSize);
+    const bestDistance = Math.abs(best - targetSize);
+    if (currentDistance < bestDistance) return size;
+    if (currentDistance === bestDistance && size > best) return size;
+    return best;
+  }, supportedSizes[0]);
+}
+
+function formatKernelValue(value: number): string {
+  if (Number.isInteger(value)) return String(value);
+  if (Math.abs(value) >= 10) return value.toFixed(1).replace(/\.0$/, '');
+  if (Math.abs(value) >= 1) return value.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+  return value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+}
+
+const KERNEL_PRESET_FAMILIES: KernelPresetFamily[] = [
+  {
+    key: 'identity',
+    label: '恒等',
+    supportedSizes: PRESET_SMOOTHING_SIZES,
+    createKernel: createIdentityKernel,
+    summary: '只保留中心像素，输出基本等于输入，用来说明“卷积核就是一组局部权重”。',
+    principle: '无论核大小是多少，只有中心位置权重为 1，其余位置全为 0，因此邻域像素不会参与输出。',
+    origin: '它对应离散情形下的单位冲激思想：只保留中心项时，卷积结果尽量保持原信号本身。',
+    formulaMathML: buildInlineMathML('<mrow><mi>G</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>=</mo><mi>f</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo></mrow>'),
+    formulaNote: '扩大到 5×5、7×7 或 11×11 时，本质仍然不变：只有中心项真正生效。',
+    visualTitle: '响应图示',
+    visualLabels: ['邻域忽略', '中心保留', '原样输出'],
+  },
+  {
+    key: 'box',
+    label: '均值',
+    supportedSizes: PRESET_SMOOTHING_SIZES,
+    createKernel: createBoxKernel,
+    summary: '窗口内所有位置同权参与，适合讲清楚“局部平均/等权平滑”这一类卷积思路。',
+    principle: '每个像素都以相同权重参与求和；若再除以全部权重之和，就得到标准的均值滤波。',
+    origin: '它来自局部平均的统计思想：不再只看中心点，而是把周围像素一起纳入估计，用整体趋势抑制随机波动。',
+    formulaMathML: buildInlineMathML('<mrow><mi>G</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>=</mo><mfrac><mn>1</mn><mi>Z</mi></mfrac><munderover><mo>&#8721;</mo><mi>i</mi><mi></mi></munderover><munderover><mo>&#8721;</mo><mi>j</mi><mi></mi></munderover><mi>f</mi><mo>(</mo><mi>x</mi><mo>+</mo><mi>i</mi><mo>,</mo><mi>y</mi><mo>+</mo><mi>j</mi><mo>)</mo></mrow>'),
+    formulaNote: '页面中的核矩阵保留“等权结构”便于观察；若除以全部权重和，就对应标准均值核。',
+    visualTitle: '响应图示',
+    visualLabels: ['周围像素', '同权汇总', '平滑输出'],
+  },
+  {
+    key: 'gaussian',
+    label: '高斯',
+    supportedSizes: PRESET_SMOOTHING_SIZES,
+    createKernel: createGaussianKernel,
+    summary: '中心权重大、边缘权重小，适合说明“平滑但尽量保留结构”的思路。',
+    principle: '越靠近中心的像素权重越大，越远的像素权重越小，因此比等权平均更温和，也更符合局部邻域的自然衰减。',
+    origin: '它来自高斯分布和尺度空间思想，是图像平滑里最经典、最标准的一类卷积核。',
+    formulaMathML: buildInlineMathML('<mrow><mi>g</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo><mo>&#8733;</mo><msup><mi>e</mi><mrow><mo>-</mo><mfrac><mrow><msup><mi>i</mi><mn>2</mn></msup><mo>+</mo><msup><mi>j</mi><mn>2</mn></msup></mrow><mrow><mn>2</mn><msup><mi>&#963;</mi><mn>2</mn></msup></mrow></mfrac></mrow></msup></mrow>'),
+    formulaNote: '离中心越近，权重越高；核越大，平滑尺度也越大。',
+    visualTitle: '响应图示',
+    visualLabels: ['中心更重', '周边更轻', '柔和平滑'],
+  },
+  {
+    key: 'laplacian',
+    label: '拉普拉斯',
+    supportedSizes: PRESET_DERIVATIVE_SIZES,
+    createKernel: createLaplacianKernel,
+    summary: '强调像素突变的位置，常用来检测边缘或轮廓，对亮度突变特别敏感。',
+    principle: '它本质上是二阶差分。3×3 使用经典模板，更大的 5×5、7×7 版本则在二阶差分周围加入了更宽的平滑支撑。',
+    origin: '它来源于离散形式的二阶导数；在图像处理中，二阶差分常用来突出“变化率本身是否突然改变”。',
+    formulaMathML: buildInlineMathML('<mrow><msup><mo>&#8711;</mo><mn>2</mn></msup><mi>f</mi><mo>=</mo><mfrac><mrow><msup><mi>&#8706;</mi><mn>2</mn></msup><mi>f</mi></mrow><mrow><mi>&#8706;</mi><msup><mi>x</mi><mn>2</mn></msup></mrow></mfrac><mo>+</mo><mfrac><mrow><msup><mi>&#8706;</mi><mn>2</mn></msup><mi>f</mi></mrow><mrow><mi>&#8706;</mi><msup><mi>y</mi><mn>2</mn></msup></mrow></mfrac></mrow>'),
+    formulaNote: '页面中的大尺寸拉普拉斯采用“二阶差分 + 更宽平滑支撑”的教学型模板，用来帮助理解大核二阶导数的概念。',
+    visualTitle: '响应图示',
+    visualLabels: ['平坦区≈0', '亮度突变', '边缘增强'],
+  },
+  {
+    key: 'sobelx',
+    label: 'Sobel X',
+    supportedSizes: PRESET_DERIVATIVE_SIZES,
+    createKernel: createSobelXKernel,
+    summary: '突出左右方向的亮度变化，因此更容易检测竖直边缘。',
+    principle: '它把“水平方向一阶差分”和“垂直方向平滑”结合在一起；核越大，参与比较的邻域越宽。',
+    origin: '它是经典的一阶导数卷积核族。3×3 最常见，5×5 和 7×7 则表示更大尺度的方向导数。',
+    formulaMathML: buildInlineMathML('<mrow><msub><mi>G</mi><mi>x</mi></msub><mo>=</mo><mfrac><mrow><mi>&#8706;</mi><mi>f</mi></mrow><mrow><mi>&#8706;</mi><mi>x</mi></mrow></mfrac></mrow>'),
+    formulaNote: '如果右侧更亮，响应通常偏正；如果左侧更亮，响应通常偏负。',
+    visualTitle: '方向图示',
+    visualLabels: ['左暗右亮'],
+  },
+  {
+    key: 'sobely',
+    label: 'Sobel Y',
+    supportedSizes: PRESET_DERIVATIVE_SIZES,
+    createKernel: createSobelYKernel,
+    summary: '突出上下方向的亮度变化，因此更容易检测水平边缘。',
+    principle: '它把“垂直方向一阶差分”和“水平方向平滑”结合在一起；核越大，参与比较的邻域越宽。',
+    origin: '它是经典的一阶导数卷积核族。3×3 最常见，5×5 和 7×7 则表示更大尺度的方向导数。',
+    formulaMathML: buildInlineMathML('<mrow><msub><mi>G</mi><mi>y</mi></msub><mo>=</mo><mfrac><mrow><mi>&#8706;</mi><mi>f</mi></mrow><mrow><mi>&#8706;</mi><mi>y</mi></mrow></mfrac></mrow>'),
+    formulaNote: '如果下侧更亮，响应通常偏正；如果上侧更亮，响应通常偏负。',
+    visualTitle: '方向图示',
+    visualLabels: ['上暗下亮'],
+  },
+];
 
 function createDefaultKernel(size: number): number[][] {
   const nextKernel = Array.from({ length: size }, () =>
@@ -63,11 +254,11 @@ function createDefaultKernel(size: number): number[][] {
 }
 
 function getMatrixCellClass(size: number): string {
-  if (size >= 11) return 'w-5 h-5 rounded-[0.2rem] text-[7px]';
-  if (size >= 9) return 'w-6 h-6 text-[8px]';
-  if (size >= 7) return 'w-8 h-8 text-[9px]';
-  if (size >= 5) return 'w-9 h-9 text-[10px]';
-  return 'w-10 h-10 text-[11px]';
+  if (size >= 11) return 'w-4 h-4 rounded-[0.2rem] text-[7px]';
+  if (size >= 9) return 'w-5 h-5 text-[8px]';
+  if (size >= 7) return 'w-7 h-7 text-[9px]';
+  if (size >= 5) return 'w-8 h-8 text-[10px]';
+  return 'w-9 h-9 text-[11px]';
 }
 
 function getProductCellClass(size: number): string {
@@ -99,11 +290,11 @@ function getFlowProductCellClass(size: number): string {
 }
 
 function getTermMatrixCellClass(size: number): string {
-  if (size >= 11) return 'w-8 h-8 text-[6px]';
-  if (size >= 9) return 'w-9 h-9 text-[7px]';
-  if (size >= 7) return 'w-10 h-10 text-[8px]';
-  if (size >= 5) return 'w-12 h-12 text-[8px]';
-  return 'w-[4.2rem] h-[4.2rem] text-[9px]';
+  if (size >= 11) return 'w-7 h-7 text-[6px]';
+  if (size >= 9) return 'w-8 h-8 text-[7px]';
+  if (size >= 7) return 'w-9 h-9 text-[8px]';
+  if (size >= 5) return 'w-10 h-10 text-[8px]';
+  return 'w-[3.4rem] h-[3.4rem] text-[9px]';
 }
 
 function formatPixelValue(value: number): string {
@@ -119,10 +310,6 @@ interface MathTextProps {
 
 function MathText({ mathML, className }: MathTextProps) {
   return <span className={className} dangerouslySetInnerHTML={{ __html: mathML }} />;
-}
-
-function buildInlineMathML(texLikeBody: string): string {
-  return `<math xmlns="http://www.w3.org/1998/Math/MathML">${texLikeBody}</math>`;
 }
 
 function buildMainFormulaMathML(x: number, y: number, outputValue: number): string {
@@ -346,11 +533,42 @@ export default function ConvolutionPage() {
     [1, -4, 1],
     [0, 1, 0],
   ]);
-  const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const originalImage = convolutionTeachingImages[imageType].image;
-  const inputWidth = originalImage[0]?.length ?? 0;
-  const inputHeight = originalImage.length;
+  const [selectedPresetKey, setSelectedPresetKey] = useState<KernelPresetFamilyKey | null>('laplacian');
+  const [assetImage, setAssetImage] = useState<number[][] | null>(null);
+  const [currentPosition, setCurrentPosition] = useState({ x: 0, y: 0 });
+  const imageConfig = convolutionTeachingImages[imageType];
+  const selectedPresetFamily = useMemo(
+    () => KERNEL_PRESET_FAMILIES.find(family => family.key === selectedPresetKey) ?? null,
+    [selectedPresetKey]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!imageConfig.assetPath) {
+      setAssetImage(null);
+      return;
+    }
+
+    setAssetImage(null);
+    loadImageAsGrayscale(imageConfig.assetPath)
+      .then(image => {
+        if (!cancelled) {
+          setAssetImage(image);
+        }
+      })
+      .catch(error => {
+        console.error('加载教学示例图失败:', error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [imageConfig]);
+
+  const originalImage = imageConfig.image ?? assetImage;
+  const inputWidth = originalImage?.[0]?.length ?? 0;
+  const inputHeight = originalImage?.length ?? 0;
 
   const kernelObj = useMemo<Kernel>(() => {
     const anchor = Math.floor(kernelSize / 2);
@@ -360,37 +578,44 @@ export default function ConvolutionPage() {
   }, [kernelSize, kernel]);
 
   const resultImage = useMemo(() => {
+    if (!originalImage || originalImage.length === 0 || !originalImage[0]) return [];
     const result = convolve2D(originalImage, kernelObj, { padding: 0 });
     return normalizeImage(result);
   }, [originalImage, kernelObj]);
 
   const outputWidth = resultImage[0]?.length ?? 0;
   const outputHeight = resultImage.length;
-
-  const steps = useMemo(() => {
-    const generator = convolve2DSteps(originalImage, kernelObj, { padding: 0 });
-    return Array.from(generator as Generator<ConvStep>);
-  }, [originalImage, kernelObj]);
-
-  const currentStep = steps[currentStepIndex];
+  const totalSteps = outputWidth * outputHeight;
 
   useEffect(() => {
-    if (!isPlaying) return;
-    const interval = setInterval(() => {
-      setCurrentStepIndex(prev => {
-        if (prev >= steps.length - 1) {
-          setIsPlaying(false);
-          return prev;
-        }
-        return prev + 1;
-      });
-    }, 600);
-    return () => clearInterval(interval);
-  }, [isPlaying, steps.length]);
+    if (outputWidth === 0 || outputHeight === 0) {
+      setCurrentPosition({ x: 0, y: 0 });
+      return;
+    }
+
+    setCurrentPosition(prev => ({
+      x: Math.min(prev.x, outputWidth - 1),
+      y: Math.min(prev.y, outputHeight - 1),
+    }));
+  }, [outputHeight, outputWidth]);
+
+  const currentStep = useMemo(() => {
+    if (!originalImage || outputWidth === 0 || outputHeight === 0) return null;
+    return getConvolutionStepAt(originalImage, kernelObj, currentPosition.x, currentPosition.y, {
+      padding: 0,
+    });
+  }, [currentPosition.x, currentPosition.y, kernelObj, originalImage, outputHeight, outputWidth]);
+  const currentStepIndex = currentStep ? currentStep.y * outputWidth + currentStep.x : 0;
+  const inputMarkerWindowLabel =
+    imageConfig.regionMarker === 'dot' ? '红点定位的输入窗口' : '红色输入窗口';
+  const inputMarkerExpandHint =
+    imageConfig.regionMarker === 'dot'
+      ? `上方大图中的红点只负责定位；这里展示的是该位置对应的 ${kernelSize}×${kernelSize} 输入窗口。`
+      : '上方大图的红框直接展开到这里；每一格仍对应原图中的同一位置。';
 
   const handleDirectionMove = useCallback(
     (direction: 'up' | 'down' | 'left' | 'right') => {
-      if (!currentStep || steps.length === 0 || outputWidth === 0 || outputHeight === 0) return;
+      if (!currentStep || totalSteps === 0 || outputWidth === 0 || outputHeight === 0) return;
 
       let newX = currentStep.x;
       let newY = currentStep.y;
@@ -410,25 +635,17 @@ export default function ConvolutionPage() {
           break;
       }
 
-      const newIndex = steps.findIndex(step => step.x === newX && step.y === newY);
-      if (newIndex !== -1) {
-        setCurrentStepIndex(newIndex);
-      }
+      setCurrentPosition({ x: newX, y: newY });
     },
-    [currentStep, outputHeight, outputWidth, steps]
+    [currentStep, outputHeight, outputWidth, totalSteps]
   );
 
   const handleStepSelect = useCallback(
     (x: number, y: number) => {
-      if (steps.length === 0) return;
-
-      const newIndex = steps.findIndex(step => step.x === x && step.y === y);
-      if (newIndex !== -1) {
-        setCurrentStepIndex(newIndex);
-        setIsPlaying(false);
-      }
+      if (totalSteps === 0) return;
+      setCurrentPosition({ x, y });
     },
-    [steps]
+    [totalSteps]
   );
 
   const handleInputRegionSelect = useCallback(
@@ -453,50 +670,52 @@ export default function ConvolutionPage() {
     [handleStepSelect, outputHeight, outputWidth]
   );
 
-  const handlePresetSelect = useCallback((preset: string) => {
-    switch (preset) {
-      case 'identity':
-        setKernel([[0, 0, 0], [0, 1, 0], [0, 0, 0]]);
-        setKernelSize(3);
-        break;
-      case 'box':
-        setKernel([[1, 1, 1], [1, 1, 1], [1, 1, 1]]);
-        setKernelSize(3);
-        break;
-      case 'laplacian':
-        setKernel([[0, 1, 0], [1, -4, 1], [0, 1, 0]]);
-        setKernelSize(3);
-        break;
-      case 'sobelx':
-        setKernel([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]]);
-        setKernelSize(3);
-        break;
-      case 'sobely':
-        setKernel([[-1, -2, -1], [0, 0, 0], [1, 2, 1]]);
-        setKernelSize(3);
-        break;
-    }
-    setCurrentStepIndex(0);
-    setIsPlaying(false);
+  const applyPresetFamilySize = useCallback((presetKey: KernelPresetFamilyKey, size: number) => {
+    const presetFamily = KERNEL_PRESET_FAMILIES.find(item => item.key === presetKey);
+    if (!presetFamily || !presetFamily.supportedSizes.includes(size)) return;
+
+    setSelectedPresetKey(presetKey);
+    setKernelSize(size);
+    setKernel(presetFamily.createKernel(size));
+    setCurrentPosition({ x: 0, y: 0 });
   }, []);
+
+  const handlePresetSelect = useCallback(
+    (presetKey: KernelPresetFamilyKey) => {
+      const presetFamily = KERNEL_PRESET_FAMILIES.find(item => item.key === presetKey);
+      if (!presetFamily) return;
+
+      const targetSize = findNearestSupportedSize(kernelSize, presetFamily.supportedSizes);
+      applyPresetFamilySize(presetKey, targetSize);
+    },
+    [applyPresetFamilySize, kernelSize]
+  );
 
   const handleImageTypeChange = useCallback((value: ConvolutionTeachingImageType) => {
     setImageType(value);
-    setCurrentStepIndex(0);
-    setIsPlaying(false);
+    setCurrentPosition({ x: 0, y: 0 });
   }, []);
 
-  const handleKernelSizeChange = useCallback((value: number) => {
-    setKernelSize(value);
-    setKernel(createDefaultKernel(value));
-    setCurrentStepIndex(0);
-    setIsPlaying(false);
-  }, []);
+  const handleKernelSizeChange = useCallback(
+    (value: number) => {
+      setKernelSize(value);
+
+      if (selectedPresetFamily && selectedPresetFamily.supportedSizes.includes(value)) {
+        setKernel(selectedPresetFamily.createKernel(value));
+      } else {
+        setSelectedPresetKey(null);
+        setKernel(createDefaultKernel(value));
+      }
+
+      setCurrentPosition({ x: 0, y: 0 });
+    },
+    [selectedPresetFamily]
+  );
 
   const handleKernelChange = useCallback((value: number[][]) => {
+    setSelectedPresetKey(null);
     setKernel(value);
-    setCurrentStepIndex(0);
-    setIsPlaying(false);
+    setCurrentPosition({ x: 0, y: 0 });
   }, []);
 
   const handleKernelCenterChange = useCallback(
@@ -507,8 +726,8 @@ export default function ConvolutionPage() {
         nextKernel[center][center] = value;
         return nextKernel;
       });
-      setCurrentStepIndex(0);
-      setIsPlaying(false);
+      setSelectedPresetKey(null);
+      setCurrentPosition({ x: 0, y: 0 });
     },
     [kernelSize]
   );
@@ -519,7 +738,6 @@ export default function ConvolutionPage() {
     }
 
     const { x, y, inputRegion, kernel: stepKernel, outputValue } = currentStep;
-    const normalizedValue = resultImage[y]?.[x] ?? 0;
     const matrixCellClass = getMatrixCellClass(kernelSize);
     const termMatrixCellClass = getTermMatrixCellClass(kernelSize);
     const center = Math.floor(kernelSize / 2);
@@ -560,15 +778,15 @@ export default function ConvolutionPage() {
             </div>
           </div>
 
-          <div className="mt-3 grid gap-2 text-xs leading-6 text-slate-600 xl:grid-cols-2">
-            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
-              当前步中，红色输入窗口覆盖原图第 {y + 1} 到 {y + kernelSize} 行、第 {x + 1} 到 {x + kernelSize} 列；
+          <div className="mt-3 space-y-2 text-xs leading-6 text-slate-600">
+            <p>
+              当前步中，{inputMarkerWindowLabel}覆盖原图第 {y + 1} 到 {y + kernelSize} 行、第 {x + 1} 到 {x + kernelSize} 列；
               该区域对应公式中的输入项
               {' '}
               <MathText mathML={inputFormulaMathML} className="align-middle [&_math]:inline-block" />
               。
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+            </p>
+            <p>
               黄色卷积核提供
               {' '}
               <MathText mathML={kernelFormulaMathML} className="align-middle [&_math]:inline-block" />
@@ -577,7 +795,7 @@ export default function ConvolutionPage() {
               <MathText mathML={productFormulaMathML} className="align-middle [&_math]:inline-block" />
               的逐项结果，对全部 {kernelSize * kernelSize} 项求和后，得到当前输出值 {outputValue.toFixed(2)}，
               并写入结果图第 {y + 1} 行、第 {x + 1} 列。
-            </div>
+            </p>
           </div>
         </div>
 
@@ -603,7 +821,7 @@ export default function ConvolutionPage() {
                 原图第 {y + 1}-{y + kernelSize} 行 / 第 {x + 1}-{x + kernelSize} 列
               </div>
               <div className="mt-2 text-xs leading-5 text-red-700">
-                该矩阵由上方红框窗口直接展开得到。
+                该矩阵由上方{inputMarkerWindowLabel}直接展开得到。
               </div>
               <div
                 className="mt-3 inline-grid gap-1"
@@ -716,16 +934,145 @@ export default function ConvolutionPage() {
                   这一数值由乘积矩阵的全部元素求和得到，并写入结果图第 {y + 1} 行、第 {x + 1} 列。
                 </div>
               </div>
-              <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-3">
-                <div className="text-[11px] text-sky-600">灰度显示值</div>
-                <div className="mt-1 font-mono text-lg font-semibold text-sky-700">
-                  {normalizedValue.toFixed(2)}
-                </div>
-                <div className="mt-1 text-[11px] leading-5 text-sky-700">
-                  仅用于结果图渲染，不参与卷积计算。
-                </div>
-              </div>
             </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-slate-800">卷积核的作用</div>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                卷积核可以理解成一张局部权重表：窗口里的每个像素都先乘上对应权重，再把全部乘积求和。
+              </p>
+            </div>
+            {selectedPresetFamily && (
+              <div className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
+                当前预设：{selectedPresetFamily.label} {kernelSize}×{kernelSize}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-4 grid gap-4">
+            {KERNEL_PRESET_FAMILIES.map(preset => {
+              const isActivePreset = selectedPresetKey === preset.key;
+              const previewSize = isActivePreset
+                ? kernelSize
+                : findNearestSupportedSize(5, preset.supportedSizes);
+              const previewKernel = preset.createKernel(previewSize);
+              const previewCellClass = getMatrixCellClass(previewSize);
+              const previewCenter = Math.floor(previewSize / 2);
+
+              return (
+                <div
+                  key={preset.key}
+                  className={`rounded-2xl border px-3 py-3 ${
+                    isActivePreset
+                      ? 'border-amber-300 bg-amber-50/70'
+                      : 'border-slate-200 bg-slate-50/70'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-slate-800">{preset.label}</div>
+                      <p className="mt-2 text-xs leading-5 text-slate-600">{preset.summary}</p>
+                    </div>
+                    {isActivePreset && (
+                      <span className="rounded-full border border-amber-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                        当前使用
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {preset.supportedSizes.map(size => (
+                      <span
+                        key={`${preset.key}-size-${size}`}
+                        className={`rounded-full border px-2.5 py-1 text-[10px] font-medium ${
+                          isActivePreset && kernelSize === size
+                            ? 'border-amber-300 bg-white text-amber-700'
+                            : 'border-slate-200 bg-white text-slate-500'
+                        }`}
+                      >
+                        {size}×{size}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 grid gap-4 lg:grid-cols-[auto,minmax(0,1fr)] lg:items-start">
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                        核矩阵可视化
+                      </div>
+                      <div
+                        className="mt-2 inline-grid gap-1"
+                        style={{ gridTemplateColumns: `repeat(${previewSize}, minmax(0, 1fr))` }}
+                      >
+                        {previewKernel.flatMap((row, rowIndex) =>
+                          row.map((value, colIndex) => (
+                            <div
+                              key={`${preset.key}-${previewSize}-${rowIndex}-${colIndex}`}
+                              className={`${previewCellClass} flex items-center justify-center rounded border font-mono ${
+                                rowIndex === previewCenter && colIndex === previewCenter
+                                  ? 'border-amber-300 bg-amber-50 text-amber-800'
+                                  : 'border-slate-200 bg-white text-slate-700'
+                              }`}
+                              title={String(value)}
+                            >
+                              {formatKernelValue(value)}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                        原理与作用来源
+                      </div>
+                      <p className="mt-2 text-xs leading-6 text-slate-600">{preset.principle}</p>
+                      <p className="mt-2 text-xs leading-6 text-slate-500">{preset.origin}</p>
+
+                      <div className="mt-4 border-t border-slate-200 pt-4">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                          公式
+                        </div>
+                        <div className="kernel-formula-block mt-2 overflow-x-auto rounded-xl border border-slate-200 bg-[#f8f7f3] px-4 py-4 text-slate-800">
+                          <MathText mathML={preset.formulaMathML} className="[&_math]:inline-block" />
+                        </div>
+                        <p className="mt-2 text-xs leading-6 text-slate-600">{preset.formulaNote}</p>
+                      </div>
+
+                      <div className="mt-4 border-t border-slate-200 pt-4">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                          {preset.visualTitle}
+                        </div>
+                        {preset.visualLabels.length === 1 ? (
+                          <div className="mt-2 inline-flex rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-medium text-amber-700">
+                            {preset.visualLabels[0]}
+                          </div>
+                        ) : (
+                          <div className="mt-2 grid grid-cols-3 gap-2">
+                            {preset.visualLabels.map((label, index) => (
+                              <div
+                                key={`${preset.key}-visual-${index}`}
+                                className={`rounded-lg px-2 py-2 text-center text-[11px] font-medium ${
+                                  index === 1
+                                    ? 'border border-amber-200 bg-amber-50 text-amber-700'
+                                    : 'border border-slate-200 bg-white text-slate-600'
+                                }`}
+                              >
+                                {label}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -733,7 +1080,8 @@ export default function ConvolutionPage() {
   }, [
     currentStep,
     kernelSize,
-    resultImage,
+    selectedPresetFamily,
+    selectedPresetKey,
   ]);
 
   const visualOverlay = currentStep ? (
@@ -751,7 +1099,6 @@ export default function ConvolutionPage() {
   const analysisPreview = useMemo(() => {
     if (!currentStep) return null;
     const { x, y, inputRegion, kernel: stepKernel, outputValue } = currentStep;
-    const normalizedValue = resultImage[y]?.[x] ?? 0;
     const flowCellClass = getFlowCellClass(kernelSize);
     const center = Math.floor(kernelSize / 2);
     const centerPixel = inputRegion[center]?.[center] ?? 0;
@@ -792,7 +1139,7 @@ export default function ConvolutionPage() {
                   </div>
                 </div>
                 <div className="max-w-[12rem] rounded-xl bg-red-50 px-3 py-2 text-center text-xs leading-5 text-red-700">
-                  上方大图的红框直接展开到这里；每一格仍对应原图中的同一位置。
+                  {inputMarkerExpandHint}
                 </div>
               </div>
             </div>
@@ -931,13 +1278,6 @@ export default function ConvolutionPage() {
                   <div className="mt-1 text-[10px] leading-4 text-slate-500">
                     这一步把全部 {kernelSize * kernelSize} 项乘积的总和写到这个位置。
                   </div>
-                  <div className="mt-2 text-xs text-slate-500">右侧灰度显示值</div>
-                  <div className="font-mono text-sm font-semibold text-sky-700">
-                    {normalizedValue.toFixed(2)}
-                  </div>
-                  <div className="mt-1 max-w-[10rem] text-[10px] leading-4 text-slate-500">
-                    仅用于把结果矩阵画成灰度图，不参与卷积计算。
-                  </div>
                 </div>
               </div>
             </div>
@@ -948,7 +1288,6 @@ export default function ConvolutionPage() {
   }, [
     currentStep,
     kernelSize,
-    resultImage,
   ]);
 
   const parameters = (
@@ -979,25 +1318,51 @@ export default function ConvolutionPage() {
       </div>
 
       <div>
-        <label className="mb-1.5 block text-xs font-medium text-slate-500">卷积核预设</label>
+        <label className="mb-1.5 block text-xs font-medium text-slate-500">预设类别</label>
         <div className="grid grid-cols-2 gap-1.5">
-          {[
-            { key: 'identity', label: '恒等' },
-            { key: 'box', label: '均值' },
-            { key: 'laplacian', label: '拉普拉斯' },
-            { key: 'sobelx', label: 'Sobel X' },
-            { key: 'sobely', label: 'Sobel Y' },
-          ].map(preset => (
+          {KERNEL_PRESET_FAMILIES.map(preset => (
             <button
               key={preset.key}
               onClick={() => handlePresetSelect(preset.key)}
-              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-600 hover:bg-slate-50"
+              className={`rounded-lg border px-2 py-1.5 text-xs hover:bg-slate-50 ${
+                selectedPresetKey === preset.key
+                  ? 'border-amber-300 bg-amber-50 text-amber-800'
+                  : 'border-slate-200 bg-white text-slate-600'
+              }`}
             >
               {preset.label}
             </button>
           ))}
         </div>
       </div>
+
+      {selectedPresetFamily && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/70 px-3 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs font-semibold text-amber-800">预设尺寸</span>
+            <span className="text-[11px] text-amber-700">{selectedPresetFamily.label}</span>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {selectedPresetFamily.supportedSizes.map(size => (
+              <button
+                key={`${selectedPresetFamily.key}-${size}`}
+                type="button"
+                onClick={() => applyPresetFamilySize(selectedPresetFamily.key, size)}
+                className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                  kernelSize === size
+                    ? 'border-amber-300 bg-white text-amber-800'
+                    : 'border-amber-200 bg-white/80 text-amber-700'
+                }`}
+              >
+                {size}×{size}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-xs leading-5 text-amber-800">
+            先选预设类别，再选支持的核大小。导数类预设通常只提供到 7×7；11×11 主要保留恒等、均值和高斯这类大核平滑模板。
+          </p>
+        </div>
+      )}
 
       <SliderParam
         label="核大小"
@@ -1009,7 +1374,7 @@ export default function ConvolutionPage() {
       />
 
       <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-5 text-slate-600">
-        当前核大小是 {kernelSize}×{kernelSize}，所以红框会直接显示成 {kernelSize}×{kernelSize}，
+        当前核大小是 {kernelSize}×{kernelSize}，所以下方会展开对应大小的输入窗口，
         结果图会缩成 {outputWidth}×{outputHeight}。
       </div>
 
@@ -1053,9 +1418,14 @@ export default function ConvolutionPage() {
       visualOverlay={visualOverlay}
       analysisPreview={analysisPreview}
       imageHints={{
-        input: `红框对应当前参与计算的 ${kernelSize}×${kernelSize} 输入窗口，可点击原图调整位置`,
+        input:
+          imageConfig.regionMarker === 'dot'
+            ? `红点定位当前参与计算的 ${kernelSize}×${kernelSize} 输入窗口，可点击原图调整位置`
+            : `红框对应当前参与计算的 ${kernelSize}×${kernelSize} 输入窗口，可点击原图调整位置`,
         output: `绿框对应结果图中的当前输出像素（共 ${outputWidth}×${outputHeight}），可点击结果图直接定位`,
       }}
+      showOriginalGrid={imageConfig.showGrid}
+      originalRegionMarker={imageConfig.regionMarker}
       singlePageScroll
       navigationHintText="方向键移动 / 点击原图或结果图跳转"
       onInputRegionSelect={handleInputRegionSelect}
@@ -1073,11 +1443,10 @@ export default function ConvolutionPage() {
           : null
       }
       stepInfo={
-        steps.length > 0
-          ? { current: currentStepIndex, total: steps.length }
+        totalSteps > 0
+          ? { current: currentStepIndex, total: totalSteps }
           : null
       }
-      onStepChange={setCurrentStepIndex}
       onDirectionMove={handleDirectionMove}
     />
   );

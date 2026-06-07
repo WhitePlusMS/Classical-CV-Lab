@@ -115,3 +115,48 @@ export function* convolve2DSteps(
   }
 }
 
+export function getConvolutionStepAt(
+  image: GrayscaleImage,
+  kernel: Kernel,
+  x: number,
+  y: number,
+  options: Partial<ConvolutionOptions> = {}
+): StepResult | null {
+  if (!image || image.length === 0 || !image[0]) return null;
+
+  const kernelSize = kernel.size;
+  const padding = options.padding ?? Math.floor(kernelSize / 2);
+  const stride = options.stride ?? 1;
+  const padded = padImage(image, padding);
+  const paddedHeight = padded.length;
+  const paddedWidth = padded[0]?.length || 0;
+  const outputWidth = Math.floor((paddedWidth - kernelSize) / stride) + 1;
+  const outputHeight = Math.floor((paddedHeight - kernelSize) / stride) + 1;
+
+  if (x < 0 || y < 0 || x >= outputWidth || y >= outputHeight) {
+    return null;
+  }
+
+  const inputRegion: number[][] = [];
+  let sum = 0;
+
+  for (let ky = 0; ky < kernelSize; ky++) {
+    const row: number[] = [];
+    for (let kx = 0; kx < kernelSize; kx++) {
+      const px = x * stride + kx;
+      const py = y * stride + ky;
+      row.push(padded[py][px]);
+      sum += padded[py][px] * kernel.values[ky][kx];
+    }
+    inputRegion.push(row);
+  }
+
+  return {
+    x,
+    y,
+    inputRegion,
+    kernel: kernel.values,
+    outputValue: sum,
+    formula: `G(${x},${y}) = Σ f(i,j) · g(${x}-i, ${y}-j)`,
+  };
+}
