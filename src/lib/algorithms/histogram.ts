@@ -1,7 +1,16 @@
 import { GrayscaleImage } from './types';
 import { clamp } from '../utils/imageProcessing';
+
+/** 基于位置的确定性伪随机值 [0, 1) */
+function posNoise(x: number, y: number): number {
+  let h = (x * 17 + y * 53 + 7) % 2147483647;
+  h = (h * 16807) % 2147483647;
+  h = (h * 16807) % 2147483647;
+  return (h >>> 0) / 4294967296;
+}
+
 /**
- * 生成示例小图 (12x12)
+ * 生成示例小图 (12x12)，所有值均为确定性生成，避免 SSR hydration 错误。
  * type: 'dark' | 'bright' | 'lowContrast' | 'bimodal' | 'standard'
  */
 export function generateExampleImage(type: 'dark' | 'bright' | 'lowContrast' | 'bimodal' | 'standard'): GrayscaleImage {
@@ -11,33 +20,28 @@ export function generateExampleImage(type: 'dark' | 'bright' | 'lowContrast' | '
   for (let y = 0; y < size; y++) {
     const row: number[] = [];
     for (let x = 0; x < size; x++) {
+      const r = posNoise(x, y); // 确定性伪随机 [0, 1)
       let value: number;
       switch (type) {
         case 'dark':
-          // 所有像素值 < 64
-          value = Math.floor(Math.random() * 64);
+          value = Math.floor(r * 64);
           break;
         case 'bright':
-          // 所有像素值 > 192
-          value = 192 + Math.floor(Math.random() * 64);
+          value = 192 + Math.floor(r * 64);
           break;
         case 'lowContrast':
-          // 80-120 窄范围
-          value = 80 + Math.floor(Math.random() * 40);
+          value = 80 + Math.floor(r * 40);
           break;
         case 'bimodal':
-          // 一半暗 (<64) + 一半亮 (>192)
           value = (y < size / 2)
-            ? Math.floor(Math.random() * 64)
-            : 192 + Math.floor(Math.random() * 64);
+            ? Math.floor(r * 64)
+            : 192 + Math.floor(r * 64);
           break;
         case 'standard':
         default:
-          // 均匀分布 0-255
-          value = Math.floor(Math.random() * 256);
+          value = Math.floor(r * 256);
           break;
       }
-      // 存储为归一化值 [0,1]
       row.push(clamp(value / 255, 0, 1));
     }
     image.push(row);
