@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import ImageCanvas from './ImageCanvas';
 import { GrayscaleImage } from '@/lib/algorithms/types';
@@ -18,6 +18,8 @@ interface ConceptLayoutProps {
     input?: string;
     output?: string;
   };
+  showOriginalGrid?: boolean;
+  originalRegionMarker?: 'frame' | 'dot';
   currentStep?: { x: number; y: number; kernelSize: number } | null;
   stepInfo?: { current: number; total: number } | null;
   onStepChange?: (newIndex: number) => void;
@@ -40,9 +42,10 @@ export default function ConceptLayout({
   codeTab,
   teachingHint,
   imageHints,
+  showOriginalGrid = true,
+  originalRegionMarker = 'frame',
   currentStep,
   stepInfo,
-  onStepChange,
   onDirectionMove,
   onInputRegionSelect,
   onOutputPixelSelect,
@@ -82,18 +85,6 @@ export default function ConceptLayout({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onDirectionMove]);
 
-  const handlePrev = useCallback(() => {
-    if (stepInfo && onStepChange) {
-      onStepChange(Math.max(0, stepInfo.current - 1));
-    }
-  }, [stepInfo, onStepChange]);
-
-  const handleNext = useCallback(() => {
-    if (stepInfo && onStepChange) {
-      onStepChange(Math.min(stepInfo.total - 1, stepInfo.current + 1));
-    }
-  }, [stepInfo, onStepChange]);
-
   const resolvedNavigationHint = useMemo(() => {
     if (navigationHintText) return navigationHintText;
     if (onInputRegionSelect || onOutputPixelSelect) {
@@ -103,34 +94,93 @@ export default function ConceptLayout({
   }, [navigationHintText, onInputRegionSelect, onOutputPixelSelect]);
   const mainImageSize = singlePageScroll ? 280 : 320;
 
-  const navigationBar = stepInfo ? (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/70 px-4 py-2">
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-slate-500">{resolvedNavigationHint}</span>
-        {currentStep && (
-          <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-600">
-            当前结果像素 ({currentStep.x}, {currentStep.y})
-          </span>
-        )}
-      </div>
-      <div className="flex items-center gap-1">
-        <button
-          onClick={handlePrev}
-          disabled={stepInfo.current === 0}
-          className="rounded border border-slate-200 bg-white px-2 py-1 text-xs hover:bg-slate-50 disabled:opacity-40"
-        >
-          上一步
-        </button>
-        <span className="px-2 text-xs font-mono text-slate-600">
-          {stepInfo.current + 1} / {stepInfo.total}
+  const navigationControlPanel = stepInfo ? (
+    <details className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/80">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-3 text-sm font-semibold text-slate-700 marker:content-none">
+        <span>窗口定位</span>
+        <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-500">
+          辅助操作
         </span>
-        <button
-          onClick={handleNext}
-          disabled={stepInfo.current === stepInfo.total - 1}
-          className="rounded border border-slate-200 bg-white px-2 py-1 text-xs hover:bg-slate-50 disabled:opacity-40"
-        >
-          下一步
-        </button>
+      </summary>
+      <div className="border-t border-slate-200 px-3 py-3">
+        <div className="text-xs leading-5 text-slate-500">
+          用方向键或下方 4 个按钮移动当前窗口；也可以直接点击原图或结果图跳转。
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {currentStep && (
+            <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600">
+              当前像素 ({currentStep.x}, {currentStep.y})
+            </span>
+          )}
+          <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600">
+            第 {stepInfo.current + 1} / {stepInfo.total} 步
+          </span>
+        </div>
+        <div className="mt-3 grid grid-cols-3 gap-2 place-items-center">
+          <div />
+          <button
+            type="button"
+            onClick={() => onDirectionMove?.('up')}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-base font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-100"
+            aria-label="向上移动"
+            title="向上移动"
+          >
+            ↑
+          </button>
+          <div />
+
+          <button
+            type="button"
+            onClick={() => onDirectionMove?.('left')}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-base font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-100"
+            aria-label="向左移动"
+            title="向左移动"
+          >
+            ←
+          </button>
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white text-[10px] font-semibold tracking-[0.12em] text-slate-400">
+            方向
+          </div>
+          <button
+            type="button"
+            onClick={() => onDirectionMove?.('right')}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-base font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-100"
+            aria-label="向右移动"
+            title="向右移动"
+          >
+            →
+          </button>
+
+          <div />
+          <button
+            type="button"
+            onClick={() => onDirectionMove?.('down')}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-base font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-100"
+            aria-label="向下移动"
+            title="向下移动"
+          >
+            ↓
+          </button>
+          <div />
+        </div>
+      </div>
+    </details>
+  ) : null;
+
+  const navigationBar = stepInfo ? (
+    <div className="border-b border-slate-100 bg-slate-50/50 px-4 py-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div className="flex flex-wrap items-center gap-2 text-slate-500">
+          <span>{resolvedNavigationHint}</span>
+          {currentStep && (
+            <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 font-medium text-slate-600">
+              当前结果像素 ({currentStep.x}, {currentStep.y})
+            </span>
+          )}
+        </div>
+        <div className="rounded-full border border-slate-200 bg-white px-2.5 py-0.5 font-medium text-slate-600">
+          第 {stepInfo.current + 1} / {stepInfo.total} 步
+        </div>
       </div>
     </div>
   ) : null;
@@ -231,6 +281,7 @@ export default function ConceptLayout({
               {showParameters ? (
                 <div className={`${singlePageScroll ? 'overflow-y-auto' : 'flex-1 overflow-y-auto'} px-4 pb-4 pt-3`}>
                   {parameters}
+                  {navigationControlPanel}
                 </div>
               ) : (
                 <div className="flex flex-1 items-center justify-center px-2 py-4">
@@ -248,14 +299,16 @@ export default function ConceptLayout({
         </div>
 
         <div className={`relative flex-1 min-w-0 p-3 xl:p-4 ${singlePageScroll ? 'pb-6' : ''}`}>
-          <div
-            className={`flex min-w-0 flex-col rounded-[1.75rem] border border-slate-200/80 bg-white shadow-[0_22px_50px_rgba(15,23,42,0.06)] ${
-              singlePageScroll ? '' : 'h-full overflow-hidden'
-            }`}
-          >
+          <div className={`flex min-w-0 flex-col ${singlePageScroll ? '' : 'h-full overflow-hidden'}`}>
+            {singlePageScroll && navigationBar && (
+              <div className="sticky top-[4.5rem] z-20 border-b border-slate-200/80 bg-[rgba(248,250,252,0.92)] backdrop-blur">
+                {navigationBar}
+              </div>
+            )}
+
             <div
-              className={`bg-slate-50/70 px-4 pt-4 xl:px-6 ${
-                singlePageScroll ? 'pb-4 xl:pt-5' : 'flex-1 min-h-0 overflow-auto pb-3 xl:pt-6 xl:pb-4'
+              className={`px-4 pt-4 xl:px-6 ${
+                singlePageScroll ? 'pb-5 pt-5 xl:pt-5' : 'flex-1 min-h-0 overflow-auto pb-3 xl:pt-6 xl:pb-4'
               }`}
             >
               <div className="flex flex-wrap items-center justify-center gap-5 xl:gap-7">
@@ -271,10 +324,11 @@ export default function ConceptLayout({
                   <ImageCanvas
                     image={originalImage}
                     maxDisplaySize={mainImageSize}
-                    showGrid
+                    showGrid={showOriginalGrid}
                     interactive={Boolean(onInputRegionSelect)}
                     onRegionSelect={onInputRegionSelect}
                     containerClassName="teaching-pulse-input conv-anchor-input-main"
+                    selectedRegionMarker={originalRegionMarker}
                     selectedRegion={
                       currentStep
                         ? {
@@ -348,30 +402,17 @@ export default function ConceptLayout({
                 </div>
               )}
 
-              {singlePageScroll && (
-                <div className="mx-auto mt-5 flex max-w-5xl flex-col items-center gap-3">
-                  <div className="flex items-center gap-3 rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold tracking-[0.08em] text-slate-600 shadow-sm">
-                    <span className="h-2 w-2 rounded-full bg-red-500" />
-                    <span>当前窗口分析区</span>
-                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                  </div>
-                </div>
-              )}
             </div>
 
             {singlePageScroll ? (
               <div className="px-4 pb-4 xl:px-6 xl:pb-6">
-                <div className="overflow-visible rounded-[1.5rem] border border-slate-200/90 bg-white/96 shadow-[0_18px_36px_rgba(15,23,42,0.06)]">
+                <div className="overflow-visible">
                   {analysisPreview && (
-                    <div className="border-b border-slate-200 bg-white/96">
+                    <div className="border-b border-slate-200/80">
                       <div className="px-4 py-4">{analysisPreview}</div>
                     </div>
                   )}
-                  {navigationBar && (
-                    <div className="sticky top-[4.5rem] z-20 border-b border-slate-200 bg-white/96 backdrop-blur">
-                      {navigationBar}
-                    </div>
-                  )}
+                  {!singlePageScroll && navigationBar && navigationBar}
                   <div className="p-4">{stepDetails}</div>
                 </div>
               </div>

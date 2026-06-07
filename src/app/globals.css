@@ -169,3 +169,16 @@ canvas {
   stroke-dasharray: 12 12;
   animation: convFlowDash 1.1s linear infinite;
 }
+
+.kernel-formula-block math {
+  display: inline-block;
+  line-height: 1.85;
+}
+
+.kernel-formula-block mtable {
+  border-spacing: 0 0.45rem;
+}
+
+.kernel-formula-block mtd {
+  padding-inline: 0.18rem;
+}
