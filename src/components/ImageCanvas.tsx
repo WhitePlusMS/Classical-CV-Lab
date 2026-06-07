@@ -2,10 +2,12 @@
 
 import React, { useRef, useEffect, useCallback, useMemo } from 'react';
 import { GrayscaleImage } from '@/lib/algorithms/types';
-import { imageToCanvas } from '@/lib/utils/imageProcessing';
+import { imageToCanvas, imageRgbToCanvas } from '@/lib/utils/imageProcessing';
 
 interface ImageCanvasProps {
   image: GrayscaleImage | null;
+  /** 可选的 RGB 彩色图（优先级高于灰度图），渲染为真彩色 */
+  rgbImage?: number[][][] | null;
   maxDisplaySize?: number;
   showGrid?: boolean;
   selectedRegion?: { x: number; y: number; size: number } | null;
@@ -18,6 +20,7 @@ interface ImageCanvasProps {
 
 export default function ImageCanvas({
   image,
+  rgbImage,
   maxDisplaySize = 300,
   showGrid = false,
   selectedRegion,
@@ -31,12 +34,13 @@ export default function ImageCanvas({
   const containerRef = useRef<HTMLDivElement>(null);
 
   const display = useMemo(() => {
-    if (!image || image.length === 0) {
+    const effectiveImage = rgbImage || image;
+    if (!effectiveImage || effectiveImage.length === 0) {
       return { width: maxDisplaySize, height: maxDisplaySize, scale: 1 };
     }
 
-    const imgHeight = image.length;
-    const imgWidth = image[0]?.length || 0;
+    const imgHeight = effectiveImage.length;
+    const imgWidth = effectiveImage[0]?.length || 0;
     const scale = Math.min(maxDisplaySize / imgWidth, maxDisplaySize / imgHeight);
 
     return {
@@ -44,27 +48,24 @@ export default function ImageCanvas({
       height: imgHeight * scale,
       scale,
     };
-  }, [image, maxDisplaySize]);
+  }, [image, rgbImage, maxDisplaySize]);
 
   const { width, height, scale } = display;
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !image || image.length === 0) return;
+    if (!canvas) return;
 
-    const imgHeight = image.length;
-    const imgWidth = image[0]?.length || 0;
+    // 优先使用 RGB 彩色图
+    if (rgbImage && rgbImage.length > 0 && rgbImage[0]?.length > 0) {
+      imageRgbToCanvas(rgbImage, canvas);
+      return;
+    }
 
-    canvas.width = imgWidth;
-    canvas.height = imgHeight;
+    if (!image || image.length === 0) return;
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
     imageToCanvas(image, canvas);
-
-  }, [image]);
+  }, [image, rgbImage]);
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -149,7 +150,7 @@ export default function ImageCanvas({
     };
   }, [scale, selectedRegion]);
 
-  if (!image || image.length === 0) {
+  if ((!image || image.length === 0) && (!rgbImage || rgbImage.length === 0)) {
     return (
       <div
         className="flex items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-100"

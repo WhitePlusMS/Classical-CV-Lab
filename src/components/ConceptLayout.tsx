@@ -10,6 +10,10 @@ interface ConceptLayoutProps {
   subtitle?: string;
   originalImage: GrayscaleImage | null;
   resultImage: GrayscaleImage | null;
+  /** 可选的 RGB 原图，用于真彩色渲染 */
+  originalRgbImage?: number[][][] | null;
+  /** 可选的 RGB 结果图 */
+  resultRgbImage?: number[][][] | null;
   parameters: React.ReactNode;
   stepDetails: React.ReactNode;
   codeTab: React.ReactNode;
@@ -37,6 +41,8 @@ export default function ConceptLayout({
   subtitle,
   originalImage,
   resultImage,
+  originalRgbImage,
+  resultRgbImage,
   parameters,
   stepDetails,
   codeTab,
@@ -323,6 +329,7 @@ export default function ConceptLayout({
                   </div>
                   <ImageCanvas
                     image={originalImage}
+                    rgbImage={originalRgbImage}
                     maxDisplaySize={mainImageSize}
                     showGrid={showOriginalGrid}
                     interactive={Boolean(onInputRegionSelect)}
@@ -379,6 +386,7 @@ export default function ConceptLayout({
                   </div>
                   <ImageCanvas
                     image={resultImage}
+                    rgbImage={resultRgbImage}
                     maxDisplaySize={mainImageSize}
                     showGrid={Boolean(resultImage && (resultImage[0]?.length ?? 0) <= 16)}
                     interactive={Boolean(onOutputPixelSelect)}

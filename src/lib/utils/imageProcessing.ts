@@ -60,6 +60,81 @@ export function imageToCanvas(image: GrayscaleImage, canvas: HTMLCanvasElement):
   ctx.putImageData(imageData, 0, 0);
 }
 
+/** 将 RGB 图像渲染到 Canvas，显示为彩色 */
+export function imageRgbToCanvas(rgb: number[][][], canvas: HTMLCanvasElement): void {
+  const height = rgb.length;
+  const width = rgb[0]?.length || 0;
+  canvas.width = width;
+  canvas.height = height;
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  const imageData = ctx.createImageData(width, height);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const [r, g, b] = rgb[y][x];
+      const index = (y * width + x) * 4;
+      imageData.data[index]     = Math.round(clamp(r, 0, 1) * 255);
+      imageData.data[index + 1] = Math.round(clamp(g, 0, 1) * 255);
+      imageData.data[index + 2] = Math.round(clamp(b, 0, 1) * 255);
+      imageData.data[index + 3] = 255;
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+}
+
+export async function loadImageAsRgb(src: string): Promise<number[][][]> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.decoding = 'async';
+
+    image.onload = () => {
+      const width = image.naturalWidth;
+      const height = image.naturalHeight;
+
+      if (!width || !height) {
+        reject(new Error(`无法读取图像尺寸: ${src}`));
+        return;
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('无法创建 Canvas 上下文'));
+        return;
+      }
+
+      ctx.drawImage(image, 0, 0, width, height);
+      const imageData = ctx.getImageData(0, 0, width, height).data;
+      const rgbImage = Array.from({ length: height }, () =>
+        Array.from({ length: width }, () => [0, 0, 0])
+      );
+
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const index = (y * width + x) * 4;
+          rgbImage[y][x] = [
+            imageData[index] / 255,
+            imageData[index + 1] / 255,
+            imageData[index + 2] / 255,
+          ];
+        }
+      }
+
+      resolve(rgbImage);
+    };
+
+    image.onerror = () => reject(new Error(`图像加载失败: ${src}`));
+    image.src = src;
+  });
+}
+
 export async function loadImageAsGrayscale(src: string): Promise<GrayscaleImage> {
   return new Promise((resolve, reject) => {
     const image = new Image();
