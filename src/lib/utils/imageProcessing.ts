@@ -59,3 +59,49 @@ export function imageToCanvas(image: GrayscaleImage, canvas: HTMLCanvasElement):
 
   ctx.putImageData(imageData, 0, 0);
 }
+
+export async function loadImageAsGrayscale(src: string): Promise<GrayscaleImage> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.decoding = 'async';
+
+    image.onload = () => {
+      const width = image.naturalWidth;
+      const height = image.naturalHeight;
+
+      if (!width || !height) {
+        reject(new Error(`无法读取图像尺寸: ${src}`));
+        return;
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('无法创建 Canvas 上下文'));
+        return;
+      }
+
+      ctx.drawImage(image, 0, 0, width, height);
+      const imageData = ctx.getImageData(0, 0, width, height).data;
+      const grayscale = create2DArray(height, width, 0);
+
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const index = (y * width + x) * 4;
+          const r = imageData[index] / 255;
+          const g = imageData[index + 1] / 255;
+          const b = imageData[index + 2] / 255;
+          grayscale[y][x] = clamp(0.299 * r + 0.587 * g + 0.114 * b, 0, 1);
+        }
+      }
+
+      resolve(grayscale);
+    };
+
+    image.onerror = () => reject(new Error(`图像加载失败: ${src}`));
+    image.src = src;
+  });
+}

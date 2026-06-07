@@ -9,6 +9,7 @@ interface ImageCanvasProps {
   maxDisplaySize?: number;
   showGrid?: boolean;
   selectedRegion?: { x: number; y: number; size: number } | null;
+  selectedRegionMarker?: 'frame' | 'dot';
   highlightPixel?: { x: number; y: number } | null;
   onRegionSelect?: (x: number, y: number) => void;
   interactive?: boolean;
@@ -20,6 +21,7 @@ export default function ImageCanvas({
   maxDisplaySize = 300,
   showGrid = false,
   selectedRegion,
+  selectedRegionMarker = 'frame',
   highlightPixel,
   onRegionSelect,
   interactive = false,
@@ -135,6 +137,18 @@ export default function ImageCanvas({
     [scale]
   );
 
+  const selectedRegionDotStyle = useMemo(() => {
+    if (!selectedRegion) return null;
+
+    const dotSize = Math.max(10, Math.min(16, scale * 0.72));
+    return {
+      left: (selectedRegion.x + selectedRegion.size / 2) * scale - dotSize / 2,
+      top: (selectedRegion.y + selectedRegion.size / 2) * scale - dotSize / 2,
+      width: dotSize,
+      height: dotSize,
+    };
+  }, [scale, selectedRegion]);
+
   if (!image || image.length === 0) {
     return (
       <div
@@ -169,7 +183,7 @@ export default function ImageCanvas({
         />
       )}
 
-      {selectedRegionStyle && (
+      {selectedRegionStyle && selectedRegionMarker === 'frame' && (
         <>
           <div className="pointer-events-none absolute inset-x-0 top-0 bg-slate-950/30" style={{ height: selectedRegionStyle.top }} />
           <div
@@ -205,6 +219,13 @@ export default function ImageCanvas({
             }}
           />
         </>
+      )}
+
+      {selectedRegionDotStyle && selectedRegionMarker === 'dot' && (
+        <div
+          className="pointer-events-none absolute rounded-full border-2 border-white bg-red-600 shadow-[0_0_0_2px_rgba(220,38,38,0.35)]"
+          style={selectedRegionDotStyle}
+        />
       )}
 
       {highlightPixelStyle && (
