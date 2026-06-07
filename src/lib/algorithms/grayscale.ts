@@ -20,10 +20,12 @@ export function generateRgbImage(grayscale: GrayscaleImage): RgbImage {
     const row: number[][] = [];
     for (let x = 0; x < width; x++) {
       const gray = grayscale[y][x];
-      // 为教学目的给每个通道施加不同的偏移，使彩色效果明显
-      const r = clamp(gray + 0.15 * Math.sin(x * 0.3) * Math.cos(y * 0.2), 0, 1);
-      const g = clamp(gray + 0.12 * Math.cos(x * 0.25 + y * 0.35), 0, 1);
-      const b = clamp(gray + 0.18 * Math.sin(x * 0.2 + y * 0.3 + 1.5), 0, 1);
+      const nx = width > 1 ? x / (width - 1) : 0;
+      const ny = height > 1 ? y / (height - 1) : 0;
+      // 教学合成图必须让 RGB 三个通道有明显差异，否则彩色模式仍会近似灰度图。
+      const r = clamp(gray * 0.58 + nx * 0.36 + 0.12 * Math.sin(y * 0.22), 0, 1);
+      const g = clamp(gray * 0.52 + (1 - ny) * 0.38 + 0.10 * Math.cos(x * 0.18), 0, 1);
+      const b = clamp(gray * 0.48 + (1 - nx) * 0.22 + ny * 0.32 + 0.10 * Math.sin((x + y) * 0.16), 0, 1);
       row.push([r, g, b]);
     }
     rgb.push(row);
