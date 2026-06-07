@@ -7,7 +7,7 @@ interface ParameterPanelProps {
 }
 
 export default function ParameterPanel({ children }: ParameterPanelProps) {
-  return <div className="flex flex-wrap items-center gap-x-8 gap-y-4">{children}</div>;
+  return <div className="flex min-w-0 max-w-full flex-wrap items-center gap-x-8 gap-y-4 overflow-x-hidden">{children}</div>;
 }
 
 interface SliderParamProps {
@@ -32,8 +32,8 @@ export function SliderParam({
   return (
     <div className="w-full min-w-0 space-y-2">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-sm font-medium text-slate-700">{label}</span>
-        <span className="text-sm font-mono text-slate-600 tabular-nums">
+        <span className="min-w-0 break-words text-sm font-medium text-slate-700">{label}</span>
+        <span className="shrink-0 text-sm font-mono text-slate-600 tabular-nums">
           {value}
           {unit}
         </span>
@@ -60,13 +60,13 @@ interface SelectParamProps {
 
 export function SelectParam({ label, value, onChange, options }: SelectParamProps) {
   return (
-    <div className="flex items-center gap-3">
-      <span className="text-sm font-medium text-slate-700 min-w-[80px]">{label}</span>
-      <div className="relative">
+    <div className="w-full min-w-0 max-w-full space-y-1.5">
+      <span className="block break-words text-sm font-medium text-slate-700">{label}</span>
+      <div className="relative min-w-0 max-w-full">
         <select
           value={value}
           onChange={e => onChange(e.target.value)}
-          className="appearance-none px-4 py-2 pr-10 text-sm bg-white border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 cursor-pointer"
+          className="w-full min-w-0 max-w-full cursor-pointer appearance-none truncate rounded-lg border border-slate-200 bg-white px-3 py-2 pr-9 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
         >
           {options.map(opt => (
             <option key={opt.value} value={opt.value}>
@@ -74,7 +74,7 @@ export function SelectParam({ label, value, onChange, options }: SelectParamProp
             </option>
           ))}
         </select>
-        <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <svg className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </div>
@@ -98,11 +98,11 @@ export function KernelEditor({ label, kernel, onChange, size }: KernelEditorProp
   };
 
   return (
-    <div className="space-y-3">
-      <span className="text-sm font-medium text-slate-700">{label}</span>
+    <div className="w-full min-w-0 max-w-full space-y-3 overflow-x-hidden">
+      {label && <span className="block break-words text-sm font-medium text-slate-700">{label}</span>}
       <div
-        className="inline-grid gap-1.5 p-4 bg-slate-50 rounded-xl border border-slate-100"
-        style={{ gridTemplateColumns: `repeat(${size}, 1fr)` }}
+        className="grid w-full min-w-0 max-w-full gap-1 rounded-xl border border-slate-100 bg-slate-50 p-2"
+        style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}
       >
         {kernel.map((row, y) =>
           row.map((value, x) => (
@@ -112,7 +112,7 @@ export function KernelEditor({ label, kernel, onChange, size }: KernelEditorProp
               step="0.1"
               value={value}
               onChange={e => handleChange(y, x, e.target.value)}
-              className="w-14 h-11 text-center text-sm font-mono bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+              className="h-10 w-full min-w-0 rounded-lg border border-slate-200 bg-white text-center font-mono text-xs transition-all focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             />
           ))
         )}

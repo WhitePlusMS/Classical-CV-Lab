@@ -34,6 +34,8 @@ interface ConceptLayoutProps {
   singlePageScroll?: boolean;
   visualOverlay?: React.ReactNode;
   analysisPreview?: React.ReactNode;
+  operationLabel?: string;
+  parameterIntro?: React.ReactNode;
 }
 
 export default function ConceptLayout({
@@ -59,6 +61,8 @@ export default function ConceptLayout({
   singlePageScroll = false,
   visualOverlay,
   analysisPreview,
+  operationLabel = '处理步骤',
+  parameterIntro = '参数面板用于调整当前示例、算法参数和辅助操作；主区负责展示图像处理过程。',
 }: ConceptLayoutProps) {
   const [showCode, setShowCode] = useState(false);
   const [showParameters, setShowParameters] = useState(true);
@@ -174,7 +178,7 @@ export default function ConceptLayout({
   ) : null;
 
   const navigationBar = stepInfo ? (
-    <div className="border-b border-slate-100 bg-slate-50/50 px-4 py-2">
+    <div className="bg-slate-50/50 px-4 py-2">
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
         <div className="flex flex-wrap items-center gap-2 text-slate-500">
           <span>{resolvedNavigationHint}</span>
@@ -233,26 +237,26 @@ export default function ConceptLayout({
         }`}
       >
         <div
-          className={`shrink-0 border-r border-slate-200/70 ${
+          className={`min-w-0 shrink-0 overflow-x-hidden border-r border-slate-200/70 ${
             showParameters ? 'w-[15.5rem] xl:w-[17rem]' : 'w-[4.75rem]'
           } ${singlePageScroll ? 'sticky top-[4.25rem] self-start' : ''} transition-all duration-300`}
         >
-          <div className={`${singlePageScroll ? 'p-3 xl:p-4' : 'h-full p-3 xl:p-4'}`}>
+          <div className={`min-w-0 ${singlePageScroll ? 'p-3 xl:p-4' : 'h-full p-3 xl:p-4'}`}>
             <div
-              className={`flex flex-col overflow-hidden rounded-[1.5rem] border border-slate-200/80 bg-white/92 shadow-[0_18px_40px_rgba(15,23,42,0.06)] backdrop-blur ${
+              className={`flex min-w-0 flex-col overflow-hidden rounded-[1.5rem] border border-slate-200/80 bg-white/92 shadow-[0_18px_40px_rgba(15,23,42,0.06)] backdrop-blur ${
                 singlePageScroll ? 'max-h-[calc(100vh-5.25rem)]' : 'h-full'
               }`}
             >
               <div className="border-b border-slate-100 px-4 py-4">
                 <div className="flex items-start justify-between gap-3">
                   {showParameters ? (
-                    <div>
+                    <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                         <span className="text-sm font-semibold text-slate-800">参数面板</span>
                       </div>
-                      <p className="mt-2 text-xs leading-5 text-slate-500">
-                        先观察右侧可视化过程，再结合这里的参数调整，有助于理解卷积窗口、核大小与输出尺寸之间的关系。
+                      <p className="mt-2 break-words text-xs leading-5 text-slate-500">
+                        {parameterIntro}
                       </p>
                     </div>
                   ) : (
@@ -285,9 +289,11 @@ export default function ConceptLayout({
               </div>
 
               {showParameters ? (
-                <div className={`${singlePageScroll ? 'overflow-y-auto' : 'flex-1 overflow-y-auto'} px-4 pb-4 pt-3`}>
-                  {parameters}
-                  {navigationControlPanel}
+                <div className={`${singlePageScroll ? 'overflow-y-auto' : 'flex-1 overflow-y-auto'} min-w-0 overflow-x-hidden px-4 pb-4 pt-3`}>
+                  <div className="min-w-0 max-w-full [&_*]:min-w-0">
+                    {parameters}
+                    {navigationControlPanel}
+                  </div>
                 </div>
               ) : (
                 <div className="flex flex-1 items-center justify-center px-2 py-4">
@@ -306,17 +312,17 @@ export default function ConceptLayout({
 
         <div className={`relative flex-1 min-w-0 p-3 xl:p-4 ${singlePageScroll ? 'pb-6' : ''}`}>
           <div className={`flex min-w-0 flex-col ${singlePageScroll ? '' : 'h-full overflow-hidden'}`}>
-            {singlePageScroll && navigationBar && (
-              <div className="sticky top-[4.5rem] z-20 border-b border-slate-200/80 bg-[rgba(248,250,252,0.92)] backdrop-blur">
-                {navigationBar}
-              </div>
-            )}
-
             <div
               className={`px-4 pt-4 xl:px-6 ${
                 singlePageScroll ? 'pb-5 pt-5 xl:pt-5' : 'flex-1 min-h-0 overflow-auto pb-3 xl:pt-6 xl:pb-4'
               }`}
             >
+              {navigationBar && (
+                <div className="mb-4 overflow-hidden rounded-2xl border border-slate-200/80 bg-white/90 shadow-sm">
+                  {navigationBar}
+                </div>
+              )}
+
               <div className="flex flex-wrap items-center justify-center gap-5 xl:gap-7">
                 <div className="flex flex-col items-center gap-3">
                   <div className="flex items-center gap-2">
@@ -356,7 +362,7 @@ export default function ConceptLayout({
                 <div className="conv-anchor-main-operator shrink-0 flex flex-col items-center gap-2">
                   <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-center shadow-[0_10px_24px_rgba(245,158,11,0.12)]">
                     <div className="text-[10px] font-semibold tracking-[0.12em] text-amber-700">
-                      卷积计算
+                      {operationLabel}
                     </div>
                     <svg
                       className="mx-auto mt-1 h-7 w-7 text-amber-500"
@@ -420,13 +426,11 @@ export default function ConceptLayout({
                       <div className="px-4 py-4">{analysisPreview}</div>
                     </div>
                   )}
-                  {!singlePageScroll && navigationBar && navigationBar}
                   <div className="p-4">{stepDetails}</div>
                 </div>
               </div>
             ) : (
               <div className="flex min-h-[320px] max-h-[46vh] flex-col border-t border-slate-200 bg-white xl:max-h-[44vh]">
-                {navigationBar}
                 <div className="flex-1 overflow-y-auto p-4">{stepDetails}</div>
               </div>
             )}
