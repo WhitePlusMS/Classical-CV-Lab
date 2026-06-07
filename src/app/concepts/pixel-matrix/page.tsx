@@ -1,23 +1,31 @@
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
-import { ConceptLayout, CodeViewer } from '@/components';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import {
+  ConceptLayout,
+  CodeViewer,
+  PixelColorSwatch,
+  SelectParam,
+} from '@/components';
 import {
   pixelMatrixSteps,
   grayscaleToTeachingColorImage,
-  getPixelNeighborhood,
   createColorCheckerboard,
   createColorGradient,
   colorToGrayscaleImage,
+  rgbArrayToColorImage,
 } from '@/lib/algorithms/pixelMatrix';
 import { sampleImages, SampleImageType } from '@/lib/utils/sampleImages';
-import type { PixelMatrixStep, PixelColor } from '@/lib/algorithms/pixelMatrix';
+import { loadImageAsRgb, resizeRgbImage } from '@/lib/utils/imageProcessing';
+import { useGridNavigation } from '@/hooks/useGridNavigation';
 
 // 教学示例图像类型
-type TeachingImageType = SampleImageType | 'color-checkerboard' | 'color-gradient';
+type TeachingImageType = SampleImageType | 'linear' | 'color-checkerboard' | 'color-gradient';
 
 // 显示模式
 type DisplayMode = 'grayscale' | 'color';
+
+const LENA_DISPLAY_MAX_SIZE = 128;
 
 const PIXEL_MATRIX_CODE = `// 图像存储本质上是矩阵
 // 灰度图：每个元素是 [0, 255] 的标量
@@ -41,7 +49,16 @@ const blue = colorImage[row][col].b;
 // - 图像尺寸 = height × width = 行数 × 列数`;
 
 // 获取教学用示例图像元数据
-function getTeachingImages(type: TeachingImageType) {
+function getTeachingImages(type: TeachingImageType, lenaRgbImage: number[][][] | null) {
+  if (type === 'lena' && lenaRgbImage) {
+    const colorImage = rgbArrayToColorImage(lenaRgbImage);
+    return {
+      colorImage,
+      name: 'Lena',
+      grayscaleImage: colorToGrayscaleImage(colorImage),
+    };
+  }
+
   if (type === 'color-checkerboard') {
     const colorImage = createColorCheckerboard();
     return {
@@ -60,24 +77,13 @@ function getTeachingImages(type: TeachingImageType) {
   }
 
   // 标准灰度图
-  const grayImage = sampleImages[type as SampleImageType].image;
+  const sampleKey: SampleImageType = type === 'linear' ? 'gradient' : type as SampleImageType;
+  const grayImage = sampleImages[sampleKey].image;
   return {
     colorImage: grayscaleToTeachingColorImage(grayImage),
-    name: sampleImages[type as SampleImageType].name,
+    name: sampleImages[sampleKey].name,
     grayscaleImage: grayImage,
   };
-}
-
-/** 像素颜色预览块（可复用） */
-function PixelColorBlock({ color, size = 'w-8 h-8' }: { color: PixelColor; size?: string }) {
-  return (
-    <div
-      className={`${size} rounded border border-slate-300`}
-      style={{
-        backgroundColor: `rgb(${Math.round(color.r * 255)}, ${Math.round(color.g * 255)}, ${Math.round(color.b * 255)})`,
-      }}
-    />
-  );
 }
 
 export default function PixelMatrixPage() {
@@ -86,26 +92,35 @@ export default function PixelMatrixPage() {
   const [displayMode, setDisplayMode] = useState<DisplayMode>('grayscale');
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [lenaRgbImage, setLenaRgbImage] = useState<number[][][] | null>(null);
 
-  const { colorImage, grayscaleImage, name } = useMemo(() => getTeachingImages(imageType), [imageType]);
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const rawImage = await loadImageAsRgb('/assets/lena-original.jpg');
+        if (!cancelled) {
+          setLenaRgbImage(resizeRgbImage(rawImage, LENA_DISPLAY_MAX_SIZE));
+        }
+      } catch {
+        // Lena 加载失败时保留 sampleImages 中的程序化示例，避免页面整体不可用。
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const { colorImage, grayscaleImage, name } = useMemo(
+    () => getTeachingImages(imageType, lenaRgbImage),
+    [imageType, lenaRgbImage]
+  );
 
   // 用于 ConceptLayout 显示的灰度图
   const displayImage = useMemo(() => {
-    if (displayMode === 'color') {
-      // 将彩色图转为灰度进行显示（原图仍用灰度渲染，选择模式用展示台展示彩图详情）
-      const h = colorImage.length;
-      const w = colorImage[0]?.length || 0;
-      const gray: number[][] = [];
-      for (let r = 0; r < h; r++) {
-        const row: number[] = [];
-        for (let c = 0; c < w; c++) {
-          const p = colorImage[r][c];
-          row.push(p.gray ?? 0.299 * p.r + 0.587 * p.g + 0.114 * p.b);
-        }
-        gray.push(row);
-      }
-      return gray;
-    }
+    if (displayMode === 'color') return colorToGrayscaleImage(colorImage);
     return grayscaleImage;
   }, [grayscaleImage, colorImage, displayMode]);
 
@@ -116,44 +131,22 @@ export default function PixelMatrixPage() {
   }, [grayscaleImage, colorImage, displayMode]);
 
   const currentStep = steps[currentStepIndex];
-  const currentPixel = currentStep?.color;
+  const selectStepByPoint = useCallback((point: { x: number; y: number }) => {
+    const idx = steps.findIndex(s => s.col === point.x && s.row === point.y);
+    if (idx !== -1) setCurrentStepIndex(idx);
+  }, [steps]);
 
-  // 方向键移动
-  const handleDirectionMove = useCallback((direction: 'up' | 'down' | 'left' | 'right') => {
-    if (!currentStep || !displayImage || steps.length === 0) return;
-
-    const width = displayImage[0].length;
-    const height = displayImage.length;
-
-    let newCol = currentStep.col;
-    let newRow = currentStep.row;
-
-    switch (direction) {
-      case 'up':
-        newRow = Math.max(0, currentStep.row - 1);
-        break;
-      case 'down':
-        newRow = Math.min(height - 1, currentStep.row + 1);
-        break;
-      case 'left':
-        newCol = Math.max(0, currentStep.col - 1);
-        break;
-      case 'right':
-        newCol = Math.min(width - 1, currentStep.col + 1);
-        break;
-    }
-
-    const newIndex = steps.findIndex(s => s.row === newRow && s.col === newCol);
-    if (newIndex !== -1) {
-      setCurrentStepIndex(newIndex);
-    }
-  }, [currentStep, displayImage, steps]);
+  const handleDirectionMove = useGridNavigation({
+    current: currentStep ? { x: currentStep.col, y: currentStep.row } : null,
+    bounds: { width: displayImage[0]?.length ?? 0, height: displayImage.length },
+    onMove: selectStepByPoint,
+    disabled: steps.length === 0,
+  });
 
   // 点击原图跳转
   const handleInputRegionSelect = useCallback((col: number, row: number) => {
-    const idx = steps.findIndex(s => s.col === col && s.row === row);
-    if (idx !== -1) setCurrentStepIndex(idx);
-  }, [steps]);
+    selectStepByPoint({ x: col, y: row });
+  }, [selectStepByPoint]);
 
   // 图像切换
   const handleImageTypeChange = useCallback((value: TeachingImageType) => {
@@ -165,11 +158,6 @@ export default function PixelMatrixPage() {
   const handleDisplayModeChange = useCallback((mode: DisplayMode) => {
     setDisplayMode(mode);
     setCurrentStepIndex(0);
-  }, []);
-
-  // 缩放手柄
-  const handleZoomChange = useCallback((v: number) => {
-    setZoomLevel(v);
   }, []);
 
   // 获取当前图像尺寸
@@ -244,7 +232,7 @@ export default function PixelMatrixPage() {
             {/* 选中像素 */}
             <div className="flex flex-col items-center gap-1.5">
               <div className="text-[10px] font-medium text-slate-400">选中像素</div>
-              <PixelColorBlock color={color} size="w-12 h-12" />
+              <PixelColorSwatch color={color} className="h-12 w-12" />
               <div className="font-mono text-[10px] text-slate-500">
                 行 {row + 1}, 列 {col + 1}
               </div>
@@ -371,136 +359,33 @@ export default function PixelMatrixPage() {
     );
   }, [currentStep, displayImage, displayMode, zoomLevel, colorImage, steps]);
 
-  // --- analysisPreview: 中间的流程展示 ---
-  const analysisPreview = useMemo(() => {
-    if (!currentStep || !currentPixel) return null;
-
-    const { row, col, color, neighborhood } = currentStep;
-    const zoomedSize = Math.max(20, zoomLevel * 12);
-
-    return (
-      <div className="flex flex-wrap items-start justify-center gap-6 py-2">
-        {/* 原图像素位置 — 放大格子 */}
-        <div className="flex flex-col items-center gap-1.5">
-          <div className="text-[10px] font-medium text-slate-400">选中像素</div>
-          <div className="relative">
-            <PixelColorBlock color={color} size={`w-${Math.min(12, Math.round(zoomedSize / 8) + 6)} h-${Math.min(12, Math.round(zoomedSize / 8) + 6)}`} />
-            <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 font-mono text-[9px] text-slate-400 whitespace-nowrap">
-              行 {row + 1}, 列 {col + 1}
-            </div>
-          </div>
-        </div>
-
-        {/* → 箭头 */}
-        <div className="flex items-center pt-4 text-slate-300 text-lg">→</div>
-
-        {/* 放大邻域 3×3 */}
-        <div className="flex flex-col items-center gap-1.5">
-          <div className="text-[10px] font-medium text-slate-400">
-            第 {row + 1} 行 · 第 {col + 1} 列
-          </div>
-          <div
-            className="grid gap-px bg-slate-200 p-px rounded"
-            style={{
-              gridTemplateColumns: `repeat(3, ${zoomedSize}px)`,
-            }}
-          >
-            {neighborhood.flat().map((pixel, i) => {
-              const nRow = Math.floor(i / 3);
-              const nCol = i % 3;
-              const isCenter = nRow === 1 && nCol === 1;
-              return (
-                <div
-                  key={i}
-                  className={`flex flex-col items-center justify-center ${
-                    isCenter ? 'ring-2 ring-red-500 z-10' : ''
-                  }`}
-                  style={{
-                    width: `${zoomedSize}px`,
-                    height: `${zoomedSize}px`,
-                    backgroundColor: `rgb(${Math.round(pixel.r * 255)}, ${Math.round(pixel.g * 255)}, ${Math.round(pixel.b * 255)})`,
-                  }}
-                >
-                  <span
-                    className={`leading-none ${
-                      zoomedSize >= 24 ? 'text-[8px]' : 'text-[6px]'
-                    } font-mono`}
-                    style={{
-                      color: pixel.r + pixel.g + pixel.b > 1.5 ? '#1e293b' : '#f1f5f9',
-                      textShadow: pixel.r + pixel.g + pixel.b > 1.5 ? 'none' : '0 0 2px rgba(0,0,0,0.5)',
-                    }}
-                  >
-                    {zoomLevel >= 2 ? (pixel.gray ?? pixel.r).toFixed(1) : ''}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-          <div className="text-[9px] text-slate-400 mt-0.5">
-            3×3 邻域 · 红框 = 选中像素
-          </div>
-        </div>
-
-        {/* → 箭头 */}
-        <div className="flex items-center pt-4 text-slate-300 text-lg">→</div>
-
-        {/* 像素值详情 */}
-        <div className="flex flex-col items-center gap-1.5">
-          <div className="text-[10px] font-medium text-slate-400">像素值</div>
-          <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 min-w-[80px] text-center">
-            {displayMode === 'color' ? (
-              <div className="space-y-0.5">
-                <div className="font-mono text-[11px] text-red-600">R: {(color.r * 255).toFixed(0)}</div>
-                <div className="font-mono text-[11px] text-green-600">G: {(color.g * 255).toFixed(0)}</div>
-                <div className="font-mono text-[11px] text-blue-600">B: {(color.b * 255).toFixed(0)}</div>
-              </div>
-            ) : (
-              <div className="font-mono text-sm text-slate-700">
-                {(color.gray ?? color.r).toFixed(3)}
-              </div>
-            )}
-            <div className="text-[9px] text-slate-400 mt-1">
-              ({col}, {row})
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }, [currentStep, currentPixel, displayMode, zoomLevel]);
-
   // --- 参数面板 ---
   const parameters = (
     <div className="space-y-4">
-      <div>
-        <label className="text-xs font-medium text-slate-500 mb-1.5 block">示例图像</label>
-        <select
-          value={imageType}
-          onChange={e => handleImageTypeChange(e.target.value as TeachingImageType)}
-          className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg"
-        >
-          <optgroup label="灰度图像">
-            {Object.entries(sampleImages).map(([key, { name }]) => (
-              <option key={key} value={key}>{name}</option>
-            ))}
-          </optgroup>
-          <optgroup label="彩色图像">
-            <option value="color-checkerboard">彩色棋盘格</option>
-            <option value="color-gradient">彩色渐变</option>
-          </optgroup>
-        </select>
-      </div>
+      <SelectParam
+        label="示例图像"
+        value={imageType}
+        onChange={value => handleImageTypeChange(value as TeachingImageType)}
+        options={[
+          ...Object.entries(sampleImages).map(([key, item]) => ({
+            value: key,
+            label: item.name,
+          })),
+          { value: 'linear', label: 'Linear（线性渐变）' },
+          { value: 'color-checkerboard', label: '彩色棋盘格' },
+          { value: 'color-gradient', label: '彩色渐变' },
+        ]}
+      />
 
-      <div>
-        <label className="text-xs font-medium text-slate-500 mb-1.5 block">显示模式</label>
-        <select
-          value={displayMode}
-          onChange={e => handleDisplayModeChange(e.target.value as DisplayMode)}
-          className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg"
-        >
-          <option value="grayscale">灰度（单通道）</option>
-          <option value="color">彩色（三通道）</option>
-        </select>
-      </div>
+      <SelectParam
+        label="显示模式"
+        value={displayMode}
+        onChange={value => handleDisplayModeChange(value as DisplayMode)}
+        options={[
+          { value: 'grayscale', label: '灰度（单通道）' },
+          { value: 'color', label: '彩色（三通道）' },
+        ]}
+      />
 
       <details className="rounded-2xl border border-slate-200 bg-slate-50/80">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-3 text-sm font-semibold text-slate-700 marker:content-none">
@@ -523,14 +408,16 @@ export default function PixelMatrixPage() {
     <ConceptLayout
       title="像素矩阵"
       subtitle="图像 = 矩阵 · 理解像素的存储与访问"
+      operationLabel="矩阵访问"
+      parameterIntro="左侧用于切换示例图像和显示模式；右侧展示图像坐标、数组行列与像素值之间的对应关系。"
       originalImage={displayImage}
       originalRgbImage={displayMode === 'color' ? colorImage.map(row => row.map(p => [p.r, p.g, p.b] as [number, number, number])) : null}
       resultImage={displayImage}
       parameters={parameters}
       stepDetails={stepDetails}
-      analysisPreview={analysisPreview}
       codeTab={<CodeViewer languages={[{ name: 'TypeScript', code: PIXEL_MATRIX_CODE }]} />}
       showOriginalGrid={shouldShowOriginalGrid}
+      originalRegionMarker={imageType === 'lena' ? 'dot' : 'frame'}
       currentStep={
         currentStep
           ? { x: currentStep.col, y: currentStep.row, kernelSize: 1 }

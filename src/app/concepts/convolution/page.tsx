@@ -2,19 +2,44 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
+  AnchoredOverlay,
+  type AnchoredOverlayPath,
   ConceptLayout,
   CodeViewer,
-  SliderParam,
-  KernelEditor,
+  FlowColumn,
+  FlowColumns,
+  FlowNode,
+  FormulaCard,
   ImageCanvas,
+  KernelEditor,
+  MathText,
+  ProcessRail,
+  SelectParam,
+  SliderParam,
+  TeachingCard,
+  buildInlineMathML,
 } from '@/components';
 import { convolve2D, createKernel, getConvolutionStepAt } from '@/lib/algorithms/convolution';
 import { Kernel } from '@/lib/algorithms/types';
+import {
+  PRESET_DERIVATIVE_SIZES,
+  PRESET_SMOOTHING_SIZES,
+  createBoxKernelValues,
+  createGaussianKernelValues,
+  createIdentityKernelValues,
+  createLaplacianKernelValues,
+  createSobelXKernelValues,
+  createSobelYKernelValues,
+  findNearestSupportedSize,
+  formatKernelValue,
+  formatPixelValue,
+} from '@/lib/algorithms/kernelPresets';
 import {
   convolutionTeachingImages,
   ConvolutionTeachingImageType,
 } from '@/lib/utils/convolutionTeachingImages';
 import { loadImageAsGrayscale, normalizeImage } from '@/lib/utils/imageProcessing';
+import { useGridNavigation } from '@/hooks/useGridNavigation';
 
 const CONVOLUTION_CODE_TS = `function convolve2D(
   image: number[][],
@@ -61,114 +86,12 @@ interface KernelPresetFamily {
   visualLabels: string[];
 }
 
-const PRESET_SMOOTHING_SIZES = [3, 5, 7, 9, 11];
-const PRESET_DERIVATIVE_SIZES = [3, 5, 7];
-
-function buildInlineMathML(texLikeBody: string): string {
-  return `<math xmlns="http://www.w3.org/1998/Math/MathML">${texLikeBody}</math>`;
-}
-
-function buildPascalRow(order: number): number[] {
-  const row = [1];
-  for (let i = 0; i < order; i++) {
-    row.unshift(0);
-    for (let j = 0; j < row.length - 1; j++) {
-      row[j] = row[j] + row[j + 1];
-    }
-  }
-  return row;
-}
-
-function convolve1D(signal: number[], kernel: number[]): number[] {
-  const result = Array.from({ length: signal.length + kernel.length - 1 }, () => 0);
-  for (let i = 0; i < signal.length; i++) {
-    for (let j = 0; j < kernel.length; j++) {
-      result[i + j] += signal[i] * kernel[j];
-    }
-  }
-  return result;
-}
-
-function outerProduct(row: number[], column: number[]): number[][] {
-  return column.map(columnValue => row.map(rowValue => rowValue * columnValue));
-}
-
-function sumMatrices(a: number[][], b: number[][]): number[][] {
-  return a.map((row, y) => row.map((value, x) => value + b[y][x]));
-}
-
-function createIdentityKernel(size: number): number[][] {
-  const kernel = Array.from({ length: size }, () => Array.from({ length: size }, () => 0));
-  kernel[Math.floor(size / 2)][Math.floor(size / 2)] = 1;
-  return kernel;
-}
-
-function createBoxKernel(size: number): number[][] {
-  return Array.from({ length: size }, () => Array.from({ length: size }, () => 1));
-}
-
-function createGaussianKernel(size: number): number[][] {
-  const row = buildPascalRow(size - 1);
-  return outerProduct(row, row);
-}
-
-function createSobelDerivativeRow(size: number): number[] {
-  if (size === 3) return [-1, 0, 1];
-  return convolve1D(buildPascalRow(size - 3), [-1, 0, 1]);
-}
-
-function createSobelXKernel(size: number): number[][] {
-  const smoothingRow = buildPascalRow(size - 1);
-  const derivativeRow = createSobelDerivativeRow(size);
-  return outerProduct(derivativeRow, smoothingRow);
-}
-
-function createSobelYKernel(size: number): number[][] {
-  const smoothingRow = buildPascalRow(size - 1);
-  const derivativeRow = createSobelDerivativeRow(size);
-  return outerProduct(smoothingRow, derivativeRow);
-}
-
-function createLaplacianKernel(size: number): number[][] {
-  if (size === 3) {
-    return [
-      [0, 1, 0],
-      [1, -4, 1],
-      [0, 1, 0],
-    ];
-  }
-
-  const smoothingRow = buildPascalRow(size - 1);
-  const secondDerivativeRow = convolve1D(buildPascalRow(size - 3), [1, -2, 1]);
-  return sumMatrices(
-    outerProduct(secondDerivativeRow, smoothingRow),
-    outerProduct(smoothingRow, secondDerivativeRow)
-  );
-}
-
-function findNearestSupportedSize(targetSize: number, supportedSizes: number[]): number {
-  return supportedSizes.reduce((best, size) => {
-    const currentDistance = Math.abs(size - targetSize);
-    const bestDistance = Math.abs(best - targetSize);
-    if (currentDistance < bestDistance) return size;
-    if (currentDistance === bestDistance && size > best) return size;
-    return best;
-  }, supportedSizes[0]);
-}
-
-function formatKernelValue(value: number): string {
-  if (Number.isInteger(value)) return String(value);
-  if (Math.abs(value) >= 10) return value.toFixed(1).replace(/\.0$/, '');
-  if (Math.abs(value) >= 1) return value.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
-  return value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
-}
-
 const KERNEL_PRESET_FAMILIES: KernelPresetFamily[] = [
   {
     key: 'identity',
     label: '恒等',
-    supportedSizes: PRESET_SMOOTHING_SIZES,
-    createKernel: createIdentityKernel,
+    supportedSizes: [...PRESET_SMOOTHING_SIZES],
+    createKernel: createIdentityKernelValues,
     summary: '只保留中心像素，输出基本等于输入，用来说明“卷积核就是一组局部权重”。',
     principle: '无论核大小是多少，只有中心位置权重为 1，其余位置全为 0，因此邻域像素不会参与输出。',
     origin: '它对应离散情形下的单位冲激思想：只保留中心项时，卷积结果尽量保持原信号本身。',
@@ -180,8 +103,8 @@ const KERNEL_PRESET_FAMILIES: KernelPresetFamily[] = [
   {
     key: 'box',
     label: '均值',
-    supportedSizes: PRESET_SMOOTHING_SIZES,
-    createKernel: createBoxKernel,
+    supportedSizes: [...PRESET_SMOOTHING_SIZES],
+    createKernel: createBoxKernelValues,
     summary: '窗口内所有位置同权参与，适合讲清楚“局部平均/等权平滑”这一类卷积思路。',
     principle: '每个像素都以相同权重参与求和；若再除以全部权重之和，就得到标准的均值滤波。',
     origin: '它来自局部平均的统计思想：不再只看中心点，而是把周围像素一起纳入估计，用整体趋势抑制随机波动。',
@@ -193,8 +116,8 @@ const KERNEL_PRESET_FAMILIES: KernelPresetFamily[] = [
   {
     key: 'gaussian',
     label: '高斯',
-    supportedSizes: PRESET_SMOOTHING_SIZES,
-    createKernel: createGaussianKernel,
+    supportedSizes: [...PRESET_SMOOTHING_SIZES],
+    createKernel: createGaussianKernelValues,
     summary: '中心权重大、边缘权重小，适合说明“平滑但尽量保留结构”的思路。',
     principle: '越靠近中心的像素权重越大，越远的像素权重越小，因此比等权平均更温和，也更符合局部邻域的自然衰减。',
     origin: '它来自高斯分布和尺度空间思想，是图像平滑里最经典、最标准的一类卷积核。',
@@ -206,8 +129,8 @@ const KERNEL_PRESET_FAMILIES: KernelPresetFamily[] = [
   {
     key: 'laplacian',
     label: '拉普拉斯',
-    supportedSizes: PRESET_DERIVATIVE_SIZES,
-    createKernel: createLaplacianKernel,
+    supportedSizes: [...PRESET_DERIVATIVE_SIZES],
+    createKernel: createLaplacianKernelValues,
     summary: '强调像素突变的位置，常用来检测边缘或轮廓，对亮度突变特别敏感。',
     principle: '它本质上是二阶差分。3×3 使用经典模板，更大的 5×5、7×7 版本则在二阶差分周围加入了更宽的平滑支撑。',
     origin: '它来源于离散形式的二阶导数；在图像处理中，二阶差分常用来突出“变化率本身是否突然改变”。',
@@ -219,8 +142,8 @@ const KERNEL_PRESET_FAMILIES: KernelPresetFamily[] = [
   {
     key: 'sobelx',
     label: 'Sobel X',
-    supportedSizes: PRESET_DERIVATIVE_SIZES,
-    createKernel: createSobelXKernel,
+    supportedSizes: [...PRESET_DERIVATIVE_SIZES],
+    createKernel: createSobelXKernelValues,
     summary: '突出左右方向的亮度变化，因此更容易检测竖直边缘。',
     principle: '它把“水平方向一阶差分”和“垂直方向平滑”结合在一起；核越大，参与比较的邻域越宽。',
     origin: '它是经典的一阶导数卷积核族。3×3 最常见，5×5 和 7×7 则表示更大尺度的方向导数。',
@@ -232,8 +155,8 @@ const KERNEL_PRESET_FAMILIES: KernelPresetFamily[] = [
   {
     key: 'sobely',
     label: 'Sobel Y',
-    supportedSizes: PRESET_DERIVATIVE_SIZES,
-    createKernel: createSobelYKernel,
+    supportedSizes: [...PRESET_DERIVATIVE_SIZES],
+    createKernel: createSobelYKernelValues,
     summary: '突出上下方向的亮度变化，因此更容易检测水平边缘。',
     principle: '它把“垂直方向一阶差分”和“水平方向平滑”结合在一起；核越大，参与比较的邻域越宽。',
     origin: '它是经典的一阶导数卷积核族。3×3 最常见，5×5 和 7×7 则表示更大尺度的方向导数。',
@@ -297,21 +220,6 @@ function getTermMatrixCellClass(size: number): string {
   return 'w-[3.4rem] h-[3.4rem] text-[9px]';
 }
 
-function formatPixelValue(value: number): string {
-  const rounded = Math.round(value * 100) / 100;
-  if (Number.isInteger(rounded)) return String(rounded);
-  return rounded.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
-}
-
-interface MathTextProps {
-  mathML: string;
-  className?: string;
-}
-
-function MathText({ mathML, className }: MathTextProps) {
-  return <span className={className} dangerouslySetInnerHTML={{ __html: mathML }} />;
-}
-
 function buildMainFormulaMathML(x: number, y: number, outputValue: number): string {
   return buildInlineMathML(`
     <mrow>
@@ -360,169 +268,6 @@ function buildOutputFormulaMathML(x: number, y: number): string {
       <mi>G</mi><mo>(</mo><mn>${x}</mn><mo>,</mo><mn>${y}</mn><mo>)</mo>
     </mrow>
   `);
-}
-
-interface OverlayPoint {
-  x: number;
-  y: number;
-}
-
-interface OverlayPath {
-  id: string;
-  tone: 'red' | 'amber' | 'emerald';
-  from: OverlayPoint;
-  to: OverlayPoint;
-}
-
-interface ConvolutionVisualOverlayProps {
-  x: number;
-  y: number;
-  kernelSize: number;
-  inputWidth: number;
-  inputHeight: number;
-  outputWidth: number;
-  outputHeight: number;
-}
-
-function getElementCenter(selector: string): OverlayPoint | null {
-  const element = document.querySelector(selector);
-  if (!element) return null;
-
-  const rect = element.getBoundingClientRect();
-  return {
-    x: rect.left + rect.width / 2,
-    y: rect.top + rect.height / 2,
-  };
-}
-
-function getRegionCenter(
-  selector: string,
-  regionX: number,
-  regionY: number,
-  regionSize: number,
-  imageWidth: number,
-  imageHeight: number
-): OverlayPoint | null {
-  const element = document.querySelector(selector);
-  if (!element || imageWidth === 0 || imageHeight === 0) return null;
-
-  const rect = element.getBoundingClientRect();
-  return {
-    x: rect.left + ((regionX + regionSize / 2) / imageWidth) * rect.width,
-    y: rect.top + ((regionY + regionSize / 2) / imageHeight) * rect.height,
-  };
-}
-
-function getPixelCenter(
-  selector: string,
-  pixelX: number,
-  pixelY: number,
-  imageWidth: number,
-  imageHeight: number
-): OverlayPoint | null {
-  return getRegionCenter(selector, pixelX, pixelY, 1, imageWidth, imageHeight);
-}
-
-function ConvolutionVisualOverlay({
-  x,
-  y,
-  kernelSize,
-  inputWidth,
-  inputHeight,
-  outputWidth,
-  outputHeight,
-}: ConvolutionVisualOverlayProps) {
-  const [paths, setPaths] = useState<OverlayPath[]>([]);
-
-  useEffect(() => {
-    const updatePaths = () => {
-      const inputFrom = getRegionCenter(
-        '.conv-anchor-input-main',
-        x,
-        y,
-        kernelSize,
-        inputWidth,
-        inputHeight
-      );
-      const inputTo = getElementCenter('.conv-anchor-window-zoom');
-      const kernelFrom = getElementCenter('.conv-anchor-main-operator');
-      const kernelTo = getElementCenter('.conv-anchor-kernel-node');
-      const outputFrom = getPixelCenter(
-        '.conv-anchor-output-main',
-        x,
-        y,
-        outputWidth,
-        outputHeight
-      );
-      const outputTo = getElementCenter('.conv-anchor-output-node');
-
-      const nextPaths: OverlayPath[] = [];
-      if (inputFrom && inputTo) {
-        nextPaths.push({ id: 'input-window', tone: 'red', from: inputFrom, to: inputTo });
-      }
-      if (kernelFrom && kernelTo) {
-        nextPaths.push({ id: 'kernel-weight', tone: 'amber', from: kernelFrom, to: kernelTo });
-      }
-      if (outputFrom && outputTo) {
-        nextPaths.push({ id: 'output-write', tone: 'emerald', from: outputFrom, to: outputTo });
-      }
-      setPaths(nextPaths);
-    };
-
-    const frame = requestAnimationFrame(updatePaths);
-    window.addEventListener('resize', updatePaths);
-    window.addEventListener('scroll', updatePaths, { passive: true });
-
-    return () => {
-      cancelAnimationFrame(frame);
-      window.removeEventListener('resize', updatePaths);
-      window.removeEventListener('scroll', updatePaths);
-    };
-  }, [inputHeight, inputWidth, kernelSize, outputHeight, outputWidth, x, y]);
-
-  if (paths.length === 0) return null;
-
-  const strokeClass = {
-    red: 'text-red-500',
-    amber: 'text-amber-500',
-    emerald: 'text-emerald-500',
-  };
-
-  return (
-    <svg className="conv-visual-overlay" aria-hidden>
-      <defs>
-        <filter id="conv-overlay-glow" x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="4" stdDeviation="3" floodColor="rgb(15 23 42)" floodOpacity="0.16" />
-        </filter>
-      </defs>
-      {paths.map(path => {
-        const controlY = Math.min(path.to.y - 48, path.from.y + 150);
-        const d = `M ${path.from.x} ${path.from.y} C ${path.from.x} ${controlY}, ${path.to.x} ${controlY}, ${path.to.x} ${path.to.y}`;
-
-        return (
-          <g key={path.id} className={strokeClass[path.tone]} filter="url(#conv-overlay-glow)">
-            <path
-              className="conv-overlay-path"
-              d={d}
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="3"
-              strokeLinecap="round"
-            />
-            <circle cx={path.from.x} cy={path.from.y} r="5" fill="white" stroke="currentColor" strokeWidth="3" />
-            <path
-              d={`M ${path.to.x - 7} ${path.to.y - 10} L ${path.to.x} ${path.to.y} L ${path.to.x + 7} ${path.to.y - 10}`}
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </g>
-        );
-      })}
-    </svg>
-  );
 }
 
 export default function ConvolutionPage() {
@@ -613,32 +358,12 @@ export default function ConvolutionPage() {
       ? `上方大图中的红点只负责定位；这里展示的是该位置对应的 ${kernelSize}×${kernelSize} 输入窗口。`
       : '上方大图的红框直接展开到这里；每一格仍对应原图中的同一位置。';
 
-  const handleDirectionMove = useCallback(
-    (direction: 'up' | 'down' | 'left' | 'right') => {
-      if (!currentStep || totalSteps === 0 || outputWidth === 0 || outputHeight === 0) return;
-
-      let newX = currentStep.x;
-      let newY = currentStep.y;
-
-      switch (direction) {
-        case 'up':
-          newY = Math.max(0, currentStep.y - 1);
-          break;
-        case 'down':
-          newY = Math.min(outputHeight - 1, currentStep.y + 1);
-          break;
-        case 'left':
-          newX = Math.max(0, currentStep.x - 1);
-          break;
-        case 'right':
-          newX = Math.min(outputWidth - 1, currentStep.x + 1);
-          break;
-      }
-
-      setCurrentPosition({ x: newX, y: newY });
-    },
-    [currentStep, outputHeight, outputWidth, totalSteps]
-  );
+  const handleDirectionMove = useGridNavigation({
+    current: currentStep ? { x: currentStep.x, y: currentStep.y } : null,
+    bounds: { width: outputWidth, height: outputHeight },
+    onMove: setCurrentPosition,
+    disabled: totalSteps === 0,
+  });
 
   const handleStepSelect = useCallback(
     (x: number, y: number) => {
@@ -759,7 +484,7 @@ export default function ConvolutionPage() {
 
     return (
       <div className="space-y-4">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+        <TeachingCard>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-slate-800">当前输出像素的卷积表达式</div>
@@ -772,11 +497,11 @@ export default function ConvolutionPage() {
             </div>
           </div>
 
-          <div className="mx-auto mt-4 max-w-4xl rounded-2xl border border-slate-200 bg-[#f8f7f3] px-5 py-5 text-slate-800 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
-            <div className="text-center text-lg leading-relaxed sm:text-xl">
-              <MathText mathML={mainFormulaMathML} className="[&_math]:mx-auto [&_math]:inline-block" />
-            </div>
-          </div>
+          <FormulaCard
+            mathML={mainFormulaMathML}
+            className="mx-auto mt-4 max-w-4xl"
+            mathClassName="[&_math]:text-lg sm:[&_math]:text-xl"
+          />
 
           <div className="mt-3 space-y-2 text-xs leading-6 text-slate-600">
             <p>
@@ -797,9 +522,9 @@ export default function ConvolutionPage() {
               并写入结果图第 {y + 1} 行、第 {x + 1} 列。
             </p>
           </div>
-        </div>
+        </TeachingCard>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+        <TeachingCard>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-slate-800">公式在当前步骤中的具体代入</div>
@@ -936,9 +661,9 @@ export default function ConvolutionPage() {
               </div>
             </div>
           </div>
-        </div>
+        </TeachingCard>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+        <TeachingCard>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-slate-800">卷积核的作用</div>
@@ -1037,10 +762,12 @@ export default function ConvolutionPage() {
                         <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
                           公式
                         </div>
-                        <div className="kernel-formula-block mt-2 overflow-x-auto rounded-xl border border-slate-200 bg-[#f8f7f3] px-4 py-4 text-slate-800">
-                          <MathText mathML={preset.formulaMathML} className="[&_math]:inline-block" />
-                        </div>
-                        <p className="mt-2 text-xs leading-6 text-slate-600">{preset.formulaNote}</p>
+                        <FormulaCard
+                          mathML={preset.formulaMathML}
+                          className="mt-2"
+                          formulaClassName="rounded-xl px-4 py-4 shadow-none"
+                          note={preset.formulaNote}
+                        />
                       </div>
 
                       <div className="mt-4 border-t border-slate-200 pt-4">
@@ -1074,7 +801,7 @@ export default function ConvolutionPage() {
               );
             })}
           </div>
-        </div>
+        </TeachingCard>
       </div>
     );
   }, [
@@ -1084,16 +811,48 @@ export default function ConvolutionPage() {
     selectedPresetKey,
   ]);
 
-  const visualOverlay = currentStep ? (
-    <ConvolutionVisualOverlay
-      x={currentStep.x}
-      y={currentStep.y}
-      kernelSize={kernelSize}
-      inputWidth={inputWidth}
-      inputHeight={inputHeight}
-      outputWidth={outputWidth}
-      outputHeight={outputHeight}
-    />
+  const visualOverlayPaths = useMemo<AnchoredOverlayPath[]>(() => {
+    if (!currentStep) return [];
+
+    return [
+      {
+        id: 'input-window',
+        tone: 'red',
+        from: {
+          kind: 'region',
+          selector: '.conv-anchor-input-main',
+          x: currentStep.x,
+          y: currentStep.y,
+          size: kernelSize,
+          imageWidth: inputWidth,
+          imageHeight: inputHeight,
+        },
+        to: { kind: 'element', selector: '.conv-anchor-window-zoom' },
+      },
+      {
+        id: 'kernel-weight',
+        tone: 'amber',
+        from: { kind: 'element', selector: '.conv-anchor-main-operator' },
+        to: { kind: 'element', selector: '.conv-anchor-kernel-node' },
+      },
+      {
+        id: 'output-write',
+        tone: 'emerald',
+        from: {
+          kind: 'pixel',
+          selector: '.conv-anchor-output-main',
+          x: currentStep.x,
+          y: currentStep.y,
+          imageWidth: outputWidth,
+          imageHeight: outputHeight,
+        },
+        to: { kind: 'element', selector: '.conv-anchor-output-node' },
+      },
+    ];
+  }, [currentStep, inputHeight, inputWidth, kernelSize, outputHeight, outputWidth]);
+
+  const visualOverlay = visualOverlayPaths.length > 0 ? (
+    <AnchoredOverlay paths={visualOverlayPaths} />
   ) : null;
 
   const analysisPreview = useMemo(() => {
@@ -1116,10 +875,10 @@ export default function ConvolutionPage() {
     const showProductGrid = kernelSize <= 3;
 
     return (
-      <div className="conv-process-rail">
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] xl:items-start">
-          <div className="flex flex-col items-center gap-3 xl:justify-self-start">
-            <div className="conv-flow-node border-red-200 bg-white">
+      <ProcessRail>
+        <FlowColumns>
+          <FlowColumn align="start">
+            <FlowNode tone="red">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <span className="text-[11px] font-semibold uppercase text-red-700">输入窗口放大</span>
                 <span className="text-[11px] text-red-700">
@@ -1142,9 +901,9 @@ export default function ConvolutionPage() {
                   {inputMarkerExpandHint}
                 </div>
               </div>
-            </div>
+            </FlowNode>
 
-            <div className="conv-flow-node border-slate-200 bg-white">
+            <FlowNode tone="slate">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <span className="text-[11px] font-semibold uppercase text-slate-600">窗口数值摘要</span>
                 <span className="font-mono text-[11px] text-slate-500">{kernelSize}×{kernelSize}</span>
@@ -1168,11 +927,11 @@ export default function ConvolutionPage() {
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
+            </FlowNode>
+          </FlowColumn>
 
-          <div className="flex flex-col items-center gap-3 xl:justify-self-center">
-            <div className="conv-flow-node conv-anchor-kernel-node border-amber-200 bg-white">
+          <FlowColumn align="center">
+            <FlowNode tone="amber" className="conv-anchor-kernel-node">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <span className="text-[11px] font-semibold uppercase text-amber-800">卷积核计算</span>
                 <span className="font-mono text-[11px] text-amber-700">逐格对齐</span>
@@ -1214,9 +973,9 @@ export default function ConvolutionPage() {
                   )}
                 </div>
               )}
-            </div>
+            </FlowNode>
 
-            <div className="conv-flow-node border-sky-200 bg-white">
+            <FlowNode tone="sky">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <span className="text-[11px] font-semibold uppercase text-sky-700">逐格乘积</span>
                 <span className="font-mono text-[11px] text-sky-700">
@@ -1253,11 +1012,11 @@ export default function ConvolutionPage() {
                   </div>
                 </div>
               )}
-            </div>
-          </div>
+            </FlowNode>
+          </FlowColumn>
 
-          <div className="flex flex-col items-center gap-3 xl:justify-self-end">
-            <div className="conv-flow-node conv-anchor-output-node min-w-[12.75rem] border-emerald-200 bg-emerald-50/70">
+          <FlowColumn align="end">
+            <FlowNode tone="emerald" className="conv-anchor-output-node min-w-[12.75rem]">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <span className="text-[11px] font-semibold uppercase text-emerald-700">写回结果图</span>
                 <span className="text-[11px] text-emerald-700">第 {y + 1} 行 / 第 {x + 1} 列</span>
@@ -1280,10 +1039,10 @@ export default function ConvolutionPage() {
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-      </div>
+            </FlowNode>
+          </FlowColumn>
+        </FlowColumns>
+      </ProcessRail>
     );
   }, [
     currentStep,
@@ -1302,20 +1061,15 @@ export default function ConvolutionPage() {
         </div>
       </div>
 
-      <div>
-        <label className="mb-1.5 block text-xs font-medium text-slate-500">教学示例</label>
-        <select
-          value={imageType}
-          onChange={e => handleImageTypeChange(e.target.value as ConvolutionTeachingImageType)}
-          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-        >
-          {Object.entries(convolutionTeachingImages).map(([key, { name }]) => (
-            <option key={key} value={key}>
-              {name}
-            </option>
-          ))}
-        </select>
-      </div>
+      <SelectParam
+        label="教学示例"
+        value={imageType}
+        onChange={value => handleImageTypeChange(value as ConvolutionTeachingImageType)}
+        options={Object.entries(convolutionTeachingImages).map(([key, item]) => ({
+          value: key,
+          label: item.name,
+        }))}
+      />
 
       <div>
         <label className="mb-1.5 block text-xs font-medium text-slate-500">预设类别</label>
@@ -1411,6 +1165,8 @@ export default function ConvolutionPage() {
     <ConceptLayout
       title="卷积运算"
       subtitle="Convolution - 图像处理的核心操作"
+      operationLabel="卷积计算"
+      parameterIntro="先观察右侧可视化过程，再结合这里的参数调整，有助于理解卷积窗口、核大小与输出尺寸之间的关系。"
       originalImage={originalImage}
       resultImage={resultImage}
       parameters={parameters}

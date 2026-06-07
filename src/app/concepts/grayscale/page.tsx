@@ -1,32 +1,31 @@
 'use client';
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { ConceptLayout, CodeViewer, SelectParam } from '@/components';
+import {
+  ConceptLayout,
+  CodeViewer,
+  FormulaCard,
+  SelectParam,
+  TeachingCard,
+  buildInlineMathML,
+} from '@/components';
 import {
   generateRgbImage,
   rgbToGrayscaleWeighted,
   rgbToGrayscaleAverage,
   extractChannel,
   grayscaleSteps,
+  getDisplayImage,
   type RgbImage,
   type GrayscaleStep,
   type DisplayMode,
 } from '@/lib/algorithms/grayscale';
 import { sampleImages, SampleImageType } from '@/lib/utils/sampleImages';
-import { loadImageAsRgb } from '@/lib/utils/imageProcessing';
+import { loadImageAsRgb, resizeRgbImage } from '@/lib/utils/imageProcessing';
 import { GrayscaleImage } from '@/lib/algorithms/types';
+import { useGridNavigation } from '@/hooks/useGridNavigation';
 
 type GrayMethod = 'weighted' | 'average';
-
-// —— MathML 工具（参考卷积模块）——
-
-function buildInlineMathML(texLikeBody: string): string {
-  return `<math xmlns="http://www.w3.org/1998/Math/MathML">${texLikeBody}</math>`;
-}
-
-function MathText({ mathML, className }: { mathML: string; className?: string }) {
-  return <span className={className} dangerouslySetInnerHTML={{ __html: mathML }} />;
-}
 
 function buildWeightedFormulaMathML(r255: string, g255: string, b255: string, result: string): string {
   return buildInlineMathML(`
@@ -112,25 +111,6 @@ function getDisplayLabel(mode: DisplayMode): string {
   }
 }
 
-function resizeRgbImage(image: RgbImage, maxSize: number): RgbImage {
-  const height = image.length;
-  const width = image[0]?.length || 0;
-  if (!height || !width || Math.max(height, width) <= maxSize) return image;
-
-  const scale = maxSize / Math.max(height, width);
-  const resizedHeight = Math.max(1, Math.round(height * scale));
-  const resizedWidth = Math.max(1, Math.round(width * scale));
-
-  return Array.from({ length: resizedHeight }, (_, y) => {
-    const sourceY = Math.min(height - 1, Math.floor(y / scale));
-    return Array.from({ length: resizedWidth }, (_, x) => {
-      const sourceX = Math.min(width - 1, Math.floor(x / scale));
-      const [r, g, b] = image[sourceY][sourceX];
-      return [r, g, b];
-    });
-  });
-}
-
 export default function GrayscalePage() {
   const [imageType, setImageType] = useState<SampleImageType>('gradient');
   const [displayMode, setDisplayMode] = useState<DisplayMode>('color');
@@ -176,14 +156,8 @@ export default function GrayscalePage() {
 
   const displayImage = useMemo(() => {
     if (!rgbImage) return null;
-    switch (displayMode) {
-      case 'color': return weightedResult;
-      case 'red': return extractChannel(rgbImage, 0);
-      case 'green': return extractChannel(rgbImage, 1);
-      case 'blue': return extractChannel(rgbImage, 2);
-      case 'grayWeighted': return weightedResult;
-      case 'grayAverage': return averageResult;
-    }
+    if (displayMode === 'color') return weightedResult;
+    return getDisplayImage(rgbImage, displayMode, weightedResult, averageResult);
   }, [rgbImage, displayMode, weightedResult, averageResult]);
 
   const resultImage = useMemo(
@@ -200,24 +174,6 @@ export default function GrayscalePage() {
 
   // —— 事件处理 ——
 
-  const handleDirectionMove = useCallback(
-    (direction: 'up' | 'down' | 'left' | 'right') => {
-      if (!currentStep || !rgbImage || steps.length === 0) return;
-      const width = rgbImage[0].length;
-      const height = rgbImage.length;
-      let newX = currentStep.x, newY = currentStep.y;
-      switch (direction) {
-        case 'up': newY = Math.max(0, currentStep.y - 1); break;
-        case 'down': newY = Math.min(height - 1, currentStep.y + 1); break;
-        case 'left': newX = Math.max(0, currentStep.x - 1); break;
-        case 'right': newX = Math.min(width - 1, currentStep.x + 1); break;
-      }
-      const newIndex = steps.findIndex(function(s) { return s.x === newX && s.y === newY; });
-      if (newIndex !== -1) setCurrentStepIndex(newIndex);
-    },
-    [currentStep, rgbImage, steps]
-  );
-
   const handleImageTypeChange = useCallback(function(value: string) {
     setImageType(value as SampleImageType);
     setCurrentStepIndex(0);
@@ -233,70 +189,34 @@ export default function GrayscalePage() {
     setCurrentStepIndex(0);
   }, []);
 
-  const handleInputRegionSelect = useCallback(
-    function(x: number, y: number) {
-      var idx = steps.findIndex(function(s) { return s.x === x && s.y === y; });
+  const selectStepByPoint = useCallback(
+    function(point: { x: number; y: number }) {
+      var idx = steps.findIndex(function(s) { return s.x === point.x && s.y === point.y; });
       if (idx !== -1) setCurrentStepIndex(idx);
     },
     [steps]
+  );
+
+  const handleDirectionMove = useGridNavigation({
+    current: currentStep ? { x: currentStep.x, y: currentStep.y } : null,
+    bounds: { width: rgbImage?.[0]?.length ?? 0, height: rgbImage?.length ?? 0 },
+    onMove: selectStepByPoint,
+    disabled: steps.length === 0,
+  });
+
+  const handleInputRegionSelect = useCallback(
+    function(x: number, y: number) {
+      selectStepByPoint({ x, y });
+    },
+    [selectStepByPoint]
   );
 
   const handleOutputPixelSelect = useCallback(
     function(x: number, y: number) {
-      var idx = steps.findIndex(function(s) { return s.x === x && s.y === y; });
-      if (idx !== -1) setCurrentStepIndex(idx);
+      selectStepByPoint({ x, y });
     },
-    [steps]
+    [selectStepByPoint]
   );
-
-  // —— analysisPreview ——
-
-  var analysisPreview = useMemo(function() {
-    if (!currentStep || !rgbImage) return null;
-    var step = currentStep;
-    var x = step.x, y = step.y, r = step.r, g = step.g, b = step.b;
-    var weightedGray = step.weightedGray, averageGray = step.averageGray;
-    var curMethod = step.method;
-    var outVal = curMethod === 'weighted' ? weightedGray : averageGray;
-    var r255 = (r * 255).toFixed(0), g255 = (g * 255).toFixed(0), b255 = (b * 255).toFixed(0);
-    var wg255 = (weightedGray * 255).toFixed(1), ag255 = (averageGray * 255).toFixed(1);
-    var ov255 = (outVal * 255).toFixed(1);
-
-    return (
-      <div className="max-w-3xl mx-auto space-y-3">
-        <div className="flex items-center gap-4 flex-wrap justify-center">
-          <div className="text-xs font-medium text-slate-500">
-            选中像素 ({x}, {y})
-          </div>
-          <div className="flex gap-2">
-            <span className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-xs font-mono text-red-700">R: {r255}</span>
-            <span className="inline-flex items-center gap-1 rounded-md bg-green-50 px-2 py-1 text-xs font-mono text-green-700">G: {g255}</span>
-            <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-1 text-xs font-mono text-blue-700">B: {b255}</span>
-          </div>
-        </div>
-        <div className="flex items-center justify-center gap-4 flex-wrap">
-          <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-2 text-center min-w-[180px]">
-            <div className="text-[10px] font-semibold tracking-wide text-amber-700 mb-1">加权法</div>
-            <code className="text-xs text-amber-900 font-mono">
-              {r255}×0.299 + {g255}×0.587 + {b255}×0.114
-            </code>
-            <div className="mt-1 text-xs font-bold text-amber-800">= {wg255}</div>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 text-center min-w-[180px]">
-            <div className="text-[10px] font-semibold tracking-wide text-slate-600 mb-1">平均法</div>
-            <code className="text-xs text-slate-700 font-mono">({r255} + {g255} + {b255}) / 3</code>
-            <div className="mt-1 text-xs font-bold text-slate-800">= {ag255}</div>
-          </div>
-          <div className="flex flex-col items-center gap-1">
-            <div className="text-[10px] font-medium text-slate-500">当前输出</div>
-            <div className="w-12 h-12 flex items-center justify-center bg-emerald-50 border-2 border-emerald-400 rounded-lg">
-              <span className="text-sm font-bold text-emerald-700">{ov255}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }, [currentStep, rgbImage]);
 
   // —— stepDetails（参考卷积模块格式）——
 
@@ -307,22 +227,29 @@ export default function GrayscalePage() {
     var weightedGray = step.weightedGray, averageGray = step.averageGray;
     var r255 = (r * 255).toFixed(0), g255 = (g * 255).toFixed(0), b255 = (b * 255).toFixed(0);
     var wg255 = (weightedGray * 255).toFixed(1), ag255 = (averageGray * 255).toFixed(1);
-    var rContribution = (r * 0.299 * 255).toFixed(1);
-    var gContribution = (g * 0.587 * 255).toFixed(1);
-    var bContribution = (b * 0.114 * 255).toFixed(1);
+    var weights = method === 'weighted'
+      ? { r: 0.299, g: 0.587, b: 0.114 }
+      : { r: 1 / 3, g: 1 / 3, b: 1 / 3 };
+    var currentOutput = method === 'weighted' ? weightedGray : averageGray;
+    var currentOutput255 = method === 'weighted' ? wg255 : ag255;
+    var rContribution = (r * weights.r * 255).toFixed(1);
+    var gContribution = (g * weights.g * 255).toFixed(1);
+    var bContribution = (b * weights.b * 255).toFixed(1);
 
     var weightedFormulaML = buildWeightedFormulaMathML(r255, g255, b255, wg255);
     var averageFormulaML = buildAverageFormulaMathML(r255, g255, b255, ag255);
+    var currentFormulaML = method === 'weighted' ? weightedFormulaML : averageFormulaML;
+    var currentMethodLabel = method === 'weighted' ? '加权法' : '平均法';
 
     return (
       <div className="space-y-4">
         {/* 公式卡片 */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+        <TeachingCard>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-slate-800">当前像素灰度化表达式</div>
               <p className="mt-1 text-xs leading-5 text-slate-500">
-                加权法基于人眼视觉特性分配权重，绿色通道权重最高（0.587），蓝色最低（0.114）。
+                当前参数选择的是{currentMethodLabel}，所以下方只展示这一种方法的代入过程。
               </p>
             </div>
             <div className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
@@ -330,37 +257,29 @@ export default function GrayscalePage() {
             </div>
           </div>
 
-          {/* 加权法公式 */}
-          <div className="mx-auto mt-4 max-w-4xl rounded-2xl border border-slate-200 bg-[#f8f7f3] px-5 py-5 text-slate-800 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
-            <div className="text-xs font-semibold text-slate-500 mb-2">加权法</div>
-            <div className="text-center leading-relaxed">
-              <MathText mathML={weightedFormulaML} className="[&_math]:mx-auto [&_math]:inline-block [&_math]:text-lg" />
-            </div>
-          </div>
+          <FormulaCard
+            label={currentMethodLabel}
+            mathML={currentFormulaML}
+            className="mx-auto mt-4 max-w-4xl"
+            mathClassName="[&_math]:text-lg"
+          />
 
           <div className="mt-3 text-xs leading-6 text-slate-600 space-y-1">
-            <p>权重 0.299、0.587、0.114 来自 ITU-R BT.601 标准，三个权重之和为 1。</p>
+            {method === 'weighted' ? (
+              <p>加权法使用 0.299、0.587、0.114 三个权重，反映人眼对绿色更敏感、对蓝色相对不敏感的视觉特性。</p>
+            ) : (
+              <p>平均法把 R、G、B 三个通道等权相加后除以 3，用于说明最直接的三通道合并方式。</p>
+            )}
           </div>
-
-          {/* 平均法公式 */}
-          <div className="mx-auto mt-4 max-w-4xl rounded-2xl border border-slate-200 bg-[#f8f7f3] px-5 py-5 text-slate-800 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
-            <div className="text-xs font-semibold text-slate-500 mb-2">平均法（对比）</div>
-            <div className="text-center leading-relaxed">
-              <MathText mathML={averageFormulaML} className="[&_math]:mx-auto [&_math]:inline-block [&_math]:text-lg" />
-            </div>
-          </div>
-          <div className="mt-2 text-xs leading-6 text-slate-500">
-            平均法将三个通道等权重平均，不考虑人眼视觉特性。绿色占主导时偏暗，蓝色占主导时偏亮。
-          </div>
-        </div>
+        </TeachingCard>
 
         {/* 代入展开卡片 */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+        <TeachingCard>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-slate-800">公式在当前像素的具体代入</div>
               <p className="mt-1 text-xs leading-5 text-slate-500">
-                三个通道与对应权重的乘积，求和得到灰度输出值。
+                三个通道与当前方法对应权重的乘积，求和得到右侧结果图中的灰度输出值。
               </p>
             </div>
             <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
@@ -372,50 +291,50 @@ export default function GrayscalePage() {
           <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(14rem,0.85fr)]">
             <div className="rounded-2xl border border-red-200 bg-red-50/55 p-3">
               <div className="text-sm font-semibold text-red-700">R 通道贡献</div>
-              <div className="mt-1 text-[11px] text-red-600">权重 × 0.299</div>
+              <div className="mt-1 text-[11px] text-red-600">权重 × {weights.r.toFixed(3)}</div>
               <div className="mt-2 text-xs leading-5 text-red-700">红色通道值 × 权重</div>
               <div className="mt-3 rounded-xl border border-red-200 bg-white/90 px-3 py-3 text-center">
                 <div className="font-mono text-lg font-bold text-red-700">{rContribution}</div>
-                <div className="mt-1 font-mono text-[10px] text-red-500">{r255} × 0.299</div>
+                <div className="mt-1 font-mono text-[10px] text-red-500">{r255} × {weights.r.toFixed(3)}</div>
               </div>
             </div>
 
             <div className="rounded-2xl border border-green-200 bg-green-50/55 p-3">
               <div className="text-sm font-semibold text-green-700">G 通道贡献</div>
-              <div className="mt-1 text-[11px] text-green-600">权重 × 0.587（最高）</div>
+              <div className="mt-1 text-[11px] text-green-600">权重 × {weights.g.toFixed(3)}</div>
               <div className="mt-2 text-xs leading-5 text-green-700">绿色通道值 × 权重</div>
               <div className="mt-3 rounded-xl border border-green-200 bg-white/90 px-3 py-3 text-center">
                 <div className="font-mono text-lg font-bold text-green-700">{gContribution}</div>
-                <div className="mt-1 font-mono text-[10px] text-green-500">{g255} × 0.587</div>
+                <div className="mt-1 font-mono text-[10px] text-green-500">{g255} × {weights.g.toFixed(3)}</div>
               </div>
             </div>
 
             <div className="rounded-2xl border border-blue-200 bg-blue-50/55 p-3">
               <div className="text-sm font-semibold text-blue-700">B 通道贡献</div>
-              <div className="mt-1 text-[11px] text-blue-600">权重 × 0.114（最低）</div>
+              <div className="mt-1 text-[11px] text-blue-600">权重 × {weights.b.toFixed(3)}</div>
               <div className="mt-2 text-xs leading-5 text-blue-700">蓝色通道值 × 权重</div>
               <div className="mt-3 rounded-xl border border-blue-200 bg-white/90 px-3 py-3 text-center">
                 <div className="font-mono text-lg font-bold text-blue-700">{bContribution}</div>
-                <div className="mt-1 font-mono text-[10px] text-blue-500">{b255} × 0.114</div>
+                <div className="mt-1 font-mono text-[10px] text-blue-500">{b255} × {weights.b.toFixed(3)}</div>
               </div>
             </div>
 
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50/55 p-3">
               <div className="text-sm font-semibold text-emerald-800">输出结果</div>
               <div className="mt-1 text-[11px] text-emerald-700">三项求和</div>
-              <div className="mt-2 text-xs leading-5 text-emerald-800">三通道贡献之和 = 加权灰度值</div>
+              <div className="mt-2 text-xs leading-5 text-emerald-800">三通道贡献之和 = {currentMethodLabel}灰度值</div>
               <div className="mt-3 rounded-xl border border-emerald-200 bg-white/90 px-3 py-3 text-center">
-                <div className="font-mono text-lg font-bold text-emerald-800">{wg255}</div>
+                <div className="font-mono text-lg font-bold text-emerald-800">{currentOutput255}</div>
                 <div className="mt-1 font-mono text-[10px] text-emerald-600">
                   {rContribution} + {gContribution} + {bContribution}
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        </TeachingCard>
 
         {/* RGB 通道数值卡片 */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+        <TeachingCard>
           <div className="text-sm font-semibold text-slate-800 mb-3">
             位置 ({x}, {y}) 的 RGB 三通道数值
           </div>
@@ -437,14 +356,14 @@ export default function GrayscalePage() {
             </div>
             <div className="flex flex-col items-center rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 min-w-[72px]">
               <span className="text-[10px] text-amber-600 mb-0.5">灰度</span>
-              <span className="text-lg font-bold text-amber-700">{(weightedGray * 255).toFixed(0)}</span>
-              <div className="mt-1 w-full h-3 rounded bg-amber-500" style={{ opacity: weightedGray }} />
+              <span className="text-lg font-bold text-amber-700">{(currentOutput * 255).toFixed(0)}</span>
+              <div className="mt-1 w-full h-3 rounded bg-amber-500" style={{ opacity: currentOutput }} />
             </div>
           </div>
-        </div>
+        </TeachingCard>
       </div>
     );
-  }, [currentStep, rgbImage]);
+  }, [currentStep, rgbImage, method]);
 
   // —— 参数面板 ——
 
@@ -513,12 +432,13 @@ export default function GrayscalePage() {
     <ConceptLayout
       title="图像灰度化"
       subtitle="Grayscale - RGB 三通道与灰度转换"
+      operationLabel="灰度转换"
+      parameterIntro="左侧用于切换示例图像、通道显示和灰度化方法；右侧展示当前像素如何由 RGB 转为灰度值。"
       originalImage={displayImage}
       originalRgbImage={displayMode === 'color' ? rgbImage : null}
       resultImage={resultImage}
       parameters={parameters}
       stepDetails={stepDetails}
-      analysisPreview={analysisPreview}
       codeTab={<CodeViewer languages={[{ name: 'TypeScript', code: GRAYSCALE_CODE_TS }]} />}
       imageHints={imageHints}
       showOriginalGrid={shouldShowOriginalGrid}

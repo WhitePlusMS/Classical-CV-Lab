@@ -1,7 +1,15 @@
 'use client';
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { ConceptLayout, CodeViewer, SelectParam } from '@/components';
+import {
+  ConceptLayout,
+  CodeViewer,
+  FormulaCard,
+  ProcessRail,
+  SelectParam,
+  TeachingCard,
+  buildInlineMathML,
+} from '@/components';
 import { computeHistogram } from '@/lib/algorithms/threshold';
 import { generateExampleImage } from '@/lib/algorithms/histogram';
 import { loadImageAsGrayscale } from '@/lib/utils/imageProcessing';
@@ -35,23 +43,41 @@ function probability(bins: number[], total: number): number[] {
   return bins.map(n => n / total);
 }`;
 
+const HISTOGRAM_FORMULA_MATHML = buildInlineMathML(`
+  <mrow>
+    <mi>P</mi><mo>(</mo><msub><mi>s</mi><mi>k</mi></msub><mo>)</mo>
+    <mo>=</mo>
+    <mfrac><msub><mi>n</mi><mi>k</mi></msub><mi>n</mi></mfrac>
+  </mrow>
+`);
+
 function HistogramSVG({
   histogram,
-  totalPixels,
   highlightedGray,
-  onBarHover,
-  onBarLeave,
+  pinnedGray,
+  onHoverGrayChange,
+  onPinGray,
 }: {
   histogram: number[];
-  totalPixels: number;
   highlightedGray: number | null;
-  onBarHover: (gray: number) => void;
-  onBarLeave: () => void;
+  pinnedGray: number | null;
+  onHoverGrayChange: (gray: number | null) => void;
+  onPinGray: (gray: number) => void;
 }) {
   const svgWidth = 520;
   const svgHeight = 220;
-  const barWidth = svgWidth / 256;
+  const plotLeft = 20;
+  const plotWidth = svgWidth - plotLeft;
+  const barWidth = plotWidth / 256;
   const maxCount = Math.max(...histogram, 1);
+  const activeGray = highlightedGray ?? pinnedGray;
+
+  const readGrayFromMouse = (event: React.MouseEvent<SVGSVGElement>): number => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const svgX = ((event.clientX - rect.left) / rect.width) * svgWidth;
+    const gray = Math.floor(((svgX - plotLeft) / plotWidth) * 256);
+    return Math.max(0, Math.min(255, gray));
+  };
 
   return (
     <svg
@@ -59,6 +85,9 @@ function HistogramSVG({
       height={svgHeight}
       viewBox={`0 0 ${svgWidth} ${svgHeight}`}
       className="font-mono"
+      onMouseMove={event => onHoverGrayChange(readGrayFromMouse(event))}
+      onMouseLeave={() => onHoverGrayChange(null)}
+      onClick={event => onPinGray(readGrayFromMouse(event))}
     >
       <rect x={0} y={0} width={svgWidth} height={svgHeight} fill="#f8fafc" rx={4} />
 
@@ -70,45 +99,43 @@ function HistogramSVG({
       </text>
 
       <line
-        x1={20} y1={svgHeight - 10} x2={svgWidth} y2={svgHeight - 10}
+        x1={plotLeft} y1={svgHeight - 10} x2={svgWidth} y2={svgHeight - 10}
         stroke="#cbd5e1" strokeWidth={1}
       />
 
       {histogram.map((count, gray) => {
         const barH = (count / maxCount) * (svgHeight - 24);
-        const isHighlighted = highlightedGray === gray;
+        const isHighlighted = activeGray === gray;
         return (
           <rect
             key={gray}
-            x={20 + gray * barWidth}
+            x={plotLeft + gray * barWidth}
             y={svgHeight - 10 - barH}
             width={Math.max(1, barWidth - 0.5)}
             height={barH}
             fill={isHighlighted ? '#ef4444' : '#3b82f6'}
             fillOpacity={isHighlighted ? 1 : count > 0 ? 0.6 : 0.15}
-            onMouseEnter={() => onBarHover(gray)}
-            onMouseLeave={onBarLeave}
-            style={{ cursor: 'pointer', transition: 'fill-opacity 0.1s' }}
+            style={{ cursor: 'crosshair', transition: 'fill-opacity 0.1s' }}
           />
         );
       })}
 
-      {highlightedGray !== null && (
+      {activeGray !== null && (
         <line
-          x1={20 + highlightedGray * barWidth + barWidth / 2}
+          x1={plotLeft + activeGray * barWidth + barWidth / 2}
           y1={svgHeight - 10}
-          x2={20 + highlightedGray * barWidth + barWidth / 2}
+          x2={plotLeft + activeGray * barWidth + barWidth / 2}
           y2={4}
-          stroke="#ef4444"
-          strokeWidth={1}
-          strokeDasharray="3 2"
+          stroke={highlightedGray !== null ? '#ef4444' : '#0f766e'}
+          strokeWidth={highlightedGray !== null ? 1 : 2}
+          strokeDasharray={highlightedGray !== null ? '3 2' : undefined}
         />
       )}
 
       {[0, 64, 128, 192, 255].map(v => (
         <g key={v}>
-          <line x1={20 + v * barWidth} y1={svgHeight - 10} x2={20 + v * barWidth} y2={svgHeight - 6} stroke="#94a3b8" strokeWidth={1} />
-          <text x={20 + v * barWidth} y={svgHeight + 2} textAnchor="middle" fontSize={8} fill="#64748b">{v}</text>
+          <line x1={plotLeft + v * barWidth} y1={svgHeight - 10} x2={plotLeft + v * barWidth} y2={svgHeight - 6} stroke="#94a3b8" strokeWidth={1} />
+          <text x={plotLeft + v * barWidth} y={svgHeight + 2} textAnchor="middle" fontSize={8} fill="#64748b">{v}</text>
         </g>
       ))}
     </svg>
@@ -117,7 +144,8 @@ function HistogramSVG({
 
 export default function HistogramPage() {
   const [exampleType, setExampleType] = useState<ExampleType>('standard');
-  const [highlightedGray, setHighlightedGray] = useState<number | null>(null);
+  const [hoveredGray, setHoveredGray] = useState<number | null>(null);
+  const [pinnedGray, setPinnedGray] = useState<number | null>(null);
   const [lenaImage, setLenaImage] = useState<GrayscaleImage | null>(null);
 
   // 加载 Lena 真实图像
@@ -140,39 +168,57 @@ export default function HistogramPage() {
   const { bins, totalPixels } = histogramData;
 
   const probabilityText = useMemo(() => {
-    if (highlightedGray === null) return null;
-    const gray = highlightedGray;
+    const gray = hoveredGray ?? pinnedGray;
+    if (gray === null) return null;
     const count = bins[gray] || 0;
     const prob = totalPixels > 0 ? count / totalPixels : 0;
     return { gray, count, prob };
-  }, [bins, totalPixels, highlightedGray]);
+  }, [bins, totalPixels, hoveredGray, pinnedGray]);
 
   const handleExampleChange = useCallback((value: string) => {
     setExampleType(value as ExampleType);
-    setHighlightedGray(null);
+    setHoveredGray(null);
+    setPinnedGray(null);
   }, []);
 
-  const handleBarHover = useCallback((gray: number) => {
-    setHighlightedGray(gray);
+  const handleHoverGrayChange = useCallback((gray: number | null) => {
+    setHoveredGray(gray);
   }, []);
 
-  const handleBarLeave = useCallback(() => {
-    setHighlightedGray(null);
+  const handlePinGray = useCallback((gray: number) => {
+    setPinnedGray(gray);
+    setHoveredGray(null);
   }, []);
+
+  const handleDirectionMove = useCallback((direction: 'up' | 'down' | 'left' | 'right') => {
+    if (direction !== 'left' && direction !== 'right') return;
+    setPinnedGray(prev => {
+      const base = hoveredGray ?? prev ?? 128;
+      return direction === 'left'
+        ? Math.max(0, base - 1)
+        : Math.min(255, base + 1);
+    });
+    setHoveredGray(null);
+  }, [hoveredGray]);
 
   const analysisPreview = useMemo(() => {
-    const gray = highlightedGray;
+    const gray = hoveredGray ?? pinnedGray;
 
     return (
-      <div className="conv-process-rail overflow-x-auto py-2">
+      <ProcessRail className="overflow-x-auto py-2">
         <div className="flex flex-col items-center gap-3">
-          <div className="text-xs font-semibold text-slate-500 tracking-wide">灰度直方图</div>
+          <div className="flex flex-wrap items-center justify-center gap-2 text-xs">
+            <span className="font-semibold tracking-wide text-slate-500">灰度直方图</span>
+            <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-500">
+              悬停预览，点击锁定；左右方向键移动锁定位置
+            </span>
+          </div>
           <HistogramSVG
             histogram={bins}
-            totalPixels={totalPixels}
-            highlightedGray={gray}
-            onBarHover={handleBarHover}
-            onBarLeave={handleBarLeave}
+            highlightedGray={hoveredGray}
+            pinnedGray={pinnedGray}
+            onHoverGrayChange={handleHoverGrayChange}
+            onPinGray={handlePinGray}
           />
           {probabilityText && (
             <div className="flex items-center gap-4 text-xs text-slate-600">
@@ -182,33 +228,28 @@ export default function HistogramPage() {
             </div>
           )}
         </div>
-      </div>
+      </ProcessRail>
     );
-  }, [bins, totalPixels, probabilityText, highlightedGray, handleBarHover, handleBarLeave]);
+  }, [bins, probabilityText, hoveredGray, pinnedGray, handleHoverGrayChange, handlePinGray]);
 
   const stepDetails = useMemo(() => {
     return (
       <div className="space-y-4">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+        <TeachingCard>
           <div className="text-sm font-semibold text-slate-800 mb-3">直方图公式</div>
-          <div className="rounded-2xl border border-slate-200 bg-[#f8f7f3] px-5 py-5">
-            <div className="text-center text-lg">
-              <span dangerouslySetInnerHTML={{
-                __html: `<math xmlns="http://www.w3.org/1998/Math/MathML">
-                  <mrow><mi>P</mi><mo>(</mo><msub><mi>s</mi><mi>k</mi></msub><mo>)</mo><mo>=</mo><mfrac><msub><mi>n</mi><mi>k</mi></msub><mi>n</mi></mfrac></mrow>
-                </math>`
-              }} />
-            </div>
-          </div>
+          <FormulaCard
+            mathML={HISTOGRAM_FORMULA_MATHML}
+            mathClassName="[&_math]:text-lg"
+          />
           <div className="mt-3 text-xs leading-6 text-slate-600 space-y-1">
             <p><code className="bg-slate-100 px-1 rounded">s_k</code>: 第 k 个灰度级（0-255）</p>
             <p><code className="bg-slate-100 px-1 rounded">n_k</code>: 灰度级 s_k 的像素个数</p>
             <p><code className="bg-slate-100 px-1 rounded">n</code>: 图像总像素数（= {totalPixels}）</p>
             <p><code className="bg-slate-100 px-1 rounded">P(s_k)</code>: 灰度级 s_k 出现的概率</p>
           </div>
-        </div>
+        </TeachingCard>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+        <TeachingCard>
           <div className="text-sm font-semibold text-slate-800 mb-3">直方图能告诉我们什么？</div>
           <div className="text-xs text-slate-600 space-y-1.5">
             <p><span className="font-medium text-slate-700">整体亮度：</span>分布偏左 → 图像偏暗；分布偏右 → 图像偏亮。</p>
@@ -216,9 +257,9 @@ export default function HistogramPage() {
             <p><span className="font-medium text-slate-700">双峰特征：</span>若直方图存在两个明显峰值，说明图像可能包含两类不同的区域（如前景与背景），适合用阈值分割。</p>
             <p className="mt-2 text-slate-500 italic">* 直方图不保留空间结构：两张空间排列完全不同的图像可能具有完全相同的直方图。</p>
           </div>
-        </div>
+        </TeachingCard>
 
-        <div className="rounded-2xl border border-amber-200 bg-amber-50/55 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+        <TeachingCard tone="amber">
           <div className="text-sm font-semibold text-amber-700 mb-2">当前示例：{EXAMPLE_LABELS[exampleType]}</div>
           <div className="text-xs text-slate-600 space-y-1">
             {exampleType === 'dark' && (
@@ -240,7 +281,7 @@ export default function HistogramPage() {
               <p>Lena 图是一张真实照片，其直方图覆盖较宽的灰度范围，呈现多个峰值。与标准图的均匀分布不同，真实照片的直方图反映了自然场景中的灰度分布特征。</p>
             )}
           </div>
-        </div>
+        </TeachingCard>
       </div>
     );
   }, [exampleType, totalPixels]);
@@ -274,6 +315,8 @@ export default function HistogramPage() {
     <ConceptLayout
       title="灰度直方图"
       subtitle="Histogram - 图像的灰度分布统计"
+      operationLabel="灰度统计"
+      parameterIntro="左侧用于切换直方图示例；右侧展示图像灰度分布以及每个灰度级的像素数量和概率。"
       originalImage={originalImage}
       resultImage={originalImage}
       parameters={parameters}
@@ -284,6 +327,7 @@ export default function HistogramPage() {
       showOriginalGrid={false}
       originalRegionMarker="dot"
       singlePageScroll
+      onDirectionMove={handleDirectionMove}
     />
   );
 }
