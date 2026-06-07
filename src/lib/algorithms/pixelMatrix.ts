@@ -50,6 +50,28 @@ export function grayscaleToColorImage(image: GrayscaleImage): ColorImage {
   return result;
 }
 
+export function grayscaleToTeachingColorImage(image: GrayscaleImage): ColorImage {
+  const height = image.length;
+  const width = image[0]?.length || 0;
+  const result: ColorImage = [];
+
+  for (let y = 0; y < height; y++) {
+    const row: PixelColor[] = [];
+    for (let x = 0; x < width; x++) {
+      const gray = clamp(image[y][x], 0, 1);
+      const nx = width > 1 ? x / (width - 1) : 0;
+      const ny = height > 1 ? y / (height - 1) : 0;
+      const r = clamp(gray * 0.58 + nx * 0.35 + 0.10 * Math.sin(y * 0.25), 0, 1);
+      const g = clamp(gray * 0.52 + (1 - ny) * 0.38 + 0.08 * Math.cos(x * 0.2), 0, 1);
+      const b = clamp(gray * 0.46 + (1 - nx) * 0.24 + ny * 0.32, 0, 1);
+      row.push({ r, g, b, gray: clamp(0.299 * r + 0.587 * g + 0.114 * b, 0, 1) });
+    }
+    result.push(row);
+  }
+
+  return result;
+}
+
 /**
  * 创建棋盘格彩色图像（用于展示彩色三通道）
  */

@@ -4,7 +4,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { ConceptLayout, CodeViewer } from '@/components';
 import {
   pixelMatrixSteps,
-  grayscaleToColorImage,
+  grayscaleToTeachingColorImage,
   getPixelNeighborhood,
   createColorCheckerboard,
   createColorGradient,
@@ -62,7 +62,7 @@ function getTeachingImages(type: TeachingImageType) {
   // 标准灰度图
   const grayImage = sampleImages[type as SampleImageType].image;
   return {
-    colorImage: grayscaleToColorImage(grayImage),
+    colorImage: grayscaleToTeachingColorImage(grayImage),
     name: sampleImages[type as SampleImageType].name,
     grayscaleImage: grayImage,
   };
@@ -178,6 +178,10 @@ export default function PixelMatrixPage() {
     return { height: displayImage.length, width: displayImage[0].length };
   }, [displayImage]);
 
+  const shouldShowOriginalGrid = useMemo(() => {
+    return displayMode === 'grayscale' && imageDim.width <= 16 && imageDim.height <= 16;
+  }, [displayMode, imageDim]);
+
   // --- stepDetails: 完整详细区 ---
   const stepDetails = useMemo(() => {
     if (!currentStep) return null;
@@ -204,7 +208,7 @@ export default function PixelMatrixPage() {
             <div>
               <div className="text-xs font-medium text-slate-500 mb-1">当前像素</div>
               <div className="font-mono text-sm text-slate-700">
-                数组访问: image[{row}][{col}]
+                第 {row + 1} 行, 第 {col + 1} 列
                 {'  '}
                 <span className="text-slate-400">→ 数学坐标 ({x}, {y})</span>
               </div>
@@ -242,7 +246,7 @@ export default function PixelMatrixPage() {
               <div className="text-[10px] font-medium text-slate-400">选中像素</div>
               <PixelColorBlock color={color} size="w-12 h-12" />
               <div className="font-mono text-[10px] text-slate-500">
-                [{row}][{col}]
+                行 {row + 1}, 列 {col + 1}
               </div>
             </div>
 
@@ -347,7 +351,7 @@ export default function PixelMatrixPage() {
                         const idx = steps.findIndex(s => s.row === r && s.col === c);
                         if (idx !== -1) setCurrentStepIndex(idx);
                       }}
-                      title={`[${r}][${c}] = ${(pixel.gray ?? pixel.r).toFixed(2)}`}
+                      title={`行 ${r + 1}, 列 ${c + 1} = ${(pixel.gray ?? pixel.r).toFixed(2)}`}
                     >
                       {displayMode === 'grayscale' ? (pixel.gray ?? pixel.r).toFixed(1) : ''}
                     </div>
@@ -363,13 +367,6 @@ export default function PixelMatrixPage() {
           </div>
         </div>
 
-        {/* 5. 行/列描述 */}
-        {currentStep && (
-          <div className="text-xs text-slate-500 border-t border-slate-200 pt-3">
-            <span className="font-medium text-slate-600">当前描述：</span>
-            {currentStep.description}
-          </div>
-        )}
       </div>
     );
   }, [currentStep, displayImage, displayMode, zoomLevel, colorImage, steps]);
@@ -389,7 +386,7 @@ export default function PixelMatrixPage() {
           <div className="relative">
             <PixelColorBlock color={color} size={`w-${Math.min(12, Math.round(zoomedSize / 8) + 6)} h-${Math.min(12, Math.round(zoomedSize / 8) + 6)}`} />
             <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 font-mono text-[9px] text-slate-400 whitespace-nowrap">
-              [{row}][{col}]
+              行 {row + 1}, 列 {col + 1}
             </div>
           </div>
         </div>
@@ -399,7 +396,9 @@ export default function PixelMatrixPage() {
 
         {/* 放大邻域 3×3 */}
         <div className="flex flex-col items-center gap-1.5">
-          <div className="text-[10px] font-medium text-slate-400">数组访问 image[row][col]</div>
+          <div className="text-[10px] font-medium text-slate-400">
+            第 {row + 1} 行 · 第 {col + 1} 列
+          </div>
           <div
             className="grid gap-px bg-slate-200 p-px rounded"
             style={{
@@ -525,11 +524,13 @@ export default function PixelMatrixPage() {
       title="像素矩阵"
       subtitle="图像 = 矩阵 · 理解像素的存储与访问"
       originalImage={displayImage}
+      originalRgbImage={displayMode === 'color' ? colorImage.map(row => row.map(p => [p.r, p.g, p.b] as [number, number, number])) : null}
       resultImage={displayImage}
       parameters={parameters}
       stepDetails={stepDetails}
       analysisPreview={analysisPreview}
       codeTab={<CodeViewer languages={[{ name: 'TypeScript', code: PIXEL_MATRIX_CODE }]} />}
+      showOriginalGrid={shouldShowOriginalGrid}
       currentStep={
         currentStep
           ? { x: currentStep.col, y: currentStep.row, kernelSize: 1 }
@@ -543,9 +544,9 @@ export default function PixelMatrixPage() {
       onStepChange={setCurrentStepIndex}
       onDirectionMove={handleDirectionMove}
       onInputRegionSelect={handleInputRegionSelect}
-      imageHints={{ input: '原图 · 点击跳转', output: '结果图' }}
+      imageHints={{ input: '原图 · 点击或方向键选择像素', output: '矩阵详览（选中行列高亮）' }}
       singlePageScroll
-      navigationHintText="方向键移动 / 点击原图像素跳转"
+      navigationHintText="方向键移动行列 / 点击图像或矩阵格子跳转"
     />
   );
 }
