@@ -40,3 +40,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local debug artifacts
+.codex-*.png
+.codex-cdp-shot.ps1
+dev-server.log
+dev-server.err.log
+
+# local course materials
+cv 课程北理工/
