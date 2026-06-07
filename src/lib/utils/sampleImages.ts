@@ -1,6 +1,14 @@
 import { GrayscaleImage } from '../algorithms/types';
 import { create2DArray } from './imageProcessing';
 
+/** 基于位置的确定性伪随机值 [0, 1) */
+function posNoise(x: number, y: number, seed: number = 0): number {
+  let h = (seed * 31 + x * 17 + y * 53) % 2147483647;
+  h = (h * 16807) % 2147483647;
+  h = (h * 16807) % 2147483647;
+  return (h >>> 0) / 4294967296;
+}
+
 export function createLenaImage(): GrayscaleImage {
   const size = 64;
   const image = create2DArray(size, size, 0);
@@ -17,7 +25,7 @@ export function createLenaImage(): GrayscaleImage {
       let value = 0.5 + 0.3 * Math.sin(nx * Math.PI * 4) * Math.cos(ny * Math.PI * 4);
 
       if (dist < 0.15) {
-        value = 0.2 + 0.1 * Math.random();
+        value = 0.2 + 0.1 * posNoise(x, y, 1);
       } else if (dist < 0.25) {
         value = 0.8;
       } else if (dist < 0.35) {
@@ -25,7 +33,7 @@ export function createLenaImage(): GrayscaleImage {
         value = 0.3 + 0.4 * (Math.sin(angle * 3) * 0.5 + 0.5);
       }
 
-      image[y][x] = Math.max(0, Math.min(1, value + (Math.random() - 0.5) * 0.1));
+      image[y][x] = Math.max(0, Math.min(1, value + (posNoise(x, y, 2) - 0.5) * 0.1));
     }
   }
 
@@ -116,13 +124,10 @@ export function createBinaryImage(): GrayscaleImage {
   const size = 64;
   const image = create2DArray(size, size, 0);
 
-  // Create a binary image with some shapes
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
-      // Background
       image[y][x] = 0;
 
-      // Add some white shapes
       const dist = Math.sqrt((x - 20) ** 2 + (y - 20) ** 2);
       if (dist < 10) {
         image[y][x] = 1;
@@ -133,14 +138,13 @@ export function createBinaryImage(): GrayscaleImage {
         image[y][x] = 1;
       }
 
-      // Add a rectangle
       if (x > 30 && x < 50 && y > 10 && y < 25) {
         image[y][x] = 1;
       }
 
-      // Add some noise
-      if (Math.random() < 0.02) {
-        image[y][x] = Math.random() > 0.5 ? 1 : 0;
+      // 确定性噪声（基于位置的伪随机）
+      if (posNoise(x, y, 3) < 0.02) {
+        image[y][x] = posNoise(x, y, 4) > 0.5 ? 1 : 0;
       }
     }
   }
