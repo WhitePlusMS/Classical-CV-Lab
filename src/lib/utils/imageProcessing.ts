@@ -86,6 +86,25 @@ export function imageRgbToCanvas(rgb: number[][][], canvas: HTMLCanvasElement): 
   ctx.putImageData(imageData, 0, 0);
 }
 
+export function resizeRgbImage(rgb: number[][][], maxSize: number): number[][][] {
+  const height = rgb.length;
+  const width = rgb[0]?.length || 0;
+  if (!height || !width || Math.max(height, width) <= maxSize) return rgb;
+
+  const scale = maxSize / Math.max(height, width);
+  const resizedHeight = Math.max(1, Math.round(height * scale));
+  const resizedWidth = Math.max(1, Math.round(width * scale));
+
+  return Array.from({ length: resizedHeight }, (_, y) => {
+    const sourceY = Math.min(height - 1, Math.floor(y / scale));
+    return Array.from({ length: resizedWidth }, (_, x) => {
+      const sourceX = Math.min(width - 1, Math.floor(x / scale));
+      const [r, g, b] = rgb[sourceY][sourceX];
+      return [r, g, b];
+    });
+  });
+}
+
 export async function loadImageAsRgb(src: string): Promise<number[][][]> {
   return new Promise((resolve, reject) => {
     const image = new Image();

@@ -17,6 +17,17 @@ export interface PixelColor {
  */
 export type ColorImage = PixelColor[][];
 
+export function rgbArrayToColorImage(rgbImage: number[][][]): ColorImage {
+  return rgbImage.map(row =>
+    row.map(([r, g, b]) => ({
+      r: clamp(r, 0, 1),
+      g: clamp(g, 0, 1),
+      b: clamp(b, 0, 1),
+      gray: clamp(0.299 * r + 0.587 * g + 0.114 * b, 0, 1),
+    }))
+  );
+}
+
 /**
  * 像素矩阵步进结果
  */
