@@ -20,6 +20,8 @@ interface RegionAnchor {
   x: number;
   y: number;
   size: number;
+  width?: number;
+  height?: number;
   imageWidth: number;
   imageHeight: number;
 }
@@ -71,8 +73,14 @@ function resolveAnchor(anchor: OverlayAnchor): OverlayPoint | null {
 
   if (anchor.imageWidth === 0 || anchor.imageHeight === 0) return null;
 
-  const centerX = anchor.kind === 'pixel' ? anchor.x + 0.5 : anchor.x + anchor.size / 2;
-  const centerY = anchor.kind === 'pixel' ? anchor.y + 0.5 : anchor.y + anchor.size / 2;
+  const centerX =
+    anchor.kind === 'pixel'
+      ? anchor.x + 0.5
+      : anchor.x + (anchor.width ?? anchor.size) / 2;
+  const centerY =
+    anchor.kind === 'pixel'
+      ? anchor.y + 0.5
+      : anchor.y + (anchor.height ?? anchor.size) / 2;
 
   return {
     x: rect.left + (centerX / anchor.imageWidth) * rect.width,

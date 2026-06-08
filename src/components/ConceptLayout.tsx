@@ -8,6 +8,7 @@ import { GrayscaleImage } from '@/lib/algorithms/types';
 interface ConceptLayoutProps {
   title: string;
   subtitle?: string;
+  contentHeader?: React.ReactNode;
   originalImage: GrayscaleImage | null;
   resultImage: GrayscaleImage | null;
   /** 可选的 RGB 原图，用于真彩色渲染 */
@@ -28,7 +29,15 @@ interface ConceptLayoutProps {
   };
   showOriginalGrid?: boolean;
   originalRegionMarker?: 'frame' | 'dot';
-  currentStep?: { x: number; y: number; kernelSize: number; regionX?: number; regionY?: number } | null;
+  currentStep?: {
+    x: number;
+    y: number;
+    kernelSize: number;
+    regionX?: number;
+    regionY?: number;
+    regionWidth?: number;
+    regionHeight?: number;
+  } | null;
   currentStepLabel?: string;
   stepInfo?: { current: number; total: number } | null;
   onStepChange?: (newIndex: number) => void;
@@ -46,6 +55,7 @@ interface ConceptLayoutProps {
 export default function ConceptLayout({
   title,
   subtitle,
+  contentHeader,
   originalImage,
   resultImage,
   originalRgbImage,
@@ -324,6 +334,12 @@ export default function ConceptLayout({
                 singlePageScroll ? 'pb-5 pt-5 xl:pt-5' : 'flex-1 min-h-0 overflow-auto pb-3 xl:pt-6 xl:pb-4'
               }`}
             >
+              {contentHeader && (
+                <div className="mb-4 overflow-hidden rounded-2xl border border-slate-200/80 bg-white/92 shadow-sm">
+                  <div className="px-4 py-4">{contentHeader}</div>
+                </div>
+              )}
+
               {navigationBar && (
                 <div className="mb-4 overflow-hidden rounded-2xl border border-slate-200/80 bg-white/90 shadow-sm">
                   {navigationBar}
@@ -357,6 +373,8 @@ export default function ConceptLayout({
                             x: currentStep.regionX ?? currentStep.x,
                             y: currentStep.regionY ?? currentStep.y,
                             size: currentStep.kernelSize,
+                            width: currentStep.regionWidth,
+                            height: currentStep.regionHeight,
                           }
                         : null
                     }

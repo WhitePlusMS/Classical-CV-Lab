@@ -10,7 +10,7 @@ interface ImageCanvasProps {
   rgbImage?: number[][][] | null;
   maxDisplaySize?: number;
   showGrid?: boolean;
-  selectedRegion?: { x: number; y: number; size: number } | null;
+  selectedRegion?: { x: number; y: number; size: number; width?: number; height?: number } | null;
   selectedRegionMarker?: 'frame' | 'dot';
   highlightPixel?: { x: number; y: number } | null;
   onRegionSelect?: (x: number, y: number) => void;
@@ -97,8 +97,8 @@ export default function ImageCanvas({
     return {
       left: selectedRegion.x * scale,
       top: selectedRegion.y * scale,
-      width: selectedRegion.size * scale,
-      height: selectedRegion.size * scale,
+      width: (selectedRegion.width ?? selectedRegion.size) * scale,
+      height: (selectedRegion.height ?? selectedRegion.size) * scale,
     };
   }, [scale, selectedRegion]);
 
@@ -142,9 +142,11 @@ export default function ImageCanvas({
     if (!selectedRegion) return null;
 
     const dotSize = Math.max(10, Math.min(16, scale * 0.72));
+    const regionWidth = selectedRegion.width ?? selectedRegion.size;
+    const regionHeight = selectedRegion.height ?? selectedRegion.size;
     return {
-      left: (selectedRegion.x + selectedRegion.size / 2) * scale - dotSize / 2,
-      top: (selectedRegion.y + selectedRegion.size / 2) * scale - dotSize / 2,
+      left: (selectedRegion.x + regionWidth / 2) * scale - dotSize / 2,
+      top: (selectedRegion.y + regionHeight / 2) * scale - dotSize / 2,
       width: dotSize,
       height: dotSize,
     };
