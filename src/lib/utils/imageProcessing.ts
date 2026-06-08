@@ -105,6 +105,24 @@ export function resizeRgbImage(rgb: number[][][], maxSize: number): number[][][]
   });
 }
 
+export function resizeGrayscaleImage(image: GrayscaleImage, maxSize: number): GrayscaleImage {
+  const height = image.length;
+  const width = image[0]?.length || 0;
+  if (!height || !width || Math.max(height, width) <= maxSize) return image;
+
+  const scale = maxSize / Math.max(height, width);
+  const resizedHeight = Math.max(1, Math.round(height * scale));
+  const resizedWidth = Math.max(1, Math.round(width * scale));
+
+  return Array.from({ length: resizedHeight }, (_, y) => {
+    const sourceY = Math.min(height - 1, Math.floor(y / scale));
+    return Array.from({ length: resizedWidth }, (_, x) => {
+      const sourceX = Math.min(width - 1, Math.floor(x / scale));
+      return image[sourceY][sourceX];
+    });
+  });
+}
+
 export async function loadImageAsRgb(src: string): Promise<number[][][]> {
   return new Promise((resolve, reject) => {
     const image = new Image();

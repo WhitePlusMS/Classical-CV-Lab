@@ -13,19 +13,21 @@ export interface PixelColor {
 }
 
 /**
- * 彩色图像类型 - 三维数组 [row][col][channel]
+ * 彩色图像类型 - 二维数组，每元素为 PixelColor
  */
 export type ColorImage = PixelColor[][];
 
-export function rgbArrayToColorImage(rgbImage: number[][][]): ColorImage {
-  return rgbImage.map(row =>
-    row.map(([r, g, b]) => ({
-      r: clamp(r, 0, 1),
-      g: clamp(g, 0, 1),
-      b: clamp(b, 0, 1),
-      gray: clamp(0.299 * r + 0.587 * g + 0.114 * b, 0, 1),
-    }))
-  );
+/**
+ * 邻域类型：四邻域（上下左右）或八邻域（含对角线）
+ */
+export type NeighborhoodType = '4' | '8';
+
+/**
+ * 邻域坐标偏移
+ */
+export interface NeighborhoodOffset {
+  dx: number;
+  dy: number;
 }
 
 /**
@@ -37,8 +39,74 @@ export interface PixelMatrixStep {
   row: number; // 数组访问中的行索引
   col: number; // 数组访问中的列索引
   color: PixelColor; // 当前像素颜色值
-  neighborhood: PixelColor[][]; // 邻域像素
+  neighborhood: PixelColor[][]; // 邻域像素（windowSize × windowSize）
+  windowSize: number; // 当前窗口大小
+  isBoundary: boolean; // 当前窗口是否越界
   description: string;
+}
+
+// ---------------------------------------------------------------------------
+// 邻域坐标工具
+// ---------------------------------------------------------------------------
+
+/**
+ * 获取四邻域或八邻域的偏移坐标列表
+ * 四邻域：上下左右 4 个方向
+ * 八邻域：四邻域 + 四个对角方向，共 8 个方向
+ */
+export function getNeighborhoodCoords(type: NeighborhoodType): NeighborhoodOffset[] {
+  if (type === '4') {
+    return [
+      { dx: 0, dy: -1 },  // 上
+      { dx: -1, dy: 0 },  // 左
+      { dx: 1, dy: 0 },   // 右
+      { dx: 0, dy: 1 },   // 下
+    ];
+  }
+  return [
+    { dx: -1, dy: -1 }, // 左上
+    { dx: 0, dy: -1 },  // 上
+    { dx: 1, dy: -1 },  // 右上
+    { dx: -1, dy: 0 },  // 左
+    { dx: 1, dy: 0 },   // 右
+    { dx: -1, dy: 1 },  // 左下
+    { dx: 0, dy: 1 },   // 下
+    { dx: 1, dy: 1 },   // 右下
+  ];
+}
+
+/**
+ * 判断以 (x,y) 为中心的 size×size 窗口是否越界
+ */
+export function isWindowOutOfBounds(
+  x: number,
+  y: number,
+  size: number,
+  imageWidth: number,
+  imageHeight: number
+): boolean {
+  const half = Math.floor(size / 2);
+  return (
+    x - half < 0 ||
+    x + half >= imageWidth ||
+    y - half < 0 ||
+    y + half >= imageHeight
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 图像转换
+// ---------------------------------------------------------------------------
+
+export function rgbArrayToColorImage(rgbImage: number[][][]): ColorImage {
+  return rgbImage.map(row =>
+    row.map(([r, g, b]) => ({
+      r: clamp(r, 0, 1),
+      g: clamp(g, 0, 1),
+      b: clamp(b, 0, 1),
+      gray: clamp(0.299 * r + 0.587 * g + 0.114 * b, 0, 1),
+    }))
+  );
 }
 
 /**
@@ -101,10 +169,8 @@ export function createColorCheckerboard(): ColorImage {
       const isWhite = (patternX + patternY) % 2 === 0;
 
       if (isWhite) {
-        // 红色通道的高亮格子
         row.push({ r: 1.0, g: 0.2, b: 0.2, gray: 0.53 });
       } else {
-        // 暗色格子
         row.push({ r: 0.1, g: 0.1, b: 0.1, gray: 0.1 });
       }
     }
@@ -138,7 +204,26 @@ export function createColorGradient(): ColorImage {
 }
 
 /**
- * 为彩色棋盘格创建对应的灰度版本（用于原图显示）
+ * 创建小尺寸灰度矩阵示例，用于像素索引和邻域窗口教学。
+ */
+export function createSmallMatrixImage(): GrayscaleImage {
+  const height = 8;
+  const width = 8;
+  const image = create2DArray(height, width, 0);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const base = (x + y * 1.4) / 18;
+      const block = x >= 2 && x <= 5 && y >= 2 && y <= 5 ? 0.28 : 0;
+      image[y][x] = clamp(base + block, 0, 1);
+    }
+  }
+
+  return image;
+}
+
+/**
+ * 为彩色图像创建对应的灰度版本
  */
 export function colorToGrayscaleImage(image: ColorImage): GrayscaleImage {
   const height = image.length;
@@ -147,7 +232,6 @@ export function colorToGrayscaleImage(image: ColorImage): GrayscaleImage {
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      // 获取像素的灰度版本用于渲染（以 red 通道为主以突出彩色格子）
       result[y][x] = image[y][x].gray ?? (0.299 * image[y][x].r + 0.587 * image[y][x].g + 0.114 * image[y][x].b);
     }
   }
@@ -155,12 +239,16 @@ export function colorToGrayscaleImage(image: ColorImage): GrayscaleImage {
   return result;
 }
 
+// ---------------------------------------------------------------------------
+// 邻域获取
+// ---------------------------------------------------------------------------
+
 /**
- * 获取像素邻域（获取以 (x,y) 为中心的 size×size 邻域）
- * @param image 彩色图像
+ * 获取像素邻域（以 (x,y) 为中心的 size×size 邻域）
+ * @param image 彩色图像或灰度图像
  * @param x 数学坐标系 x（列）
  * @param y 数学坐标系 y（行）
- * @param size 邻域尺寸
+ * @param size 邻域尺寸（奇数）
  * @returns 邻域像素颜色矩阵
  */
 export function getPixelNeighborhood(
@@ -172,12 +260,10 @@ export function getPixelNeighborhood(
   const isGrayscale = Array.isArray(image[0]) && typeof image[0][0] === 'number';
 
   if (isGrayscale) {
-    const grayImg = image as GrayscaleImage;
-    return convertGrayscaleNeighborhood(grayImg, x, y, size);
+    return convertGrayscaleNeighborhood(image as GrayscaleImage, x, y, size);
   }
 
-  const colorImg = image as ColorImage;
-  return convertColorNeighborhood(colorImg, x, y, size);
+  return convertColorNeighborhood(image as ColorImage, x, y, size);
 }
 
 function convertColorNeighborhood(
@@ -229,15 +315,26 @@ function convertGrayscaleNeighborhood(
   return neighborhood;
 }
 
+// ---------------------------------------------------------------------------
+// 步进生成器
+// ---------------------------------------------------------------------------
+
+export interface PixelMatrixStepsOptions {
+  /** 邻域窗口大小，默认 3（支持 3 / 5 / 7 等奇数） */
+  windowSize?: number;
+}
+
 /**
  * 像素矩阵遍历步进 - 逐像素遍历图像并生成步骤
  * @param image 灰度图像或彩色图像
- * @param useColor 是否使用彩色模式
+ * @param options 可选配置
  * @returns 步进生成器
  */
 export function* pixelMatrixSteps(
-  image: GrayscaleImage | ColorImage
+  image: GrayscaleImage | ColorImage,
+  options: PixelMatrixStepsOptions = {}
 ): Generator<PixelMatrixStep> {
+  const { windowSize = 3 } = options;
   const isGrayscale = Array.isArray(image[0]) && typeof image[0][0] === 'number';
   let colorImg: ColorImage;
 
@@ -255,19 +352,19 @@ export function* pixelMatrixSteps(
   for (let row = 0; row < height; row++) {
     for (let col = 0; col < width; col++) {
       const pixel = colorImg[row][col];
-      const neighborSize = 3;
 
       yield {
-        x: col,             // 数学坐标系 x = 列索引
-        y: row,             // 数学坐标系 y = 行索引（注意：图像的行在数学中通常向下递增）
-        row,                // 数组访问行索引
-        col,                // 数组访问列索引
+        x: col,
+        y: row,
+        row,
+        col,
         color: { ...pixel },
-        neighborhood: getPixelNeighborhood(colorImg, col, row, neighborSize),
-        description: `image[${row}][${col}] = ${isGrayscale
-            ? (pixel.gray ?? 0).toFixed(3)
-            : `(R:${(pixel.r * 255).toFixed(0)}, G:${(pixel.g * 255).toFixed(0)}, B:${(pixel.b * 255).toFixed(0)})`
-          }`,
+        neighborhood: getPixelNeighborhood(colorImg, col, row, windowSize),
+        windowSize,
+        isBoundary: isWindowOutOfBounds(col, row, windowSize, width, height),
+        description: isGrayscale
+          ? `image[${row}][${col}] = ${(pixel.gray ?? 0).toFixed(3)}`
+          : `image[${row}][${col}] = (R:${(pixel.r * 255).toFixed(0)}, G:${(pixel.g * 255).toFixed(0)}, B:${(pixel.b * 255).toFixed(0)})`,
       };
     }
   }

@@ -22,9 +22,14 @@ interface ConceptLayoutProps {
     input?: string;
     output?: string;
   };
+  imageLabels?: {
+    input?: string;
+    output?: string;
+  };
   showOriginalGrid?: boolean;
   originalRegionMarker?: 'frame' | 'dot';
-  currentStep?: { x: number; y: number; kernelSize: number } | null;
+  currentStep?: { x: number; y: number; kernelSize: number; regionX?: number; regionY?: number } | null;
+  currentStepLabel?: string;
   stepInfo?: { current: number; total: number } | null;
   onStepChange?: (newIndex: number) => void;
   onDirectionMove?: (direction: 'up' | 'down' | 'left' | 'right') => void;
@@ -50,9 +55,11 @@ export default function ConceptLayout({
   codeTab,
   teachingHint,
   imageHints,
+  imageLabels,
   showOriginalGrid = true,
   originalRegionMarker = 'frame',
   currentStep,
+  currentStepLabel = '当前结果像素',
   stepInfo,
   onDirectionMove,
   onInputRegionSelect,
@@ -184,7 +191,7 @@ export default function ConceptLayout({
           <span>{resolvedNavigationHint}</span>
           {currentStep && (
             <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 font-medium text-slate-600">
-              当前结果像素 ({currentStep.x}, {currentStep.y})
+              {currentStepLabel} ({currentStep.x}, {currentStep.y})
             </span>
           )}
         </div>
@@ -326,7 +333,9 @@ export default function ConceptLayout({
               <div className="flex flex-wrap items-center justify-center gap-5 xl:gap-7">
                 <div className="flex flex-col items-center gap-3">
                   <div className="flex items-center gap-2">
-                    <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">原图</span>
+                    <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                      {imageLabels?.input ?? '原图'}
+                    </span>
                     {originalImage && (
                       <span className="font-mono text-xs text-slate-400">
                         {originalImage[0]?.length}×{originalImage.length}
@@ -344,9 +353,9 @@ export default function ConceptLayout({
                     selectedRegionMarker={originalRegionMarker}
                     selectedRegion={
                       currentStep
-                        ? {
-                            x: currentStep.x,
-                            y: currentStep.y,
+                          ? {
+                            x: currentStep.regionX ?? currentStep.x,
+                            y: currentStep.regionY ?? currentStep.y,
                             size: currentStep.kernelSize,
                           }
                         : null
@@ -383,7 +392,9 @@ export default function ConceptLayout({
 
                 <div className="flex flex-col items-center gap-3">
                   <div className="flex items-center gap-2">
-                    <span className="rounded-md bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600">结果</span>
+                    <span className="rounded-md bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600">
+                      {imageLabels?.output ?? '结果'}
+                    </span>
                     {resultImage && (
                       <span className="font-mono text-xs text-slate-400">
                         {resultImage[0]?.length}×{resultImage.length}

@@ -6,3 +6,4 @@ export * from './histogram';
 export * from './grayscale';
 export * from './kernelPresets';
 export * from './equalization';
+export * from './sharpening';
