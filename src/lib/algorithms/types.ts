@@ -7,7 +7,7 @@ export interface Kernel {
 }
 
 export interface StructElement {
-  shape: 'square' | 'cross' | 'diamond';
+  shape: 'rectangle' | 'cross' | 'ellipse';
   size: number;
 }
 
