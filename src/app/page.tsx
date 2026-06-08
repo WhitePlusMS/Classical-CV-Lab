@@ -190,6 +190,16 @@ const implementedCards = {
     bgLight: 'bg-orange-50',
     textColor: 'text-orange-600',
   },
+  imageSharpening: {
+    href: '/concepts/image-sharpening',
+    title: '图像锐化',
+    titleEn: 'Image Sharpening',
+    description: '一阶梯度锐化与二阶 Laplace 增强：突出边缘与轮廓',
+    icon: icons.edge,
+    color: 'from-pink-500 to-rose-600',
+    bgLight: 'bg-pink-50',
+    textColor: 'text-pink-600',
+  },
 } satisfies Record<string, ConceptCard>;
 
 const placeholder = (
@@ -223,7 +233,7 @@ const learningChapters: LearningChapter[] = [
           implementedCards.pixelMatrix,
           implementedCards.histogram,
           implementedCards.histogramEqualization,
-          placeholder('图像锐化', 'Image Sharpening', icons.edge, 'from-pink-500 to-rose-600', 'bg-pink-50', 'text-pink-600'),
+          implementedCards.imageSharpening,
           implementedCards.convolution,
           implementedCards.imageFiltering,
           implementedCards.edgeDetection,
