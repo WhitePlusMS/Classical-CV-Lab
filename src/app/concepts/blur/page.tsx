@@ -415,8 +415,8 @@ export default function BlurPage() {
 
   return (
     <ConceptLayout
-      title="模糊滤波"
-      subtitle="均值模糊、高斯模糊与中值滤波"
+      title="图像滤波"
+      subtitle="Image Filtering - 均值滤波、高斯滤波与中值滤波"
       originalImage={originalImage}
       resultImage={resultImage}
       parameters={parameters}
