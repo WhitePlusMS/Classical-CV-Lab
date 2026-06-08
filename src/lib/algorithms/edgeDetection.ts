@@ -1,6 +1,151 @@
 import { GrayscaleImage } from './types';
 import { create2DArray, clamp } from '../utils/imageProcessing';
 
+// ---- 通用边缘检测结果类型 ----
+
+export interface EdgeResult {
+  magnitude: GrayscaleImage;
+  direction: number[][];
+  gx: GrayscaleImage;
+  gy: GrayscaleImage;
+}
+
+// ---- Roberts 算子 (2×2 对角差分) ----
+
+const ROBERTS_GX = [[1, 0], [0, -1]];
+const ROBERTS_GY = [[0, 1], [-1, 0]];
+
+export function robertsEdgeDetection(image: GrayscaleImage): EdgeResult {
+  const height = image.length;
+  const width = image[0]?.length || 0;
+  const gx = create2DArray(height, width, 0);
+  const gy = create2DArray(height, width, 0);
+  const magnitude = create2DArray(height, width, 0);
+  const direction: number[][] = [];
+
+  for (let y = 0; y < height; y++) {
+    const dirRow: number[] = [];
+    for (let x = 0; x < width; x++) {
+      // 2×2 对角差分
+      const p00 = getPixel(image, x, y, width, height);
+      const p10 = getPixel(image, x + 1, y, width, height);
+      const p01 = getPixel(image, x, y + 1, width, height);
+      const p11 = getPixel(image, x + 1, y + 1, width, height);
+
+      const sumX = p00 * ROBERTS_GX[0][0] + p10 * ROBERTS_GX[0][1] +
+                   p01 * ROBERTS_GX[1][0] + p11 * ROBERTS_GX[1][1];
+      const sumY = p00 * ROBERTS_GY[0][0] + p10 * ROBERTS_GY[0][1] +
+                   p01 * ROBERTS_GY[1][0] + p11 * ROBERTS_GY[1][1];
+
+      gx[y][x] = sumX;
+      gy[y][x] = sumY;
+      magnitude[y][x] = Math.sqrt(sumX * sumX + sumY * sumY);
+      dirRow.push(Math.atan2(sumY, sumX) * (180 / Math.PI));
+    }
+    direction.push(dirRow);
+  }
+
+  return { magnitude, direction, gx, gy };
+}
+
+// ---- Prewitt 算子 (3×3 简单差分) ----
+
+const PREWITT_GX = [[-1, 0, 1], [-1, 0, 1], [-1, 0, 1]];
+const PREWITT_GY = [[-1, -1, -1], [0, 0, 0], [1, 1, 1]];
+
+export function prewittEdgeDetection(image: GrayscaleImage): EdgeResult {
+  return convolveGradient(image, PREWITT_GX, PREWITT_GY);
+}
+
+// ---- Laplace 算子 (二阶微分) ----
+
+const LAPLACE_4 = [[0, -1, 0], [-1, 4, -1], [0, -1, 0]];
+const LAPLACE_8 = [[-1, -1, -1], [-1, 8, -1], [-1, -1, -1]];
+
+export function laplaceEdgeDetection(
+  image: GrayscaleImage,
+  use8Neighbor: boolean = false
+): { magnitude: GrayscaleImage } {
+  const kernel = use8Neighbor ? LAPLACE_8 : LAPLACE_4;
+  const height = image.length;
+  const width = image[0]?.length || 0;
+  const magnitude = create2DArray(height, width, 0);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let sum = 0;
+      for (let ky = -1; ky <= 1; ky++) {
+        for (let kx = -1; kx <= 1; kx++) {
+          const py = y + ky;
+          const px = x + kx;
+          let pixel = 0;
+          if (py >= 0 && py < height && px >= 0 && px < width) {
+            pixel = image[py][px];
+          }
+          sum += pixel * kernel[ky + 1][kx + 1];
+        }
+      }
+      // Laplace 可取绝对值表示边缘强度
+      magnitude[y][x] = Math.abs(sum);
+    }
+  }
+
+  return { magnitude };
+}
+
+// ---- 通用梯度卷积 ----
+
+function convolveGradient(
+  image: GrayscaleImage,
+  gxKernel: number[][],
+  gyKernel: number[][]
+): EdgeResult {
+  const height = image.length;
+  const width = image[0]?.length || 0;
+  const gx = create2DArray(height, width, 0);
+  const gy = create2DArray(height, width, 0);
+  const magnitude = create2DArray(height, width, 0);
+  const direction: number[][] = [];
+
+  for (let y = 0; y < height; y++) {
+    const dirRow: number[] = [];
+    for (let x = 0; x < width; x++) {
+      let sumX = 0;
+      let sumY = 0;
+
+      for (let ky = -1; ky <= 1; ky++) {
+        for (let kx = -1; kx <= 1; kx++) {
+          const py = y + ky;
+          const px = x + kx;
+          let pixel = 0;
+          if (py >= 0 && py < height && px >= 0 && px < width) {
+            pixel = image[py][px];
+          }
+          sumX += pixel * gxKernel[ky + 1][kx + 1];
+          sumY += pixel * gyKernel[ky + 1][kx + 1];
+        }
+      }
+
+      gx[y][x] = sumX;
+      gy[y][x] = sumY;
+      magnitude[y][x] = Math.sqrt(sumX * sumX + sumY * sumY);
+      dirRow.push(Math.atan2(sumY, sumX) * (180 / Math.PI));
+    }
+    direction.push(dirRow);
+  }
+
+  return { magnitude, direction, gx, gy };
+}
+
+// ---- 像素边界安全读取 ----
+
+function getPixel(image: GrayscaleImage, x: number, y: number, width: number, height: number): number {
+  if (x >= 0 && x < width && y >= 0 && y < height) return image[y][x];
+  return 0;
+}
+
+// ---- Sobel 算子 ----
+
 export interface SobelResult {
   magnitude: GrayscaleImage;
   direction: number[][];
@@ -147,6 +292,7 @@ export interface CannyResult {
     gradientMagnitude: GrayscaleImage;
     gradientDirection: number[][];
     nms: GrayscaleImage;
+    doubleThreshold: GrayscaleImage;
     thresholded: GrayscaleImage;
   };
 }
@@ -184,7 +330,10 @@ export function cannyEdgeDetection(
   // Step 3: Non-maximum suppression
   const nms = nonMaximumSuppression(normalizedMag, direction);
 
-  // Step 4: Double threshold + hysteresis
+  // Step 4: Double threshold classification
+  const doubleThreshold = doubleThresholdClassify(nms, lowThreshold, highThreshold);
+
+  // Step 5: Hysteresis edge tracking
   const thresholded = hysteresisThreshold(nms, lowThreshold, highThreshold);
 
   return {
@@ -195,6 +344,7 @@ export function cannyEdgeDetection(
       gradientMagnitude: normalizedMag,
       gradientDirection: direction,
       nms,
+      doubleThreshold,
       thresholded,
     },
   };
@@ -338,6 +488,28 @@ function hysteresisThreshold(
             stack.push([nx, ny]);
           }
         }
+      }
+    }
+  }
+
+  return result;
+}
+
+export function doubleThresholdClassify(
+  nms: GrayscaleImage,
+  lowThreshold: number,
+  highThreshold: number
+): GrayscaleImage {
+  const height = nms.length;
+  const width = nms[0]?.length || 0;
+  const result = create2DArray(height, width, 0);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (nms[y][x] >= highThreshold) {
+        result[y][x] = 1;
+      } else if (nms[y][x] >= lowThreshold) {
+        result[y][x] = 0.5;
       }
     }
   }
