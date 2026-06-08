@@ -123,6 +123,34 @@ export function resizeGrayscaleImage(image: GrayscaleImage, maxSize: number): Gr
   });
 }
 
+export function centerCropRgbImage(rgb: number[][][]): number[][][] {
+  const height = rgb.length;
+  const width = rgb[0]?.length || 0;
+  const size = Math.min(width, height);
+  if (!height || !width || width === height) return rgb;
+
+  const offsetX = Math.floor((width - size) / 2);
+  const offsetY = Math.floor((height - size) / 2);
+
+  return Array.from({ length: size }, (_, y) =>
+    Array.from({ length: size }, (_, x) => rgb[y + offsetY][x + offsetX])
+  );
+}
+
+export function centerCropGrayscaleImage(image: GrayscaleImage): GrayscaleImage {
+  const height = image.length;
+  const width = image[0]?.length || 0;
+  const size = Math.min(width, height);
+  if (!height || !width || width === height) return image;
+
+  const offsetX = Math.floor((width - size) / 2);
+  const offsetY = Math.floor((height - size) / 2);
+
+  return Array.from({ length: size }, (_, y) =>
+    Array.from({ length: size }, (_, x) => image[y + offsetY][x + offsetX])
+  );
+}
+
 export async function loadImageAsRgb(src: string): Promise<number[][][]> {
   return new Promise((resolve, reject) => {
     const image = new Image();
