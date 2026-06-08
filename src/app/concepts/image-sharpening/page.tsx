@@ -25,7 +25,11 @@ import {
   type LaplaceEnhanceStep,
 } from '@/lib/algorithms/sharpening';
 import { sampleImages, SampleImageType } from '@/lib/utils/sampleImages';
-import { loadImageAsGrayscale, resizeGrayscaleImage } from '@/lib/utils/imageProcessing';
+import {
+  centerCropGrayscaleImage,
+  loadImageAsGrayscale,
+  resizeGrayscaleImage,
+} from '@/lib/utils/imageProcessing';
 import { useGridNavigation } from '@/hooks/useGridNavigation';
 
 // ============================================================
@@ -184,7 +188,7 @@ export default function ImageSharpeningPage() {
 
     loadImageAsGrayscale('/assets/lena-original.jpg')
       .then(image => {
-        if (!cancelled) setLenaImage(resizeGrayscaleImage(image, 96));
+        if (!cancelled) setLenaImage(resizeGrayscaleImage(centerCropGrayscaleImage(image), 96));
       })
       .catch(() => {
         if (!cancelled) setLenaImage(null);

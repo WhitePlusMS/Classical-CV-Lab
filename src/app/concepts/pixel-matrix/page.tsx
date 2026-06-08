@@ -26,7 +26,7 @@ import {
 } from '@/lib/algorithms/pixelMatrix';
 import type { PixelMatrixStep, NeighborhoodType } from '@/lib/algorithms/pixelMatrix';
 import { sampleImages, SampleImageType } from '@/lib/utils/sampleImages';
-import { loadImageAsRgb, resizeRgbImage } from '@/lib/utils/imageProcessing';
+import { centerCropRgbImage, loadImageAsRgb, resizeRgbImage } from '@/lib/utils/imageProcessing';
 import { useGridNavigation } from '@/hooks/useGridNavigation';
 
 // ---------------------------------------------------------------------------
@@ -174,7 +174,7 @@ export default function PixelMatrixPage() {
     (async () => {
       try {
         const rawImage = await loadImageAsRgb('/assets/lena-original.jpg');
-        if (!cancelled) setLenaRgbImage(resizeRgbImage(rawImage, LENA_DISPLAY_MAX_SIZE));
+        if (!cancelled) setLenaRgbImage(resizeRgbImage(centerCropRgbImage(rawImage), LENA_DISPLAY_MAX_SIZE));
       } catch {
         // Lena 加载失败时保留 sampleImages 中的程序化示例
       }

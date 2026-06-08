@@ -12,7 +12,7 @@ import {
 } from '@/components';
 import { computeHistogram } from '@/lib/algorithms/threshold';
 import { generateExampleImage } from '@/lib/algorithms/histogram';
-import { loadImageAsGrayscale } from '@/lib/utils/imageProcessing';
+import { centerCropGrayscaleImage, loadImageAsGrayscale } from '@/lib/utils/imageProcessing';
 import { GrayscaleImage } from '@/lib/algorithms/types';
 
 type ExampleType = 'dark' | 'bright' | 'lowContrast' | 'bimodal' | 'standard' | 'lena';
@@ -152,7 +152,7 @@ export default function HistogramPage() {
   useEffect(() => {
     let cancelled = false;
     loadImageAsGrayscale('/assets/lena-original.jpg').then(img => {
-      if (!cancelled) setLenaImage(img);
+      if (!cancelled) setLenaImage(centerCropGrayscaleImage(img));
     }).catch(() => {});
     return () => { cancelled = true; };
   }, []);

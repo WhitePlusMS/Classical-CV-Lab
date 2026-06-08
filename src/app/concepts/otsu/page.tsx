@@ -4,6 +4,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { ConceptLayout, CodeViewer, SliderParam, OtsuFormula } from '@/components';
 import { otsuThreshold, otsuSteps } from '@/lib/algorithms/threshold';
 import { sampleImages, SampleImageType } from '@/lib/utils/sampleImages';
+import { useLenaGrayscaleImage } from '@/hooks/useLenaGrayscaleImage';
 
 const OTSU_CODE_TS = `function otsuThreshold(image: number[][]): { threshold: number; binary: number[][] } {
   // 1. 计算直方图
@@ -69,7 +70,11 @@ export default function OtsuPage() {
   const [useOtsu, setUseOtsu] = useState(true);
   const [manualThreshold, setManualThreshold] = useState(128);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const originalImage = sampleImages[imageType].image;
+  const lenaImage = useLenaGrayscaleImage(96);
+  const originalImage = useMemo(() => {
+    if (imageType === 'lena' && lenaImage) return lenaImage;
+    return sampleImages[imageType].image;
+  }, [imageType, lenaImage]);
 
   const otsuResult = useMemo(() => otsuThreshold(originalImage), [originalImage]);
   const bestThreshold = useMemo(

@@ -38,7 +38,11 @@ import {
   convolutionTeachingImages,
   ConvolutionTeachingImageType,
 } from '@/lib/utils/convolutionTeachingImages';
-import { loadImageAsGrayscale, normalizeImage } from '@/lib/utils/imageProcessing';
+import {
+  centerCropGrayscaleImage,
+  loadImageAsGrayscale,
+  normalizeImage,
+} from '@/lib/utils/imageProcessing';
 import { useGridNavigation } from '@/hooks/useGridNavigation';
 
 const CONVOLUTION_CODE_TS = `function convolve2D(
@@ -299,7 +303,7 @@ export default function ConvolutionPage() {
     loadImageAsGrayscale(imageConfig.assetPath)
       .then(image => {
         if (!cancelled) {
-          setAssetImage(image);
+          setAssetImage(centerCropGrayscaleImage(image));
         }
       })
       .catch(error => {

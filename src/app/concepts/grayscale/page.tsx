@@ -21,7 +21,7 @@ import {
   type DisplayMode,
 } from '@/lib/algorithms/grayscale';
 import { sampleImages, SampleImageType } from '@/lib/utils/sampleImages';
-import { loadImageAsRgb, resizeRgbImage } from '@/lib/utils/imageProcessing';
+import { centerCropRgbImage, loadImageAsRgb, resizeRgbImage } from '@/lib/utils/imageProcessing';
 import { GrayscaleImage } from '@/lib/algorithms/types';
 import { useGridNavigation } from '@/hooks/useGridNavigation';
 
@@ -125,7 +125,7 @@ export default function GrayscalePage() {
       try {
         const raw = await loadImageAsRgb('/assets/lena-original.jpg');
         if (cancelled) return;
-        setLenaRgbImage(resizeRgbImage(raw, 128));
+        setLenaRgbImage(resizeRgbImage(centerCropRgbImage(raw), 128));
       } catch {
         // 加载失败则回退到程序生成的图
       }
