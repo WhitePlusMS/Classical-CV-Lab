@@ -180,6 +180,16 @@ const implementedCards = {
     bgLight: 'bg-amber-50',
     textColor: 'text-amber-600',
   },
+  histogramEqualization: {
+    href: '/concepts/histogram-equalization',
+    title: '直方图均衡化',
+    titleEn: 'Histogram Equalization',
+    description: 'CDF 映射：灰度级重新分布以增强图像对比度',
+    icon: icons.histogram,
+    color: 'from-orange-500 to-red-500',
+    bgLight: 'bg-orange-50',
+    textColor: 'text-orange-600',
+  },
 } satisfies Record<string, ConceptCard>;
 
 const placeholder = (
@@ -212,7 +222,7 @@ const learningChapters: LearningChapter[] = [
           implementedCards.grayscale,
           implementedCards.pixelMatrix,
           implementedCards.histogram,
-          placeholder('直方图均衡化', 'Histogram Equalization', icons.histogram, 'from-orange-500 to-red-500', 'bg-orange-50', 'text-orange-600'),
+          implementedCards.histogramEqualization,
           placeholder('图像锐化', 'Image Sharpening', icons.edge, 'from-pink-500 to-rose-600', 'bg-pink-50', 'text-pink-600'),
           placeholder('邻域与窗口', 'Neighborhood Window', icons.convolution, 'from-sky-500 to-blue-600', 'bg-sky-50', 'text-sky-600'),
           implementedCards.convolution,
