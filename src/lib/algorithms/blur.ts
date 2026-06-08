@@ -271,3 +271,225 @@ export function* medianFilterSteps(
     }
   }
 }
+
+// ========== 噪声生成 (Noise Generation) ==========
+
+/**
+ * 添加椒盐噪声
+ * @param image 原始灰度图像 [0, 1]
+ * @param density 噪声密度 (0-1)，默认 0.05
+ */
+export function addSaltPepperNoise(image: GrayscaleImage, density: number = 0.05): GrayscaleImage {
+  const height = image.length;
+  const width = image[0]?.length || 0;
+  const result = create2DArray(height, width, 0);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const rand = Math.random();
+      if (rand < density / 2) {
+        result[y][x] = 0; // 椒噪声（黑点）
+      } else if (rand < density) {
+        result[y][x] = 1; // 盐噪声（白点）
+      } else {
+        result[y][x] = image[y][x];
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * 添加高斯噪声
+ * @param image 原始灰度图像 [0, 1]
+ * @param sigma 噪声标准差，默认 0.08
+ */
+export function addGaussianNoise(image: GrayscaleImage, sigma: number = 0.08): GrayscaleImage {
+  const height = image.length;
+  const width = image[0]?.length || 0;
+  const result = create2DArray(height, width, 0);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      // Box-Muller 方法生成高斯随机数
+      let u = 0, v = 0;
+      while (u === 0) u = Math.random();
+      while (v === 0) v = Math.random();
+      const noise = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v) * sigma;
+      result[y][x] = Math.max(0, Math.min(1, image[y][x] + noise));
+    }
+  }
+
+  return result;
+}
+
+// ========== 边窗滤波 (Side Window Filtering) ==========
+
+/** 边窗候选方向 */
+export interface SideWindowCandidate {
+  name: string;
+  kernel: number[][];
+  value: number;
+}
+
+/** 边窗滤波步骤 */
+export interface SideWindowStep {
+  x: number;
+  y: number;
+  inputRegion: number[][];
+  centerValue: number;
+  candidates: SideWindowCandidate[];
+  selectedIndex: number;
+  outputValue: number;
+}
+
+/**
+ * 创建8个方向的侧窗核矩阵
+ * 每个核矩阵只覆盖当前像素的一侧（半平面），用于边窗滤波
+ * 3×3 时与课程中的 1/4 角窗和 1/6 边窗权重完全一致
+ */
+export function createSideWindowKernels(kernelSize: number): { name: string; kernel: number[][] }[] {
+  const half = Math.floor(kernelSize / 2);
+  const k = kernelSize;
+
+  const directions: { name: string; rowStart: number; rowEnd: number; colStart: number; colEnd: number }[] = [
+    { name: 'NW', rowStart: 0, rowEnd: half, colStart: 0, colEnd: half },
+    { name: 'NE', rowStart: 0, rowEnd: half, colStart: half, colEnd: k - 1 },
+    { name: 'SW', rowStart: half, rowEnd: k - 1, colStart: 0, colEnd: half },
+    { name: 'SE', rowStart: half, rowEnd: k - 1, colStart: half, colEnd: k - 1 },
+    { name: 'U',  rowStart: 0, rowEnd: half, colStart: 0, colEnd: k - 1 },
+    { name: 'D',  rowStart: half, rowEnd: k - 1, colStart: 0, colEnd: k - 1 },
+    { name: 'L',  rowStart: 0, rowEnd: k - 1, colStart: 0, colEnd: half },
+    { name: 'R',  rowStart: 0, rowEnd: k - 1, colStart: half, colEnd: k - 1 },
+  ];
+
+  return directions.map(({ name, rowStart, rowEnd, colStart, colEnd }) => {
+    const kernel: number[][] = [];
+    let count = 0;
+    for (let r = rowStart; r <= rowEnd; r++) {
+      for (let c = colStart; c <= colEnd; c++) count++;
+    }
+
+    const weight = 1 / count;
+    for (let r = 0; r < k; r++) {
+      const row: number[] = [];
+      for (let c = 0; c < k; c++) {
+        row.push((r >= rowStart && r <= rowEnd && c >= colStart && c <= colEnd) ? weight : 0);
+      }
+      kernel.push(row);
+    }
+
+    return { name, kernel };
+  });
+}
+
+/**
+ * 边窗滤波：对每个像素使用8个方向侧窗分别计算均值，选择最接近原像素值的候选作为输出
+ * 侧窗只覆盖当前像素的一侧，避免跨边缘混合，达到保边效果
+ */
+export function sideWindowFilter(image: GrayscaleImage, kernelSize: number): GrayscaleImage {
+  const height = image.length;
+  const width = image[0]?.length || 0;
+  const half = Math.floor(kernelSize / 2);
+  const sideWindows = createSideWindowKernels(kernelSize);
+  const result = create2DArray(height, width, 0);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      // 收集邻域
+      const region: number[][] = [];
+      for (let ky = -half; ky <= half; ky++) {
+        const row: number[] = [];
+        for (let kx = -half; kx <= half; kx++) {
+          const py = clamp(y + ky, 0, height - 1);
+          const px = clamp(x + kx, 0, width - 1);
+          row.push(image[py][px]);
+        }
+        region.push(row);
+      }
+
+      const center = image[y][x];
+      let bestVal = center;
+      let bestDiff = Infinity;
+
+      for (const sw of sideWindows) {
+        let sum = 0;
+        for (let ky = 0; ky < kernelSize; ky++) {
+          for (let kx = 0; kx < kernelSize; kx++) {
+            sum += region[ky][kx] * sw.kernel[ky][kx];
+          }
+        }
+        const diff = (sum - center) * (sum - center);
+        if (diff < bestDiff) {
+          bestDiff = diff;
+          bestVal = sum;
+        }
+      }
+
+      result[y][x] = bestVal;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * 边窗滤波步骤生成器，用于可视化教学
+ */
+export function* sideWindowFilterSteps(
+  image: GrayscaleImage,
+  kernelSize: number
+): Generator<SideWindowStep> {
+  if (!image || image.length === 0 || !image[0]) return;
+  const height = image.length;
+  const width = image[0].length;
+  const half = Math.floor(kernelSize / 2);
+  const sideWindows = createSideWindowKernels(kernelSize);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const inputRegion: number[][] = [];
+      for (let ky = -half; ky <= half; ky++) {
+        const row: number[] = [];
+        for (let kx = -half; kx <= half; kx++) {
+          const py = clamp(y + ky, 0, height - 1);
+          const px = clamp(x + kx, 0, width - 1);
+          row.push(image[py][px]);
+        }
+        inputRegion.push(row);
+      }
+
+      const centerValue = image[y][x];
+      const candidates: SideWindowCandidate[] = [];
+      let bestIndex = 0;
+      let bestDiff = Infinity;
+
+      for (let i = 0; i < sideWindows.length; i++) {
+        const sw = sideWindows[i];
+        let sum = 0;
+        for (let ky = 0; ky < kernelSize; ky++) {
+          for (let kx = 0; kx < kernelSize; kx++) {
+            sum += inputRegion[ky][kx] * sw.kernel[ky][kx];
+          }
+        }
+        candidates.push({ name: sw.name, kernel: sw.kernel, value: sum });
+        const diff = (sum - centerValue) * (sum - centerValue);
+        if (diff < bestDiff) {
+          bestDiff = diff;
+          bestIndex = i;
+        }
+      }
+
+      yield {
+        x,
+        y,
+        inputRegion,
+        centerValue,
+        candidates,
+        selectedIndex: bestIndex,
+        outputValue: candidates[bestIndex].value,
+      };
+    }
+  }
+}
