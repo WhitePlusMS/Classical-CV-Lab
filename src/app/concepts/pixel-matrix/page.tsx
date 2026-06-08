@@ -43,7 +43,7 @@ const LENA_DISPLAY_MAX_SIZE = 128;
 // ---------------------------------------------------------------------------
 
 const PIXEL_MATRIX_CODE = `// 图像存储本质上是矩阵
-// 本页内部使用 [0, 1] 归一化值；OpenCV 8-bit 图像常见存储范围是 [0, 255]
+// 示例统一使用 [0, 1] 归一化值；OpenCV 8-bit 图像常见存储范围是 [0, 255]
 // 灰度图：每个元素是一个标量
 // 彩色图：每个元素是 (R, G, B) 三元组
 
@@ -534,7 +534,7 @@ export default function PixelMatrixPage() {
             </div>
           </div>
           <div className="mt-3 text-[11px] text-slate-500 leading-relaxed">
-            灰度图中每个元素是一个标量；本页内部使用 <code className="bg-slate-100 px-1 rounded">[0, 1]</code> 归一化值，
+            灰度图中每个元素是一个标量；示例统一使用 <code className="bg-slate-100 px-1 rounded">[0, 1]</code> 归一化值，
             OpenCV 8-bit 图像中常见范围是 <code className="bg-slate-100 px-1 rounded">[0, 255]</code>。
             彩色图中每个元素是 <code className="bg-slate-100 px-1 rounded">(R, G, B)</code> 三元组。
             在 OpenCV 中使用 <code className="bg-slate-100 px-1 rounded">cv::Mat</code> 存储，
@@ -556,7 +556,7 @@ export default function PixelMatrixPage() {
               <span className="ml-2">x = <strong>{col}</strong>（水平/列方向），y = <strong>{row}</strong>（垂直/行方向）</span>
             </div>
             <div className="text-amber-600 text-[11px]">
-              图像坐标系中 y 轴向下为正，与数学坐标系 y 轴向上相反。本页统一使用 (x, y) = (col, row)。
+              图像坐标系中 y 轴向下为正，与数学坐标系 y 轴向上相反。坐标统一使用 (x, y) = (col, row)。
             </div>
           </div>
           <FormulaCard
@@ -749,7 +749,7 @@ export default function PixelMatrixPage() {
                 ))}
               </div>
               <p className="text-[11px] text-red-500 mt-1">
-                本页当前使用 Clamp 策略：越界坐标被限制到最近的有效边界位置，窗口不会真正"越界"。
+                当前边界处理使用 Clamp 策略：越界坐标被限制到最近的有效边界位置，窗口不会真正“越界”。
               </p>
             </div>
           </TeachingCard>
@@ -806,9 +806,9 @@ export default function PixelMatrixPage() {
         <TeachingCard>
           <h3 className="text-sm font-semibold text-blue-700">为什么需要邻域窗口？</h3>
           <div className="mt-2 text-xs text-blue-700 leading-relaxed">
-            后续课程中的卷积、均值滤波、中值滤波、Sobel 边缘检测、拉普拉斯锐化、形态学操作等算法，
+            卷积、均值滤波、中值滤波、Sobel 边缘检测、拉普拉斯锐化、形态学操作等算法，
             都依赖从图像中取出一个局部窗口（邻域），对这个窗口内的像素进行加权求和、排序、比较等操作，
-            然后将结果写回输出图像的对应位置。没有邻域窗口概念，就无法理解为什么这些算法需要"看周围像素"而不只是"看当前像素"。
+            然后将结果写回输出图像的对应位置。没有邻域窗口概念，就无法理解为什么这些算法需要“看周围像素”而不只是“看当前像素”。
           </div>
         </TeachingCard>
       </div>

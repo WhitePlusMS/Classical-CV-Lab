@@ -113,7 +113,7 @@ const KERNEL_PRESET_FAMILIES: KernelPresetFamily[] = [
     principle: '每个像素都以相同权重参与求和；若再除以全部权重之和，就得到标准的均值滤波。',
     origin: '它来自局部平均的统计思想：不再只看中心点，而是把周围像素一起纳入估计，用整体趋势抑制随机波动。',
     formulaMathML: buildInlineMathML('<mrow><mi>G</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>=</mo><mfrac><mn>1</mn><mi>Z</mi></mfrac><munderover><mo>&#8721;</mo><mi>i</mi><mi></mi></munderover><munderover><mo>&#8721;</mo><mi>j</mi><mi></mi></munderover><mi>f</mi><mo>(</mo><mi>x</mi><mo>+</mo><mi>i</mi><mo>,</mo><mi>y</mi><mo>+</mo><mi>j</mi><mo>)</mo></mrow>'),
-    formulaNote: '页面中的核矩阵保留“等权结构”便于观察；若除以全部权重和，就对应标准均值核。',
+    formulaNote: '等权核矩阵保留“等权结构”便于观察；若除以全部权重和，就对应标准均值核。',
     visualTitle: '响应图示',
     visualLabels: ['周围像素', '同权汇总', '平滑输出'],
   },
@@ -139,7 +139,7 @@ const KERNEL_PRESET_FAMILIES: KernelPresetFamily[] = [
     principle: '它本质上是二阶差分。3×3 使用经典模板，更大的 5×5、7×7 版本则在二阶差分周围加入了更宽的平滑支撑。',
     origin: '它来源于离散形式的二阶导数；在图像处理中，二阶差分常用来突出“变化率本身是否突然改变”。',
     formulaMathML: buildInlineMathML('<mrow><msup><mo>&#8711;</mo><mn>2</mn></msup><mi>f</mi><mo>=</mo><mfrac><mrow><msup><mi>&#8706;</mi><mn>2</mn></msup><mi>f</mi></mrow><mrow><mi>&#8706;</mi><msup><mi>x</mi><mn>2</mn></msup></mrow></mfrac><mo>+</mo><mfrac><mrow><msup><mi>&#8706;</mi><mn>2</mn></msup><mi>f</mi></mrow><mrow><mi>&#8706;</mi><msup><mi>y</mi><mn>2</mn></msup></mrow></mfrac></mrow>'),
-    formulaNote: '页面中的大尺寸拉普拉斯采用“二阶差分 + 更宽平滑支撑”的教学型模板，用来帮助理解大核二阶导数的概念。',
+    formulaNote: '大尺寸拉普拉斯采用“二阶差分 + 更宽平滑支撑”的教学型模板，用来帮助理解大核二阶导数的概念。',
     visualTitle: '响应图示',
     visualLabels: ['平坦区≈0', '亮度突变', '边缘增强'],
   },
@@ -283,7 +283,7 @@ export default function ConvolutionPage() {
     [0, 1, 0],
   ]);
   const [selectedPresetKey, setSelectedPresetKey] = useState<KernelPresetFamilyKey | null>('laplacian');
-  const [assetImage, setAssetImage] = useState<number[][] | null>(null);
+  const [assetImageState, setAssetImageState] = useState<{ path: string; image: number[][] } | null>(null);
   const [currentPosition, setCurrentPosition] = useState({ x: 0, y: 0 });
   const imageConfig = convolutionTeachingImages[imageType];
   const selectedPresetFamily = useMemo(
@@ -293,17 +293,17 @@ export default function ConvolutionPage() {
 
   useEffect(() => {
     let cancelled = false;
+    const assetPath = imageConfig.assetPath;
 
-    if (!imageConfig.assetPath) {
-      setAssetImage(null);
-      return;
-    }
+    if (!assetPath) return;
 
-    setAssetImage(null);
-    loadImageAsGrayscale(imageConfig.assetPath)
+    loadImageAsGrayscale(assetPath)
       .then(image => {
         if (!cancelled) {
-          setAssetImage(centerCropGrayscaleImage(image));
+          setAssetImageState({
+            path: assetPath,
+            image: centerCropGrayscaleImage(image),
+          });
         }
       })
       .catch(error => {
@@ -315,7 +315,9 @@ export default function ConvolutionPage() {
     };
   }, [imageConfig]);
 
-  const originalImage = imageConfig.image ?? assetImage;
+  const originalImage = imageConfig.image ?? (
+    assetImageState && assetImageState.path === imageConfig.assetPath ? assetImageState.image : null
+  );
   const inputWidth = originalImage?.[0]?.length ?? 0;
   const inputHeight = originalImage?.length ?? 0;
 
@@ -336,31 +338,24 @@ export default function ConvolutionPage() {
   const outputHeight = resultImage.length;
   const totalSteps = outputWidth * outputHeight;
 
-  useEffect(() => {
-    if (outputWidth === 0 || outputHeight === 0) {
-      setCurrentPosition({ x: 0, y: 0 });
-      return;
-    }
-
-    setCurrentPosition(prev => ({
-      x: Math.min(prev.x, outputWidth - 1),
-      y: Math.min(prev.y, outputHeight - 1),
-    }));
-  }, [outputHeight, outputWidth]);
+  const safeCurrentPosition = {
+    x: outputWidth > 0 ? Math.min(currentPosition.x, outputWidth - 1) : 0,
+    y: outputHeight > 0 ? Math.min(currentPosition.y, outputHeight - 1) : 0,
+  };
 
   const currentStep = useMemo(() => {
     if (!originalImage || outputWidth === 0 || outputHeight === 0) return null;
-    return getConvolutionStepAt(originalImage, kernelObj, currentPosition.x, currentPosition.y, {
+    return getConvolutionStepAt(originalImage, kernelObj, safeCurrentPosition.x, safeCurrentPosition.y, {
       padding: 0,
     });
-  }, [currentPosition.x, currentPosition.y, kernelObj, originalImage, outputHeight, outputWidth]);
+  }, [safeCurrentPosition.x, safeCurrentPosition.y, kernelObj, originalImage, outputHeight, outputWidth]);
   const currentStepIndex = currentStep ? currentStep.y * outputWidth + currentStep.x : 0;
   const inputMarkerWindowLabel =
     imageConfig.regionMarker === 'dot' ? '红点定位的输入窗口' : '红色输入窗口';
   const inputMarkerExpandHint =
     imageConfig.regionMarker === 'dot'
-      ? `上方大图中的红点只负责定位；这里展示的是该位置对应的 ${kernelSize}×${kernelSize} 输入窗口。`
-      : '上方大图的红框直接展开到这里；每一格仍对应原图中的同一位置。';
+      ? `上方红点只负责定位；该位置对应的 ${kernelSize}×${kernelSize} 输入窗口会在下方展开。`
+      : '上方红框对应的输入窗口会在下方展开；每一格仍对应原图中的同一位置。';
 
   const handleDirectionMove = useGridNavigation({
     current: currentStep ? { x: currentStep.x, y: currentStep.y } : null,
@@ -943,7 +938,7 @@ export default function ConvolutionPage() {
               {kernelSize >= 7 ? (
                 <div className="grid gap-2 text-xs">
                   <div className="rounded-xl bg-amber-50 px-3 py-2 text-amber-800">
-                    这里先用中心格帮助定位。真正参与计算的是整张 {kernelSize}×{kernelSize}
+                    中心格先用于帮助定位。真正参与计算的是整张 {kernelSize}×{kernelSize}
                     卷积核，完整权重见下方矩阵区。
                   </div>
                   <div className="rounded-xl border border-amber-200 bg-white px-3 py-2 text-amber-700">
@@ -1011,7 +1006,7 @@ export default function ConvolutionPage() {
                     中心项：{formatPixelValue(centerPixel)} × {centerWeight} = {activeProduct.toFixed(2)}
                   </div>
                   <div className="mt-2 text-xs leading-5 text-slate-500">
-                    这里只摘出中心项做流程提示；当前输出值仍由全部 {kernelSize * kernelSize}
+                    流程提示先摘出中心项；当前输出值仍由全部 {kernelSize * kernelSize}
                     项乘积共同决定，详细乘积在下方展开区查看。
                   </div>
                 </div>
@@ -1058,7 +1053,7 @@ export default function ConvolutionPage() {
       <div className="rounded-2xl border border-blue-200 bg-blue-50 px-3 py-3">
         <div className="text-xs font-semibold text-blue-700">尺寸关系</div>
         <p className="mt-2 text-xs leading-5 text-blue-700">
-          当前页面使用小尺寸示例图，并默认采用不补零卷积。输出边长 = 输入边长 - 核大小 + 1。
+          示例图保持小尺寸，并默认采用不补零卷积。输出边长 = 输入边长 - 核大小 + 1。
         </p>
         <div className="mt-2 rounded-xl bg-white/80 px-3 py-2 text-sm font-semibold text-blue-800">
           {inputWidth} - {kernelSize} + 1 = {outputWidth}
@@ -1170,7 +1165,7 @@ export default function ConvolutionPage() {
       title="卷积运算"
       subtitle="Convolution - 图像处理的核心操作"
       operationLabel="卷积计算"
-      parameterIntro="先观察右侧可视化过程，再结合这里的参数调整，有助于理解卷积窗口、核大小与输出尺寸之间的关系。"
+      parameterIntro="先观察右侧可视化过程，再结合参数调整，有助于理解卷积窗口、核大小与输出尺寸之间的关系。"
       originalImage={originalImage}
       resultImage={resultImage}
       parameters={parameters}

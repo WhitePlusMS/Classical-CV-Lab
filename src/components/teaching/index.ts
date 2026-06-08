@@ -3,3 +3,4 @@ export { FlowColumn, FlowColumns, FlowNode, ProcessRail } from './TeachingFlow';
 export { FormulaCard, MathText, buildInlineMathML } from './TeachingMath';
 export { PixelColorSwatch } from './TeachingPixel';
 export { TeachingCard } from './TeachingCard';
+export { CameraCalibrationScene3D, type CameraCalibrationScenePoint } from './CameraCalibrationScene3D';

@@ -260,7 +260,7 @@ export default function HistogramPage() {
         </TeachingCard>
 
         <TeachingCard tone="amber">
-          <div className="text-sm font-semibold text-amber-700 mb-2">当前示例：{EXAMPLE_LABELS[exampleType]}</div>
+          <div className="text-sm font-semibold text-amber-700 mb-2">图像类型：{EXAMPLE_LABELS[exampleType]}</div>
           <div className="text-xs text-slate-600 space-y-1">
             {exampleType === 'dark' && (
               <p>所有像素的灰度值 {'<'} 64，直方图集中在左侧暗区。图像整体很暗，细节难以辨认。</p>

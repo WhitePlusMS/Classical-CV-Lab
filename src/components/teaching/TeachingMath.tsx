@@ -8,13 +8,20 @@ export function buildInlineMathML(body: string): string {
   return `<math xmlns="http://www.w3.org/1998/Math/MathML">${body}</math>`;
 }
 
+function normalizeMathML(mathML: string): string {
+  return mathML.replace(
+    /<mfenced\s+open="\["\s+close="\]">([\s\S]*?)<\/mfenced>/g,
+    '<mrow><mo fence="true" stretchy="true">[</mo>$1<mo fence="true" stretchy="true">]</mo></mrow>'
+  );
+}
+
 interface MathTextProps {
   mathML: string;
   className?: string;
 }
 
 export function MathText({ mathML, className }: MathTextProps) {
-  return <span className={className} dangerouslySetInnerHTML={{ __html: mathML }} />;
+  return <span className={className} dangerouslySetInnerHTML={{ __html: normalizeMathML(mathML) }} />;
 }
 
 interface FormulaCardProps {

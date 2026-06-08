@@ -732,7 +732,7 @@ export default function BlurPage() {
           {!isBox && !isMedian && kernelSize === 3 && (
             <div className="mx-auto mt-4 max-w-2xl rounded-2xl border border-amber-200 bg-amber-50/60 px-4 py-3">
               <div className="mb-2 text-xs font-semibold text-amber-800">
-                课程中的 3×3 高斯模板
+                经典 3×3 高斯模板
               </div>
               <FormulaLine
                 mathML={buildGaussianTemplateMathML()}

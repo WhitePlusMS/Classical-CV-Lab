@@ -5,6 +5,7 @@ export { default as ParameterPanel, SliderParam, SelectParam, KernelEditor } fro
 export { default as FormulaWithExplanation, ConvolutionFormula, BoxBlurFormula, MedianFormula, SobelFormula, OtsuFormula } from './FormulaWithExplanation';
 export {
   AnchoredOverlay,
+  CameraCalibrationScene3D,
   FlowColumn,
   FlowColumns,
   FlowNode,
@@ -15,5 +16,6 @@ export {
   TeachingCard,
   buildInlineMathML,
   type AnchoredOverlayPath,
+  type CameraCalibrationScenePoint,
   type OverlayAnchor,
 } from './teaching';

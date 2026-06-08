@@ -644,7 +644,7 @@ export default function ImageSharpeningPage() {
                 <FormulaLine mathML={outputDetailML} className="font-semibold text-emerald-700" />
                 <FormulaLine mathML={output8BitDetailML} className="font-semibold text-emerald-700" />
                 <div className="text-[10px] text-slate-500 mt-1">
-                  梯度值越大说明该位置灰度变化越剧烈（边缘越明显）。页面内部使用归一化灰度；按 8-bit 显示时必须裁剪到 0 到 255。
+                  梯度值越大说明该位置灰度变化越剧烈（边缘越明显）。计算过程使用归一化灰度；按 8-bit 显示时必须裁剪到 0 到 255。
                 </div>
               </div>
             </div>
@@ -828,7 +828,7 @@ export default function ImageSharpeningPage() {
               <FormulaLine mathML={enhanceDetailResultML} className="mt-1 font-bold text-emerald-700" />
               <FormulaLine mathML={enhance8BitDetailML} className="mt-1 font-bold text-emerald-700" />
               <div className="text-[10px] text-slate-500 mt-1">
-                页面内部使用归一化灰度；按 8-bit 显示时必须裁剪到 0 到 255。锐化会增强边缘反差，同时也可能放大噪声。
+                计算过程使用归一化灰度；按 8-bit 显示时必须裁剪到 0 到 255。锐化会增强边缘反差，同时也可能放大噪声。
               </div>
             </div>
           </div>

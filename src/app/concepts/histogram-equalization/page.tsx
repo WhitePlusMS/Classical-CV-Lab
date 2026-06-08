@@ -480,7 +480,7 @@ export default function HistogramEqualizationPage() {
           <div className="text-xs text-slate-600 space-y-1.5">
             <p>
               <span className="font-medium text-slate-700">增强对比度：</span>
-              原直方图集中的区域被"拉伸"到更宽的灰度范围。
+              原直方图集中的区域被“拉伸”到更宽的灰度范围。
             </p>
             <p>
               <span className="font-medium text-slate-700">直方图趋平：</span>
@@ -493,7 +493,7 @@ export default function HistogramEqualizationPage() {
               这意味着相同灰度级的所有像素会被映射到同一输出值。
             </p>
             <p className="mt-2">
-              调整参数面板中的"示例图"类型，观察不同图像均衡化前后的直方图变化。
+              调整参数面板中的“示例图”类型，观察不同图像均衡化前后的直方图变化。
             </p>
           </div>
         </TeachingCard>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   AnchoredOverlay,
   type AnchoredOverlayPath,
@@ -509,14 +509,9 @@ export default function MorphologyPage() {
     return phaseStartIndex !== -1 ? phaseStartIndex : 0;
   }, [viewMode, steps, taskRepresentativePoint, effectiveOperation]);
 
-  const activeStepIndex = viewMode === 'task' ? taskStepIndex : currentStepIndex;
+  const safeCurrentStepIndex = totalSteps > 0 ? Math.min(currentStepIndex, totalSteps - 1) : 0;
+  const activeStepIndex = viewMode === 'task' ? taskStepIndex : safeCurrentStepIndex;
   const currentStep: MorphologyStep | null = steps[activeStepIndex] ?? null;
-
-  useEffect(() => {
-    if (viewMode === 'theory') {
-      setCurrentStepIndex(0);
-    }
-  }, [task, operation, seShape, seSize, viewMode]);
 
   // 判断当前是高亮哪种操作类型
   const isErode = currentStep?.operation === 'erode';
@@ -537,7 +532,7 @@ export default function MorphologyPage() {
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold text-slate-800">页面结构切换</div>
+          <div className="text-sm font-semibold text-slate-800">视图结构切换</div>
           <p className="mt-1 text-xs leading-5 text-slate-500">
             先用原理演示理解结构元素与开闭操作，再看应用示例中的典型任务结果。
           </p>
@@ -580,8 +575,8 @@ export default function MorphologyPage() {
   ), [viewMode]);
 
   const parameterIntro = viewMode === 'theory'
-    ? '这一栏只保留会影响原理演示的参数，重点观察结构元素如何滑动并决定输出像素。'
-    : '这一栏用于切换任务场景并查看对应演示配置；任务页使用固定观察窗口展示局部区域与结果的对应关系。';
+    ? '原理演示只保留会影响结构元素运动与输出判定的参数，重点观察结构元素如何滑动并决定输出像素。'
+    : '任务场景可切换对应演示配置；固定观察窗口用于展示局部区域与结果的对应关系。';
 
   // 使用 useGridNavigation 钩子
   const handleDirectionMove = useGridNavigation({
@@ -983,7 +978,7 @@ export default function MorphologyPage() {
               <div>
                 <div className="text-sm font-semibold text-slate-800">任务场景与对应操作</div>
                 <p className="mt-1 text-xs leading-5 text-slate-500">
-                  这一页展示任务场景、对应操作与最终结果之间的关系，不进行逐像素步骤推导。
+                  任务演示展示任务场景、对应操作与最终结果之间的关系，不进行逐像素步骤推导。
                 </p>
               </div>
               <div className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
@@ -1688,8 +1683,8 @@ export default function MorphologyPage() {
         </div>
         <p className="mt-2 text-xs leading-5 text-blue-700">
           {viewMode === 'theory'
-            ? '当前页面固定使用一张二值示例图，重点观察结构元素平移后如何决定腐蚀、膨胀、开操作和闭操作的输出。'
-            : '当前页面聚焦典型教学任务，重点比较面对不同目标时不同操作产生的结果差异，并固定展示一个代表性局部位置。'}
+            ? '二值示例图固定不变，重点观察结构元素平移后如何决定腐蚀、膨胀、开操作和闭操作的输出。'
+            : '典型教学任务聚焦不同目标下的操作结果差异，并固定展示一个代表性局部位置。'}
           {' '}输入与输出图像分辨率相同：{inputWidth}&#x00D7;{inputHeight}。
         </p>
         {isComposite && (
@@ -1716,7 +1711,7 @@ export default function MorphologyPage() {
 
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-xs leading-5 text-emerald-800">
             <span className="font-semibold">对应操作：</span>
-            {OPERATION_LABELS[recommendedOperation]}。当前页面固定展示该操作的处理结果，不提供逐像素步骤切换。
+            {OPERATION_LABELS[recommendedOperation]}。任务演示固定展示该操作的处理结果，不提供逐像素步骤切换。
           </div>
         </>
       ) : (

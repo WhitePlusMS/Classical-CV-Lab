@@ -50,6 +50,10 @@ interface ConceptLayoutProps {
   analysisPreview?: React.ReactNode;
   operationLabel?: string;
   parameterIntro?: React.ReactNode;
+  mainVisual?: React.ReactNode;
+  showInputSelection?: boolean;
+  showNavigationBar?: boolean;
+  showNavigationControls?: boolean;
 }
 
 export default function ConceptLayout({
@@ -80,6 +84,10 @@ export default function ConceptLayout({
   analysisPreview,
   operationLabel = '处理步骤',
   parameterIntro = '参数面板用于调整当前示例、算法参数和辅助操作；主区负责展示图像处理过程。',
+  mainVisual,
+  showInputSelection = true,
+  showNavigationBar = true,
+  showNavigationControls = true,
 }: ConceptLayoutProps) {
   const [showCode, setShowCode] = useState(false);
   const [showParameters, setShowParameters] = useState(true);
@@ -121,7 +129,7 @@ export default function ConceptLayout({
   }, [navigationHintText, onInputRegionSelect, onOutputPixelSelect]);
   const mainImageSize = singlePageScroll ? 280 : 320;
 
-  const navigationControlPanel = stepInfo ? (
+  const navigationControlPanel = stepInfo && showNavigationControls ? (
     <details className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/80">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-3 text-sm font-semibold text-slate-700 marker:content-none">
         <span>窗口定位</span>
@@ -139,7 +147,7 @@ export default function ConceptLayout({
               当前像素 ({currentStep.x}, {currentStep.y})
             </span>
           )}
-          <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600">
+          <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium tabular-nums text-slate-600">
             第 {stepInfo.current + 1} / {stepInfo.total} 步
           </span>
         </div>
@@ -194,7 +202,7 @@ export default function ConceptLayout({
     </details>
   ) : null;
 
-  const navigationBar = stepInfo ? (
+  const navigationBar = stepInfo && showNavigationBar ? (
     <div className="bg-slate-50/50 px-4 py-2">
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
         <div className="flex flex-wrap items-center gap-2 text-slate-500">
@@ -205,7 +213,7 @@ export default function ConceptLayout({
             </span>
           )}
         </div>
-        <div className="rounded-full border border-slate-200 bg-white px-2.5 py-0.5 font-medium text-slate-600">
+        <div className="rounded-full border border-slate-200 bg-white px-2.5 py-0.5 font-medium tabular-nums text-slate-600">
           第 {stepInfo.current + 1} / {stepInfo.total} 步
         </div>
       </div>
@@ -346,96 +354,100 @@ export default function ConceptLayout({
                 </div>
               )}
 
-              <div className="flex flex-wrap items-center justify-center gap-5 xl:gap-7">
-                <div className="flex flex-col items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
-                      {imageLabels?.input ?? '原图'}
-                    </span>
-                    {originalImage && (
-                      <span className="font-mono text-xs text-slate-400">
-                        {originalImage[0]?.length}×{originalImage.length}
+              {mainVisual ? (
+                <div className="mx-auto w-full max-w-6xl">{mainVisual}</div>
+              ) : (
+                <div className="flex flex-wrap items-center justify-center gap-5 xl:gap-7">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                        {imageLabels?.input ?? '原图'}
                       </span>
-                    )}
-                  </div>
-                  <ImageCanvas
-                    image={originalImage}
-                    rgbImage={originalRgbImage}
-                    maxDisplaySize={mainImageSize}
-                    showGrid={showOriginalGrid}
-                    interactive={Boolean(onInputRegionSelect)}
-                    onRegionSelect={onInputRegionSelect}
-                    containerClassName="teaching-pulse-input conv-anchor-input-main"
-                    selectedRegionMarker={originalRegionMarker}
-                    selectedRegion={
-                      currentStep
+                      {originalImage && (
+                        <span className="font-mono text-xs text-slate-400">
+                          {originalImage[0]?.length}×{originalImage.length}
+                        </span>
+                      )}
+                    </div>
+                    <ImageCanvas
+                      image={originalImage}
+                      rgbImage={originalRgbImage}
+                      maxDisplaySize={mainImageSize}
+                      showGrid={showOriginalGrid}
+                      interactive={Boolean(onInputRegionSelect)}
+                      onRegionSelect={onInputRegionSelect}
+                      containerClassName="teaching-pulse-input conv-anchor-input-main"
+                      selectedRegionMarker={originalRegionMarker}
+                      selectedRegion={
+                        currentStep && showInputSelection
                           ? {
-                            x: currentStep.regionX ?? currentStep.x,
-                            y: currentStep.regionY ?? currentStep.y,
-                            size: currentStep.kernelSize,
-                            width: currentStep.regionWidth,
-                            height: currentStep.regionHeight,
-                          }
-                        : null
-                    }
-                  />
-                  {imageHints?.input && (
-                    <div className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-600">
-                      {imageHints.input}
-                    </div>
-                  )}
-                </div>
-
-                <div className="conv-anchor-main-operator shrink-0 flex flex-col items-center gap-2">
-                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-center shadow-[0_10px_24px_rgba(245,158,11,0.12)]">
-                    <div className="text-[10px] font-semibold tracking-[0.12em] text-amber-700">
-                      {operationLabel}
-                    </div>
-                    <svg
-                      className="mx-auto mt-1 h-7 w-7 text-amber-500"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
+                              x: currentStep.regionX ?? currentStep.x,
+                              y: currentStep.regionY ?? currentStep.y,
+                              size: currentStep.kernelSize,
+                              width: currentStep.regionWidth,
+                              height: currentStep.regionHeight,
+                            }
+                          : null
+                      }
+                    />
+                    {imageHints?.input && (
+                      <div className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-600">
+                        {imageHints.input}
+                      </div>
+                    )}
                   </div>
-                  {stepInfo && (
-                    <span className="font-mono text-xs text-slate-400">
-                      {stepInfo.current + 1}/{stepInfo.total}
-                    </span>
-                  )}
-                </div>
 
-                <div className="flex flex-col items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-md bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600">
-                      {imageLabels?.output ?? '结果'}
-                    </span>
-                    {resultImage && (
-                      <span className="font-mono text-xs text-slate-400">
-                        {resultImage[0]?.length}×{resultImage.length}
+                  <div className="conv-anchor-main-operator shrink-0 flex flex-col items-center gap-2">
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-center shadow-[0_10px_24px_rgba(245,158,11,0.12)]">
+                      <div className="text-[10px] font-semibold tracking-[0.12em] text-amber-700">
+                        {operationLabel}
+                      </div>
+                      <svg
+                        className="mx-auto mt-1 h-7 w-7 text-amber-500"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                    {stepInfo && (
+                      <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium tabular-nums text-slate-500 shadow-sm">
+                        第 {stepInfo.current + 1} / {stepInfo.total} 步
                       </span>
                     )}
                   </div>
-                  <ImageCanvas
-                    image={resultImage}
-                    rgbImage={resultRgbImage}
-                    maxDisplaySize={mainImageSize}
-                    showGrid={Boolean(resultImage && (resultImage[0]?.length ?? 0) <= 16)}
-                    interactive={Boolean(onOutputPixelSelect)}
-                    onRegionSelect={onOutputPixelSelect}
-                    containerClassName="teaching-pulse-output conv-anchor-output-main"
-                    highlightPixel={currentStep ? { x: currentStep.x, y: currentStep.y } : null}
-                  />
-                  {imageHints?.output && (
-                    <div className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-600">
-                      {imageHints.output}
+
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-md bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-600">
+                        {imageLabels?.output ?? '结果'}
+                      </span>
+                      {resultImage && (
+                        <span className="font-mono text-xs text-slate-400">
+                          {resultImage[0]?.length}×{resultImage.length}
+                        </span>
+                      )}
                     </div>
-                  )}
+                    <ImageCanvas
+                      image={resultImage}
+                      rgbImage={resultRgbImage}
+                      maxDisplaySize={mainImageSize}
+                      showGrid={Boolean(resultImage && (resultImage[0]?.length ?? 0) <= 16)}
+                      interactive={Boolean(onOutputPixelSelect)}
+                      onRegionSelect={onOutputPixelSelect}
+                      containerClassName="teaching-pulse-output conv-anchor-output-main"
+                      highlightPixel={currentStep ? { x: currentStep.x, y: currentStep.y } : null}
+                    />
+                    {imageHints?.output && (
+                      <div className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-600">
+                        {imageHints.output}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {teachingHint && (
                 <div className="mx-auto mt-4 max-w-5xl">

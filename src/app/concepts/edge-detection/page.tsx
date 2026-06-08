@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   AnchoredOverlay,
   type AnchoredOverlayPath,
@@ -596,13 +596,12 @@ export default function EdgeDetectionPage() {
   }, [originalImage, operator, laplaceVariant, cannyStage, cannyResult, imgWidth, imgHeight]);
 
   const totalSteps = steps.length;
-  const currentStepIndex = currentPosition.y * imgWidth + currentPosition.x;
+  const safeCurrentPosition = {
+    x: imgWidth > 0 ? Math.min(currentPosition.x, imgWidth - 1) : 0,
+    y: imgHeight > 0 ? Math.min(currentPosition.y, imgHeight - 1) : 0,
+  };
+  const currentStepIndex = safeCurrentPosition.y * imgWidth + safeCurrentPosition.x;
   const safeStepIndex = totalSteps > 0 ? Math.min(currentStepIndex, totalSteps - 1) : 0;
-
-  // 算子、阶段或图像尺寸变化后回到左上角，避免旧坐标映射到新图像的错误位置。
-  useEffect(() => {
-    setCurrentPosition({ x: 0, y: 0 });
-  }, [operator, cannyStage, laplaceVariant, imageType, imgWidth, imgHeight]);
 
   const currentStep = steps.length > 0 ? steps[safeStepIndex] ?? null : null;
 

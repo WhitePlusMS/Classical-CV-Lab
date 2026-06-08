@@ -191,7 +191,7 @@ export default function GrayscalePage() {
 
   const selectStepByPoint = useCallback(
     function(point: { x: number; y: number }) {
-      var idx = steps.findIndex(function(s) { return s.x === point.x && s.y === point.y; });
+      const idx = steps.findIndex(function(s) { return s.x === point.x && s.y === point.y; });
       if (idx !== -1) setCurrentStepIndex(idx);
     },
     [steps]
@@ -220,26 +220,26 @@ export default function GrayscalePage() {
 
   // —— stepDetails（参考卷积模块格式）——
 
-  var stepDetails = useMemo(function() {
+  const stepDetails = useMemo(function() {
     if (!currentStep || !rgbImage) return null;
-    var step = currentStep;
-    var x = step.x, y = step.y, r = step.r, g = step.g, b = step.b;
-    var weightedGray = step.weightedGray, averageGray = step.averageGray;
-    var r255 = (r * 255).toFixed(0), g255 = (g * 255).toFixed(0), b255 = (b * 255).toFixed(0);
-    var wg255 = (weightedGray * 255).toFixed(1), ag255 = (averageGray * 255).toFixed(1);
-    var weights = method === 'weighted'
+    const step = currentStep;
+    const x = step.x, y = step.y, r = step.r, g = step.g, b = step.b;
+    const weightedGray = step.weightedGray, averageGray = step.averageGray;
+    const r255 = (r * 255).toFixed(0), g255 = (g * 255).toFixed(0), b255 = (b * 255).toFixed(0);
+    const wg255 = (weightedGray * 255).toFixed(1), ag255 = (averageGray * 255).toFixed(1);
+    const weights = method === 'weighted'
       ? { r: 0.299, g: 0.587, b: 0.114 }
       : { r: 1 / 3, g: 1 / 3, b: 1 / 3 };
-    var currentOutput = method === 'weighted' ? weightedGray : averageGray;
-    var currentOutput255 = method === 'weighted' ? wg255 : ag255;
-    var rContribution = (r * weights.r * 255).toFixed(1);
-    var gContribution = (g * weights.g * 255).toFixed(1);
-    var bContribution = (b * weights.b * 255).toFixed(1);
+    const currentOutput = method === 'weighted' ? weightedGray : averageGray;
+    const currentOutput255 = method === 'weighted' ? wg255 : ag255;
+    const rContribution = (r * weights.r * 255).toFixed(1);
+    const gContribution = (g * weights.g * 255).toFixed(1);
+    const bContribution = (b * weights.b * 255).toFixed(1);
 
-    var weightedFormulaML = buildWeightedFormulaMathML(r255, g255, b255, wg255);
-    var averageFormulaML = buildAverageFormulaMathML(r255, g255, b255, ag255);
-    var currentFormulaML = method === 'weighted' ? weightedFormulaML : averageFormulaML;
-    var currentMethodLabel = method === 'weighted' ? '加权法' : '平均法';
+    const weightedFormulaML = buildWeightedFormulaMathML(r255, g255, b255, wg255);
+    const averageFormulaML = buildAverageFormulaMathML(r255, g255, b255, ag255);
+    const currentFormulaML = method === 'weighted' ? weightedFormulaML : averageFormulaML;
+    const currentMethodLabel = method === 'weighted' ? '加权法' : '平均法';
 
     return (
       <div className="space-y-4">
@@ -367,7 +367,7 @@ export default function GrayscalePage() {
 
   // —— 参数面板 ——
 
-  var parameters = (
+  const parameters = (
     <div className="space-y-4">
       <SelectParam
         label="示例图像"
@@ -415,7 +415,7 @@ export default function GrayscalePage() {
     </div>
   );
 
-  var imageHints = useMemo(function() {
+  const imageHints = useMemo(function() {
     return {
       input: getDisplayLabel(displayMode),
       output: method === 'weighted' ? '加权灰度结果' : '平均灰度结果',
