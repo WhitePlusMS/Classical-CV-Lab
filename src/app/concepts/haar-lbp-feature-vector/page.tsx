@@ -67,15 +67,15 @@ const HAAR_DIAGONAL_ITEMS = [
 // ========================================
 
 const FEATURE_VALUE_FORMULA = buildInlineMathML(
-  '<mrow><mi>V</mi><mo>=</mo><munder><mo>\u2211</mo><mtext>\u9ED1\u533A</mtext></munder><mi>p</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo><mo>-</mo><munder><mo>\u2211</mo><mtext>\u767D\u533A</mtext></munder><mi>p</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo></mrow>'
+  '<mrow><mi>V</mi><mo>=</mo><munder><mo>∑</mo><mtext>黑区</mtext></munder><mi>p</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo><mo>-</mo><munder><mo>∑</mo><mtext>白区</mtext></munder><mi>p</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo></mrow>'
 );
 
 const FEATURE_VALUE_CHAIN = buildInlineMathML(
-  '<mrow><mi>V</mi><mo>=</mo><munder><mo>\u2211</mo><mtext>\u9ED1\u533A</mtext></munder><mi>p</mi><mo>-</mo><munder><mo>\u2211</mo><mtext>\u767D\u533A</mtext></munder><mi>p</mi><mo>=</mo><mn>128</mn><mo>-</mo><mn>45</mn><mo>=</mo><mn>83</mn></mrow>'
+  '<mrow><mi>V</mi><mo>=</mo><munder><mo>∑</mo><mtext>黑区</mtext></munder><mi>p</mi><mo>-</mo><munder><mo>∑</mo><mtext>白区</mtext></munder><mi>p</mi><mo>=</mo><mn>128</mn><mo>-</mo><mn>45</mn><mo>=</mo><mn>83</mn></mrow>'
 );
 
 const INTEGRAL_IMAGE_FORMULA = buildInlineMathML(
-  '<mrow><mi>n</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo><mo>=</mo><munder><mo>\u2211</mo><mrow><msup><mi>i</mi><mo>\u2032</mo></msup><mo>\u2264</mo><mi>i</mi><mo>,</mo><msup><mi>j</mi><mo>\u2032</mo></msup><mo>\u2264</mo><mi>j</mi></mrow></munder><mi>p</mi><mo>(</mo><msup><mi>i</mi><mo>\u2032</mo></msup><mo>,</mo><msup><mi>j</mi><mo>\u2032</mo></msup><mo>)</mo></mrow>'
+  '<mrow><mi>n</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo><mo>=</mo><munder><mo>∑</mo><mrow><msup><mi>i</mi><mo>′</mo></msup><mo>≤</mo><mi>i</mi><mo>,</mo><msup><mi>j</mi><mo>′</mo></msup><mo>≤</mo><mi>j</mi></mrow></munder><mi>p</mi><mo>(</mo><msup><mi>i</mi><mo>′</mo></msup><mo>,</mo><msup><mi>j</mi><mo>′</mo></msup><mo>)</mo></mrow>'
 );
 
 const FOUR_CORNER_FORMULA = buildInlineMathML(
@@ -84,20 +84,20 @@ const FOUR_CORNER_FORMULA = buildInlineMathML(
 
 const LBP_FORMULA = buildInlineMathML(
   '<mrow><mi>LBP</mi><mo>(</mo><msub><mi>x</mi><mi>c</mi></msub><mo>,</mo><msub><mi>y</mi><mi>c</mi></msub><mo>)</mo><mo>=</mo>' +
-  '<munderover><mo>\u2211</mo><mrow><mi>p</mi><mo>=</mo><mn>1</mn></mrow><mn>8</mn></munderover>' +
+  '<munderover><mo>∑</mo><mrow><mi>p</mi><mo>=</mo><mn>1</mn></mrow><mn>8</mn></munderover>' +
   '<mi>s</mi><mo>(</mo><mi>I</mi><mo>(</mo><msub><mi>p</mi><mi>i</mi></msub><mo>)</mo><mo>-</mo><mi>I</mi><mo>(</mo><msub><mi>p</mi><mi>c</mi></msub><mo>)</mo><mo>)</mo><msup><mn>2</mn><mrow><mi>p</mi><mo>-</mo><mn>1</mn></mrow></msup></mrow>'
 );
 
 const LBP_THRESHOLD = buildInlineMathML(
-  '<mrow><mi>s</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><mrow><mo>{</mo><mtable><mtr><mtd><mn>1</mn></mtd><mtd><mtext>\u82E5 </mtext><mi>x</mi><mo>\u2265</mo><mn>0</mn></mtd></mtr><mtr><mtd><mn>0</mn></mtd><mtd><mtext>\u82E5 </mtext><mi>x</mi><mo><</mo><mn>0</mn></mtd></mtr></mtable></mrow></mrow>'
+  '<mrow><mi>s</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><mrow><mo>{</mo><mtable><mtr><mtd><mn>1</mn></mtd><mtd><mtext>若 </mtext><mi>x</mi><mo>≥</mo><mn>0</mn></mtd></mtr><mtr><mtd><mn>0</mn></mtd><mtd><mtext>若 </mtext><mi>x</mi><mo><</mo><mn>0</mn></mtd></mtr></mtable></mrow></mrow>'
 );
 
 const LBP_HISTOGRAM = buildInlineMathML(
-  '<mrow><msub><mi>h</mi><mi>k</mi></msub><mo>(</mo><mi>b</mi><mo>)</mo><mo>=</mo><mfrac><mrow><mtext>cell</mtext><msub><mi>k</mi></msub><mtext>\u4E2D LBP \u503C\u4E3A</mtext><mi>b</mi><mtext>\u7684\u50CF\u7D20\u6570</mtext></mrow><mrow><mtext>cell \u603B\u50CF\u7D20\u6570</mtext></mrow></mfrac></mrow>'
+  '<mrow><msub><mi>h</mi><mi>k</mi></msub><mo>(</mo><mi>b</mi><mo>)</mo><mo>=</mo><mfrac><mrow><mtext>cell</mtext><msub><mi>k</mi></msub><mtext>中 LBP 值为</mtext><mi>b</mi><mtext>的像素数</mtext></mrow><mrow><mtext>cell 总像素数</mtext></mrow></mfrac></mrow>'
 );
 
 const FEATURE_VECTOR_FORMULA = buildInlineMathML(
-  '<mrow><mi>v</mi><mo>=</mo><mo>[</mo><msub><mi>h</mi><mn>1</mn></msub><mo>,</mo><msub><mi>h</mi><mn>2</mn></msub><mo>,</mo><mo>\u22EF</mo><mo>,</mo><msub><mi>h</mi><mi>N</mi></msub><mo>]</mo></mrow>'
+  '<mrow><mi>v</mi><mo>=</mo><mo>[</mo><msub><mi>h</mi><mn>1</mn></msub><mo>,</mo><msub><mi>h</mi><mn>2</mn></msub><mo>,</mo><mo>⋯</mo><mo>,</mo><msub><mi>h</mi><mi>N</mi></msub><mo>]</mo></mrow>'
 );
 
 // ========================================
@@ -145,7 +145,7 @@ const HAAR_SUB_SECTIONS: Record<HaarSubType, HaarSubSection> = {
     description:
       '边缘特征包括 x 方向、y 方向、x 倾斜方向、y 倾斜方向四种模板。每种模板由黑白两个矩形区域组成，特征值为黑色区域像素和与白色区域像素和之差，用于检测图像中的边缘信息。',
     formulaMathML: buildInlineMathML(
-      '<mrow><mi>V</mi><mo>=</mo><munder><mo>\u2211</mo><mtext>\u9ED1\u533A</mtext></munder><mi>p</mi><mo>-</mo><munder><mo>\u2211</mo><mtext>\u767D\u533A</mtext></munder><mi>p</mi></mrow>'
+      '<mrow><mi>V</mi><mo>=</mo><munder><mo>∑</mo><mtext>黑区</mtext></munder><mi>p</mi><mo>-</mo><munder><mo>∑</mo><mtext>白区</mtext></munder><mi>p</mi></mrow>'
     ),
   },
   line: {
@@ -153,7 +153,7 @@ const HAAR_SUB_SECTIONS: Record<HaarSubType, HaarSubSection> = {
     description:
       '线特征包含水平方向、竖直方向及其倾斜方向的共 8 种模板结构。每个模板由三个矩形区域组成（黑白黑或白黑白模式），用于检测图像中呈线状分布的结构。',
     formulaMathML: buildInlineMathML(
-      '<mrow><mi>V</mi><mo>=</mo><munder><mo>\u2211</mo><mtext>\u9ED1\u533A</mtext></munder><mi>p</mi><mo>-</mo><munder><mo>\u2211</mo><mtext>\u767D\u533A</mtext></munder><mi>p</mi></mrow>'
+      '<mrow><mi>V</mi><mo>=</mo><munder><mo>∑</mo><mtext>黑区</mtext></munder><mi>p</mi><mo>-</mo><munder><mo>∑</mo><mtext>白区</mtext></munder><mi>p</mi></mrow>'
     ),
   },
   point: {
@@ -161,7 +161,7 @@ const HAAR_SUB_SECTIONS: Record<HaarSubType, HaarSubSection> = {
     description:
       '点特征由一个中心矩形与周围矩形区域构成，用于检测图像中心与周边区域的差异，适合检测孤立亮点或暗点区域。',
     formulaMathML: buildInlineMathML(
-      '<mrow><mi>V</mi><mo>=</mo><munder><mo>\u2211</mo><mtext>\u9ED1\u533A</mtext></munder><mi>p</mi><mo>-</mo><munder><mo>\u2211</mo><mtext>\u767D\u533A</mtext></munder><mi>p</mi></mrow>'
+      '<mrow><mi>V</mi><mo>=</mo><munder><mo>∑</mo><mtext>黑区</mtext></munder><mi>p</mi><mo>-</mo><munder><mo>∑</mo><mtext>白区</mtext></munder><mi>p</mi></mrow>'
     ),
   },
   diagonal: {
@@ -169,7 +169,7 @@ const HAAR_SUB_SECTIONS: Record<HaarSubType, HaarSubSection> = {
     description:
       '对角线特征采用对角划分的黑白矩形结构，用于检测图像中对角线方向上的亮度差异。',
     formulaMathML: buildInlineMathML(
-      '<mrow><mi>V</mi><mo>=</mo><munder><mo>\u2211</mo><mtext>\u9ED1\u533A</mtext></munder><mi>p</mi><mo>-</mo><munder><mo>\u2211</mo><mtext>\u767D\u533A</mtext></munder><mi>p</mi></mrow>'
+      '<mrow><mi>V</mi><mo>=</mo><munder><mo>∑</mo><mtext>黑区</mtext></munder><mi>p</mi><mo>-</mo><munder><mo>∑</mo><mtext>白区</mtext></munder><mi>p</mi></mrow>'
     ),
   },
 };

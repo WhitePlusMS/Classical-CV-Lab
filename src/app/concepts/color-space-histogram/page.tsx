@@ -96,29 +96,29 @@ function getChannelImage(rgbImage: number[][][] | null, mode: DisplayMode): numb
 }
 
 const RPB_GPB_BPB = buildInlineMathML(
-  '<mrow><msup><mi>R</mi><mo>\u2032</mo></msup><mo>=</mo><mfrac><mi>R</mi><mn>255</mn></mfrac><mo>,</mo>' +
-  '<msup><mi>G</mi><mo>\u2032</mo></msup><mo>=</mo><mfrac><mi>G</mi><mn>255</mn></mfrac><mo>,</mo>' +
-  '<msup><mi>B</mi><mo>\u2032</mo></msup><mo>=</mo><mfrac><mi>B</mi><mn>255</mn></mfrac></mrow>'
+  '<mrow><msup><mi>R</mi><mo>′</mo></msup><mo>=</mo><mfrac><mi>R</mi><mn>255</mn></mfrac><mo>,</mo>' +
+  '<msup><mi>G</mi><mo>′</mo></msup><mo>=</mo><mfrac><mi>G</mi><mn>255</mn></mfrac><mo>,</mo>' +
+  '<msup><mi>B</mi><mo>′</mo></msup><mo>=</mo><mfrac><mi>B</mi><mn>255</mn></mfrac></mrow>'
 );
 
 const CMAX_CMIN_DELTA = buildInlineMathML(
-  '<mrow><msub><mi>C</mi><mi>max</mi></msub><mo>=</mo><mo>max</mo><mo>(</mo><msup><mi>R</mi><mo>\u2032</mo></msup><mo>,</mo><msup><mi>G</mi><mo>\u2032</mo></msup><mo>,</mo><msup><mi>B</mi><mo>\u2032</mo></msup><mo>)</mo><mo>,</mo>' +
-  '<msub><mi>C</mi><mi>min</mi></msub><mo>=</mo><mo>min</mo><mo>(</mo><msup><mi>R</mi><mo>\u2032</mo></msup><mo>,</mo><msup><mi>G</mi><mo>\u2032</mo></msup><mo>,</mo><msup><mi>B</mi><mo>\u2032</mo></msup><mo>)</mo><mo>,</mo>' +
-  '<mi mathvariant="normal">\u0394</mi><mo>=</mo><msub><mi>C</mi><mi>max</mi></msub><mo>-</mo><msub><mi>C</mi><mi>min</mi></msub></mrow>'
+  '<mrow><msub><mi>C</mi><mi>max</mi></msub><mo>=</mo><mo>max</mo><mo>(</mo><msup><mi>R</mi><mo>′</mo></msup><mo>,</mo><msup><mi>G</mi><mo>′</mo></msup><mo>,</mo><msup><mi>B</mi><mo>′</mo></msup><mo>)</mo><mo>,</mo>' +
+  '<msub><mi>C</mi><mi>min</mi></msub><mo>=</mo><mo>min</mo><mo>(</mo><msup><mi>R</mi><mo>′</mo></msup><mo>,</mo><msup><mi>G</mi><mo>′</mo></msup><mo>,</mo><msup><mi>B</mi><mo>′</mo></msup><mo>)</mo><mo>,</mo>' +
+  '<mi mathvariant="normal">Δ</mi><mo>=</mo><msub><mi>C</mi><mi>max</mi></msub><mo>-</mo><msub><mi>C</mi><mi>min</mi></msub></mrow>'
 );
 
 const H_FORMULA = buildInlineMathML(
   '<mrow><mi>H</mi><mo>=</mo><mrow><mo>{</mo><mtable columnspacing="1em" rowspacing="0.3em">' +
-  '<mtr><mtd><mn>0</mn><mo>\u00B0</mo></mtd><mtd><mi mathvariant="normal">\u0394</mi><mo>=</mo><mn>0</mn></mtd></mtr>' +
-  '<mtr><mtd><mn>60\u00B0</mn><mo>\u00D7</mo><mrow><mo>(</mo><mfrac><mrow><msup><mi>G</mi><mo>\u2032</mo></msup><mo>-</mo><msup><mi>B</mi><mo>\u2032</mo></msup></mrow><mi mathvariant="normal">\u0394</mi></mfrac><mo>+</mo><mn>0</mn><mo>)</mo></mrow></mtd><mtd><msub><mi>C</mi><mi>max</mi></msub><mo>=</mo><msup><mi>R</mi><mo>\u2032</mo></msup></mtd></mtr>' +
-  '<mtr><mtd><mn>60\u00B0</mn><mo>\u00D7</mo><mrow><mo>(</mo><mfrac><mrow><msup><mi>B</mi><mo>\u2032</mo></msup><mo>-</mo><msup><mi>R</mi><mo>\u2032</mo></msup></mrow><mi mathvariant="normal">\u0394</mi></mfrac><mo>+</mo><mn>2</mn><mo>)</mo></mrow></mtd><mtd><msub><mi>C</mi><mi>max</mi></msub><mo>=</mo><msup><mi>G</mi><mo>\u2032</mo></msup></mtd></mtr>' +
-  '<mtr><mtd><mn>60\u00B0</mn><mo>\u00D7</mo><mrow><mo>(</mo><mfrac><mrow><msup><mi>R</mi><mo>\u2032</mo></msup><mo>-</mo><msup><mi>G</mi><mo>\u2032</mo></msup></mrow><mi mathvariant="normal">\u0394</mi></mfrac><mo>+</mo><mn>4</mn><mo>)</mo></mrow></mtd><mtd><msub><mi>C</mi><mi>max</mi></msub><mo>=</mo><msup><mi>B</mi><mo>\u2032</mo></msup></mtd></mtr></mtable></mrow></mrow>'
+  '<mtr><mtd><mn>0</mn><mo>°</mo></mtd><mtd><mi mathvariant="normal">Δ</mi><mo>=</mo><mn>0</mn></mtd></mtr>' +
+  '<mtr><mtd><mn>60°</mn><mo>×</mo><mrow><mo>(</mo><mfrac><mrow><msup><mi>G</mi><mo>′</mo></msup><mo>-</mo><msup><mi>B</mi><mo>′</mo></msup></mrow><mi mathvariant="normal">Δ</mi></mfrac><mo>+</mo><mn>0</mn><mo>)</mo></mrow></mtd><mtd><msub><mi>C</mi><mi>max</mi></msub><mo>=</mo><msup><mi>R</mi><mo>′</mo></msup></mtd></mtr>' +
+  '<mtr><mtd><mn>60°</mn><mo>×</mo><mrow><mo>(</mo><mfrac><mrow><msup><mi>B</mi><mo>′</mo></msup><mo>-</mo><msup><mi>R</mi><mo>′</mo></msup></mrow><mi mathvariant="normal">Δ</mi></mfrac><mo>+</mo><mn>2</mn><mo>)</mo></mrow></mtd><mtd><msub><mi>C</mi><mi>max</mi></msub><mo>=</mo><msup><mi>G</mi><mo>′</mo></msup></mtd></mtr>' +
+  '<mtr><mtd><mn>60°</mn><mo>×</mo><mrow><mo>(</mo><mfrac><mrow><msup><mi>R</mi><mo>′</mo></msup><mo>-</mo><msup><mi>G</mi><mo>′</mo></msup></mrow><mi mathvariant="normal">Δ</mi></mfrac><mo>+</mo><mn>4</mn><mo>)</mo></mrow></mtd><mtd><msub><mi>C</mi><mi>max</mi></msub><mo>=</mo><msup><mi>B</mi><mo>′</mo></msup></mtd></mtr></mtable></mrow></mrow>'
 );
 
 const S_FORMULA = buildInlineMathML(
   '<mrow><mi>S</mi><mo>=</mo><mrow><mo>{</mo><mtable>' +
   '<mtr><mtd><mn>0</mn></mtd><mtd><msub><mi>C</mi><mi>max</mi></msub><mo>=</mo><mn>0</mn></mtd></mtr>' +
-  '<mtr><mtd><mfrac><mi mathvariant="normal">\u0394</mi><msub><mi>C</mi><mi>max</mi></msub></mfrac></mtd><mtd><msub><mi>C</mi><mi>max</mi></msub><mo>\u2260</mo><mn>0</mn></mtd></mtr></mtable></mrow></mrow>'
+  '<mtr><mtd><mfrac><mi mathvariant="normal">Δ</mi><msub><mi>C</mi><mi>max</mi></msub></mfrac></mtd><mtd><msub><mi>C</mi><mi>max</mi></msub><mo>≠</mo><mn>0</mn></mtd></mtr></mtable></mrow></mrow>'
 );
 
 const V_FORMULA = buildInlineMathML(
@@ -206,13 +206,13 @@ export default function ColorSpaceHistogramPage() {
           </FlowColumn>
           <FlowColumn align="center">
             <FlowNode tone="amber">
-              <div className="mb-2 text-xs font-semibold text-amber-700">RGB \u2192 HSV 转换</div>
+              <div className="mb-2 text-xs font-semibold text-amber-700">RGB → HSV 转换</div>
               <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
-                H = {h}\u00B0<br />S = {s}%<br />V = {v}%
+                H = {h}°<br />S = {s}%<br />V = {v}%
               </div>
               <div className="mt-2 text-[10px] leading-4 text-amber-700">
-                归一化 R\u2032=R/255，G\u2032=G/255，B\u2032=B/255，<br />
-                再代入 Cmax、Cmin、\u0394 公式
+                归一化 R′=R/255，G′=G/255，B′=B/255，<br />
+                再代入 Cmax、Cmin、Δ 公式
               </div>
             </FlowNode>
           </FlowColumn>
@@ -220,7 +220,7 @@ export default function ColorSpaceHistogramPage() {
             <FlowNode tone="emerald">
               <div className="mb-2 text-xs font-semibold text-emerald-700">颜色直方图</div>
               <div className="rounded-xl bg-emerald-50 px-4 py-3 text-xs leading-5 text-emerald-800">
-                统计 {width}\u00D7{height} = {width * height} 个像素的<br />
+                统计 {width}×{height} = {width * height} 个像素的<br />
                 {displayMode === 'rgb' ? 'RGB 分量' :
                  displayMode === 'h' ? 'H 分量' :
                  displayMode === 's' ? 'S 分量' :
@@ -247,7 +247,7 @@ export default function ColorSpaceHistogramPage() {
     return (
       <div className="space-y-6">
         <TeachingCard>
-          <h2 className="mb-3 text-sm font-semibold text-slate-800">\uff081\uff09RGB 颜色空间</h2>
+          <h2 className="mb-3 text-sm font-semibold text-slate-800">（1）RGB 颜色空间</h2>
           <p className="mb-4 text-xs leading-6 text-slate-600">
             RGB 颜色空间以红（R）、绿（G）、蓝（B）三种基色光的分量叠加混合表示颜色，
             每种分量的取值范围为 0 ~ 255。当三基色分量都为 0（最弱）时混合为黑色，
@@ -266,10 +266,10 @@ export default function ColorSpaceHistogramPage() {
         </TeachingCard>
 
         <TeachingCard>
-          <h2 className="mb-3 text-sm font-semibold text-slate-800">\uff082\uff09HSV 颜色空间</h2>
+          <h2 className="mb-3 text-sm font-semibold text-slate-800">（2）HSV 颜色空间</h2>
           <p className="mb-4 text-xs leading-6 text-slate-600">
             HSV 颜色空间用色调 H（Hue）、饱和度 S（Saturation）、明度 V（Value）三个分量描述颜色。
-            色调 H 由绕 V 轴的旋转角给出，红色对应 0\u00B0，绿色对应 120\u00B0，蓝色对应 240\u00B0。
+            色调 H 由绕 V 轴的旋转角给出，红色对应 0°，绿色对应 120°，蓝色对应 240°。
             饱和度 S 取值 0 ~ 1，描述颜色的纯度。明度 V 取值 0 ~ 1，描述颜色的明亮程度。
             HSV 模型通常用圆锥空间模型表示。
           </p>
@@ -286,31 +286,31 @@ export default function ColorSpaceHistogramPage() {
         </TeachingCard>
 
         <div className="border-t border-slate-200 pt-5">
-          <h2 className="mb-3 text-sm font-semibold text-slate-800">\uff083\uff09RGB \u2192 HSV 转换</h2>
+          <h2 className="mb-3 text-sm font-semibold text-slate-800">（3）RGB → HSV 转换</h2>
           <p className="mb-4 text-xs leading-6 text-slate-600">
-            转换分两步：第一步将 R、G、B 值归一化到 [0, 1] 区间；第二步按 Cmax、Cmin、\u0394 计算 H、S、V。
+            转换分两步：第一步将 R、G、B 值归一化到 [0, 1] 区间；第二步按 Cmax、Cmin、Δ 计算 H、S、V。
           </p>
           <div className="mb-4 space-y-3">
-            <FormulaCard label="第一步：归一化" mathML={RPB_GPB_BPB} note="将 R、G、B 除以 255，得到 [0,1] 范围的 R\u2032、G\u2032、B\u2032" />
-            <FormulaCard label="第二步：求极值与差值" mathML={CMAX_CMIN_DELTA} note="Cmax 为最大值，Cmin 为最小值，\u0394 为两者之差" />
-            <FormulaCard label="H 色调计算（分段）" mathML={H_FORMULA} note="H 的取值范围为 0\u00B0 ~ 360\u00B0" />
+            <FormulaCard label="第一步：归一化" mathML={RPB_GPB_BPB} note="将 R、G、B 除以 255，得到 [0,1] 范围的 R′、G′、B′" />
+            <FormulaCard label="第二步：求极值与差值" mathML={CMAX_CMIN_DELTA} note="Cmax 为最大值，Cmin 为最小值，Δ 为两者之差" />
+            <FormulaCard label="H 色调计算（分段）" mathML={H_FORMULA} note="H 的取值范围为 0° ~ 360°" />
             <FormulaCard label="S 饱和度计算" mathML={S_FORMULA} note="S 的取值范围为 [0, 1]" />
             <FormulaCard label="V 明度计算" mathML={V_FORMULA} note="V 即 Cmax，取值范围为 [0, 1]" />
           </div>
         </div>
 
         <div className="border-t border-slate-200 pt-5">
-          <h2 className="mb-3 text-sm font-semibold text-slate-800">\uff084\uff09当前像素代入计算</h2>
+          <h2 className="mb-3 text-sm font-semibold text-slate-800">（4）当前像素代入计算</h2>
           <p className="mb-4 text-xs leading-6 text-slate-600">
-            对当前位置 ({currentPixel.x}, {currentPixel.y}) 的像素代入 RGB \u2192 HSV 转换公式：
+            对当前位置 ({currentPixel.x}, {currentPixel.y}) 的像素代入 RGB → HSV 转换公式：
           </p>
           <div className="space-y-3 text-xs leading-6">
             <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
               <p className="mb-2 font-semibold text-slate-800">归一化：</p>
               <p className="text-slate-600">
-                R\u2032 = {r} / 255 = {rNorm.toFixed(3)}&emsp;
-                G\u2032 = {g} / 255 = {gNorm.toFixed(3)}&emsp;
-                B\u2032 = {b} / 255 = {bNorm.toFixed(3)}
+                R′ = {r} / 255 = {rNorm.toFixed(3)}&emsp;
+                G′ = {g} / 255 = {gNorm.toFixed(3)}&emsp;
+                B′ = {b} / 255 = {bNorm.toFixed(3)}
               </p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
@@ -318,33 +318,33 @@ export default function ColorSpaceHistogramPage() {
               <p className="text-slate-600">
                 Cmax = max({rNorm.toFixed(3)}, {gNorm.toFixed(3)}, {bNorm.toFixed(3)}) = {cmax.toFixed(3)}&emsp;
                 Cmin = min({rNorm.toFixed(3)}, {gNorm.toFixed(3)}, {bNorm.toFixed(3)}) = {cmin.toFixed(3)}&emsp;
-                \u0394 = Cmax \u2212 Cmin = {cmax.toFixed(3)} \u2212 {cmin.toFixed(3)} = {delta.toFixed(3)}
+                Δ = Cmax − Cmin = {cmax.toFixed(3)} − {cmin.toFixed(3)} = {delta.toFixed(3)}
               </p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
               <p className="mb-2 font-semibold text-slate-800">H 色调：</p>
               <p className="text-slate-600">
-                由于 Cmax = {cmax === rNorm ? 'R\u2032' : cmax === gNorm ? 'G\u2032' : 'B\u2032'}，
-                H = {h}\u00B0
+                由于 Cmax = {cmax === rNorm ? 'R′' : cmax === gNorm ? 'G′' : 'B′'}，
+                H = {h}°
               </p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
               <p className="mb-2 font-semibold text-slate-800">S 饱和度：</p>
               <p className="text-slate-600">
-                S = \u0394 / Cmax = {delta.toFixed(3)} / {cmax.toFixed(3)} = {hsv.s.toFixed(3)} \u2248 {s}%
+                S = Δ / Cmax = {delta.toFixed(3)} / {cmax.toFixed(3)} = {hsv.s.toFixed(3)} ≈ {s}%
               </p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
               <p className="mb-2 font-semibold text-slate-800">V 明度：</p>
               <p className="text-slate-600">
-                V = Cmax = {cmax.toFixed(3)} \u2248 {v}%
+                V = Cmax = {cmax.toFixed(3)} ≈ {v}%
               </p>
             </div>
           </div>
         </div>
 
         <div className="border-t border-slate-200 pt-5">
-          <h2 className="mb-3 text-sm font-semibold text-slate-800">\uff085\uff09颜色直方图</h2>
+          <h2 className="mb-3 text-sm font-semibold text-slate-800">（5）颜色直方图</h2>
           <p className="mb-4 text-xs leading-6 text-slate-600">
             颜色直方图统计图像中每个颜色分量（R、G、B）或 H 分量的像素数量分布。
             在目标检测中，提取目标的颜色直方图作为特征，通过直方图匹配方法（相关法、卡方法、
@@ -354,8 +354,8 @@ export default function ColorSpaceHistogramPage() {
             <div className="space-y-1 text-xs leading-5 text-slate-700">
               <p className="font-semibold">颜色直方图用于目标检测的基本流程：</p>
               <ol className="list-inside list-decimal space-y-1 pl-2">
-                <li>从目标区域提取颜色分量或 H 分量的直方图 H\u2081(i)</li>
-                <li>从待检测区域提取相同分量的直方图 H\u2082(i)</li>
+                <li>从目标区域提取颜色分量或 H 分量的直方图 H₁(i)</li>
+                <li>从待检测区域提取相同分量的直方图 H₂(i)</li>
                 <li>采用直方图匹配方法计算两个直方图的相似度</li>
                 <li>相似度超过阈值则判定为目标匹配</li>
               </ol>
@@ -374,10 +374,13 @@ export default function ColorSpaceHistogramPage() {
     <div className="space-y-4">
       <SelectParam label="显示模式" value={displayMode} onChange={value => setDisplayMode(value as DisplayMode)} options={DISPLAY_MODE_OPTIONS} />
       <SliderParam label="颜色阈值 T" value={threshold} onChange={setThreshold} min={10} max={200} step={10} />
+      <p className="mt-1 text-[11px] leading-4 text-slate-500">
+        用于颜色范围提取，在 HSV 空间中匹配 H ± T 区间内的像素
+      </p>
       <div className="rounded-2xl border border-blue-200 bg-blue-50 px-3 py-3">
         <div className="text-xs font-semibold text-blue-700">图像尺寸</div>
         <p className="mt-2 text-xs leading-5 text-blue-700">
-          示例图大小为 {width}\u00D7{height}，共 {width * height} 个像素。
+          示例图大小为 {width}×{height}，共 {width * height} 个像素。
           切换显示模式可观察不同颜色空间的分量分布。
         </p>
       </div>
@@ -387,7 +390,7 @@ export default function ColorSpaceHistogramPage() {
           <div className="mt-2 space-y-1 font-mono text-[11px] text-amber-800">
             <div>坐标 ({currentPixel.x}, {currentPixel.y})</div>
             <div>RGB ({currentPixel.r}, {currentPixel.g}, {currentPixel.b})</div>
-            <div>HSV ({currentPixel.h}\u00B0, {currentPixel.s}%, {currentPixel.v}%)</div>
+            <div>HSV ({currentPixel.h}°, {currentPixel.s}%, {currentPixel.v}%)</div>
           </div>
         </div>
       )}
@@ -399,8 +402,9 @@ export default function ColorSpaceHistogramPage() {
       title="颜色空间与颜色直方图"
       subtitle="Color Space &amp; Histogram - 基于颜色特征的目标检测"
       operationLabel={displayMode === 'rgb' ? 'RGB 彩图' : displayMode.toUpperCase()}
-      parameterIntro="切换显示模式观察 RGB 与 HSV 各分量的分布差异，点击像素查看 RGB\u2192HSV 的转换计算。"
-      originalImage={displayMode === 'rgb' ? null : resultImage}
+      parameterIntro="切换显示模式观察 RGB 与 HSV 各分量的分布差异，点击像素查看 RGB→HSV 的转换计算。"
+      originalImage={resultImage}
+      originalRgbImage={rgbImage}
       resultImage={resultImage}
       parameters={parameters}
       analysisPreview={analysisPreview}
