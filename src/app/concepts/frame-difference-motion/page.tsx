@@ -1,6 +1,5 @@
 'use client';
-
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   CodeViewer,
   ConceptLayout,
@@ -10,6 +9,7 @@ import {
   FormulaCard,
   ProcessRail,
   TeachingCard,
+  SelectParam,
   buildInlineMathML,
 } from '@/components';
 import { createMotionSequence, computeFrameDifference } from '@/lib/algorithms/simpleBackground';
@@ -83,10 +83,6 @@ const SYMMETRIC_EXPERIMENT_STEPS = [
     ],
   },
 ] as const;
-
-const displaySequence = createMotionSequence(6, 10);
-const displayResult = computeFrameDifference(displaySequence, 52, 'twoFrame');
-
 function frameDifferenceFormulaMathML(): string {
   return buildInlineMathML(`
     <mrow>
@@ -111,6 +107,9 @@ function frameDifferenceFormulaMathML(): string {
         </mtable>
       </mrow>
       <mo>=</mo>
+      {
+        /* 以下 |146-82|>60 为示例数值，仅用于教学演示，非真实数据 */
+      }
       <mrow>
         <mo>{</mo>
         <mtable>
@@ -181,7 +180,15 @@ function CourseImage({
 }
 
 export default function FrameDifferenceMotionPage() {
-  const mainVisual = (
+  const [method, setMethod] = useState<'timeDifference' | 'symmetric'>('timeDifference');
+
+  const displaySequence = useMemo(() => createMotionSequence(6, 10), []);
+  const displayResult = useMemo(
+    () => computeFrameDifference(displaySequence, 52, 'twoFrame'),
+    [displaySequence]
+  );
+
+  const timeDiffMainVisual = (
     <section className="mx-auto w-full max-w-6xl">
       <div>
         <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
@@ -200,6 +207,30 @@ export default function FrameDifferenceMotionPage() {
       </div>
     </section>
   );
+
+  const symmetricMainVisual = (
+    <section className="mx-auto w-full max-w-6xl">
+      <div>
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-800">对称差分法流程图</h2>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              对称差分法通过连续三帧图像两次差分约束，提取中间帧的运动候选区域。
+            </p>
+          </div>
+        </div>
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <img
+            src="/assets/simple-background/symmetric-flowchart.jpg"
+            alt="对称差分法流程图"
+            className="mx-auto max-h-[560px] w-full object-contain"
+          />
+        </div>
+      </div>
+    </section>
+  );
+
+  const mainVisual = method === 'timeDifference' ? timeDiffMainVisual : symmetricMainVisual;
 
   const analysisPreview = (
     <ProcessRail>
@@ -231,11 +262,10 @@ export default function FrameDifferenceMotionPage() {
       </FlowColumns>
     </ProcessRail>
   );
-
-  const stepDetails = (
-    <div className="space-y-5">
-      <section className="space-y-4">
-        <h2 className="text-sm font-semibold text-slate-800">时间差分法</h2>
+ const timeDiffDetails = (
+   <div className="space-y-5">
+     <section className="space-y-4">
+       <h2 className="text-sm font-semibold text-slate-800">时间差分法</h2>
         <FormulaCard
           label="相邻帧变化判定"
           mathML={frameDifferenceFormulaMathML()}
@@ -250,22 +280,16 @@ export default function FrameDifferenceMotionPage() {
         </TeachingCard>
       </section>
 
-      <section className="border-t border-slate-200 pt-4">
+    </div>
+  );
+
+  const symmetricDetails = (
+    <div className="space-y-5">
+      <section className="space-y-4">
         <h2 className="text-sm font-semibold text-slate-800">对称差分法</h2>
-        <p className="mt-2 text-xs leading-6 text-slate-600">
+        <p className="text-xs leading-6 text-slate-600">
           对称差分法是时间差分法的三帧实验示例。它先取连续三帧，再分别计算前后两次帧间差，用两次差分共同约束中间帧的运动候选区域。
         </p>
-      </section>
-
-      <section className="border-t border-slate-200 pt-4">
-        <h2 className="text-sm font-semibold text-slate-800">对称差分法流程图</h2>
-        <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <img
-            src="/assets/simple-background/symmetric-flowchart.jpg"
-            alt="对称差分法流程图"
-            className="mx-auto max-h-[560px] w-full object-contain"
-          />
-        </div>
       </section>
 
       <section className="border-t border-slate-200 pt-4">
@@ -306,14 +330,23 @@ export default function FrameDifferenceMotionPage() {
     </div>
   );
 
+  const stepDetails = method === 'timeDifference' ? timeDiffDetails : symmetricDetails;
+
   const parameters = (
     <div className="space-y-4 text-xs leading-6 text-slate-600">
-      <div className="border-l-2 border-emerald-300 bg-emerald-50/70 px-3 py-3">
-        <div className="font-semibold text-emerald-700">讲解顺序</div>
-        <p className="mt-1">先讲时间差分法定义、公式、优点与限制；再用对称差分法实验图解释三帧流程。</p>
-      </div>
+      <SelectParam
+        label="算法选择"
+        value={method}
+        onChange={v => setMethod(v as 'timeDifference' | 'symmetric')}
+        options={[
+          { value: 'timeDifference', label: '时间差分法' },
+          { value: 'symmetric', label: '对称差分法' },
+        ]}
+      />
       <div className="border-t border-slate-200 pt-3">
-        页面使用课程图像素材展示流程，不提供额外调参滑杆。
+        {method === 'timeDifference'
+          ? '时间差分法通过相邻两帧比较检测运动区域，适合快速变化检测。'
+          : '对称差分法通过三帧两次差分约束提取中间帧运动区域，减少空洞。'}
       </div>
     </div>
   );
@@ -333,10 +366,6 @@ export default function FrameDifferenceMotionPage() {
       mainVisual={mainVisual}
       showOriginalGrid={false}
       originalRegionMarker="dot"
-      singlePageScroll
-      showNavigationBar={false}
-      showNavigationControls={false}
-      showInputSelection={false}
-    />
+      singlePageScroll      />
   );
 }

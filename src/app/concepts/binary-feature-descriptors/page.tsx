@@ -1,20 +1,22 @@
 'use client';
 
-import React, { useCallback, useMemo, useState } from 'react';
-import {
-  CodeViewer,
-  ConceptLayout,
-  FlowColumn,
-  FlowColumns,
-  FlowNode,
-  FormulaCard,
-  ImageCanvas,
-  ProcessRail,
-  SelectParam,
-  SliderParam,
-  TeachingCard,
-  buildInlineMathML,
-} from '@/components';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+ import {
+   CodeViewer,
+   ConceptLayout,
+   FlowColumn,
+   FlowColumns,
+   FlowNode,
+   FormulaCard,
+   ImageCanvas,
+   ProcessRail,
+   SelectParam,
+   SliderParam,
+   TeachingCard,
+   buildInlineMathML,
+ } from '@/components';
+import { GrayscaleImage } from '@/lib/algorithms/types';
+import { loadImageAsGrayscale, resizeGrayscaleImage } from '@/lib/utils/imageProcessing';
 
 /// ============================================================
 /// 二进制特征描述子页面常量与工具
@@ -242,7 +244,25 @@ matcher.match(des1, des2, matches);`;
 export default function BinaryFeatureDescriptorsPage() {
   const [samplingMethod, setSamplingMethod] = useState<SamplingMethod>('GI');
   const [numPairs, setNumPairs] = useState(256);
-  const [currentPairIndex, setCurrentPairIndex] = useState(0);
+ const [currentPairIndex, setCurrentPairIndex] = useState(0);
+ const [loadedImage, setLoadedImage] = useState<GrayscaleImage | null>(null);
+ /// 异步加载课件中的真实图像作为原图展示
+ useEffect(() => {
+   let cancelled = false;
+   loadImageAsGrayscale('/assets/binary-feature-descriptors/0611a984f7a384894e8779c0c84166142a64673d53ccbdac68d1da6bba77e06d.jpg')
+     .then((img) => {
+       if (!cancelled) {
+         const resized = resizeGrayscaleImage(img, 64);
+         setLoadedImage(resized);
+       }
+     })
+     .catch(() => {
+       if (!cancelled) {
+         console.warn('加载参考图像失败');
+       }
+     });
+   return () => { cancelled = true; };
+ }, []);
 
   const totalPairs = numPairs;
 
@@ -281,7 +301,25 @@ export default function BinaryFeatureDescriptorsPage() {
       if (binaryString[i] !== binaryString2[i]) dist++;
     }
     return dist;
-  }, [binaryString, binaryString2]);
+ }, [binaryString, binaryString2]);
+ 
+ /// 链式代入：逐位展示 BRIEF 描述子的数值计算过程（前 8 位）
+ const chainSubstitution = useMemo(() => {
+   let sum = 0;
+   const rows: { i: number; tau: number; weight: number; contrib: number; sum: number }[] = [];
+   const bits = 8;
+   for (let i = 0; i < Math.min(bits, pairs.length); i++) {
+     const [x1, y1, x2, y2] = pairs[i];
+     const v1 = SYNTHETIC_PATCH[y1][x1];
+     const v2 = SYNTHETIC_PATCH[y2][x2];
+     const tau = v1 < v2 ? 1 : 0;
+     const weight = Math.pow(2, i);
+     const contrib = weight * tau;
+     sum += contrib;
+     rows.push({ i: i + 1, tau, weight, contrib, sum });
+   }
+   return rows;
+ }, [pairs]);
 
   /// 采样方式说明文案
   const samplingInfo = SAMPLING_OPTIONS.find(o => o.value === samplingMethod);
@@ -326,8 +364,47 @@ export default function BinaryFeatureDescriptorsPage() {
         <FormulaCard
           label="BRIEF 描述子"
           mathML={BRIEF_DESCRIPTOR_FORMULA}
-          note={'当前二进制串的前 ' + (currentPairIndex + 1) + ' 位：' + binaryString}
-        />
+         note={'当前二进制串的前 ' + (currentPairIndex + 1) + ' 位：' + binaryString}
+       />
+       {/* 链式代入展示：前 8 位的逐位计算过程 */}
+       <p className="mb-2 mt-4 text-xs font-semibold text-slate-700">
+         链式代入过程（前 8 bit）
+       </p>
+       <div className="overflow-x-auto rounded-xl border border-slate-200">
+         <table className="w-full text-left text-[11px] tabular-nums">
+           <thead>
+             <tr className="bg-slate-100">
+               <th className="px-2 py-1.5 font-semibold text-slate-600">i</th>
+               <th className="px-2 py-1.5 font-semibold text-slate-600">τ(p; xᵢ, yᵢ)</th>
+               <th className="px-2 py-1.5 font-semibold text-slate-600">2^(i-1)</th>
+               <th className="px-2 py-1.5 font-semibold text-slate-600">2^(i-1)·τ</th>
+               <th className="px-2 py-1.5 font-semibold text-slate-600">累计和</th>
+             </tr>
+           </thead>
+           <tbody className="divide-y divide-slate-200">
+             {chainSubstitution.map(r => (
+               <tr key={r.i} className={r.i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                 <td className="px-2 py-1.5 font-mono text-slate-800">{r.i}</td>
+                 <td className="px-2 py-1.5 font-mono text-slate-700">
+                   {r.tau}
+                   <span className="ml-1 text-[10px] text-slate-500">
+                     {r.tau === 1
+                       ? '（p(x) < p(y)）'
+                       : '（p(x) ≥ p(y)）'}
+                   </span>
+                 </td>
+                 <td className="px-2 py-1.5 font-mono text-slate-700">{r.weight}</td>
+                 <td className="px-2 py-1.5 font-mono text-slate-700">
+                   <span className={r.contrib > 0 ? 'font-bold text-amber-700' : 'text-slate-400'}>
+                     {r.contrib}
+                   </span>
+                 </td>
+                 <td className="px-2 py-1.5 font-mono font-semibold text-blue-700">{r.sum}</td>
+               </tr>
+             ))}
+           </tbody>
+         </table>
+       </div>
       </div>
 
       {/* ===== 4. 五种采样方式 ===== */}
@@ -654,10 +731,10 @@ export default function BinaryFeatureDescriptorsPage() {
         <CodeViewer languages={[
           { name: 'ORB', code: ORB_CODE_TS },
           { name: 'BRISK', code: BRISK_CODE_TS },
-        ]} />
-      }
-      originalImage={SYNTHETIC_PATCH}
-      resultImage={SYNTHETIC_PATCH}
+       ]} />
+     }
+     originalImage={loadedImage}
+     resultImage={loadedImage}
       singlePageScroll
     />
   );
