@@ -727,9 +727,6 @@ export default function PerspectiveTransformPage() {
       codeTab={<CodeViewer languages={[{ name: 'TypeScript', code: PERSPECTIVE_CODE }]} />}
       mainVisual={mainVisual}
       singlePageScroll
-      onDirectionMove={handleDirectionMove}
-      showNavigationBar={false}
-      showNavigationControls={false}
-    />
+      onDirectionMove={handleDirectionMove}    />
   );
 }

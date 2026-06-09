@@ -301,11 +301,7 @@ export default function DistortionCorrectionPage() {
       imageLabels={{ input: '畸变图', output: '校正图' }}
       imageHints={{
         output: '右图绿色框是当前正在解释的校正后输出像素。',
-      }}
-      showInputSelection={false}
-      showNavigationBar={false}
-      showNavigationControls={false}
-      currentStep={{
+      }}      currentStep={{
         x: selectedPixel.x,
         y: selectedPixel.y,
         kernelSize: 1,

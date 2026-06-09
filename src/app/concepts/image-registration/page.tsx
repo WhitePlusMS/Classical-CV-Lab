@@ -675,9 +675,6 @@ export default function ImageRegistrationPage() {
       mainVisual={mainVisual}
       visualOverlay={<AnchoredOverlay paths={visualOverlayPaths} />}
       singlePageScroll
-      onDirectionMove={handleDirectionMove}
-      showNavigationBar={false}
-      showNavigationControls={false}
-    />
+      onDirectionMove={handleDirectionMove}    />
   );
 }
