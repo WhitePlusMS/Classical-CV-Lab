@@ -21,6 +21,173 @@ import {
 } from '@/lib/algorithms/simpleBackground';
 import { useGridNavigation } from '@/hooks/useGridNavigation';
 
+const BACKGROUND_CODE_TS = `/**
+ * 背景建模与背景减除算法 — 教学简化实现
+ *
+ * 四种经典背景建模方法：
+ *   1. 均值模型     — 前 N 帧像素均值作为背景
+ *   2. 自适应背景   — 学习率 α 控制的递归更新
+ *   3. 单高斯模型   — 每个像素用高斯分布 N(μ, δ²) 建模
+ *   4. 混合高斯模型 — 多模态背景用 K 个加权高斯分布描述
+ */
+
+// ============================
+// 1. 均值模型
+// ============================
+
+/** 均值背景：B(x,y) = (1/N)·Σ_{i=1}^{N} I_i(x,y) */
+function meanBackgroundModel(frames: number[][]): number[] {
+  const N = frames.length;
+  return frames[0].map((_, i) =>
+    frames.reduce((sum, f) => sum + f[i], 0) / N
+  );
+}
+
+/** 均值模型前景判定：|I_t - B| > T → 前景 */
+function meanForegroundDetect(
+  pixel: number,
+  bg: number,
+  threshold: number
+): boolean {
+  return Math.abs(pixel - bg) > threshold;
+}
+
+// ============================
+// 2. 自适应背景模型
+// ============================
+
+/**
+ * B_t = α·I_t + (1 - α)·B_{t-1}
+ * @param alpha 学习率（0 < α < 1），越大背景更新越快
+ */
+function updateAdaptiveBackground(
+  currentPixel: number,
+  prevBackground: number,
+  alpha: number
+): number {
+  return alpha * currentPixel + (1 - alpha) * prevBackground;
+}
+
+// ============================
+// 3. 单高斯模型
+// ============================
+
+/** 单高斯分布参数 */
+interface SingleGaussianParams {
+  mean: number;     // μ
+  variance: number; // δ²
+  sigma: number;    // δ（标准差）
+}
+
+/** 初始化：μ₀ = I₀, δ₀ = 20（δ² = 400） */
+function initSingleGaussian(pixel: number): SingleGaussianParams {
+  return { mean: pixel, variance: 400, sigma: 20 };
+}
+
+/** 前景判定：|I_t - μ| > λ·δ */
+function singleGaussianDetect(
+  pixel: number,
+  params: SingleGaussianParams,
+  lambda: number
+): boolean {
+  return Math.abs(pixel - params.mean) > lambda * params.sigma;
+}
+
+/** 模型更新：μ 与 δ² */
+function updateSingleGaussian(
+  pixel: number,
+  params: SingleGaussianParams,
+  alpha: number
+): SingleGaussianParams {
+  const mean = (1 - alpha) * params.mean + alpha * pixel;
+  const variance =
+    (1 - alpha) * params.variance +
+    alpha * (pixel - params.mean) ** 2;
+  return { mean, variance, sigma: Math.sqrt(variance) };
+}
+
+// ============================
+// 4. 混合高斯模型
+// ============================
+
+const K = 5;       // 高斯分量个数
+const T_BG = 0.7;  // 背景权重累计阈值
+const D = 2.5;     // 标准差倍数（统一阈值参数）
+
+interface GaussianComponent {
+  weight: number;  // ω_i
+  mean: number;    // μ_i
+  sigma: number;   // δ_i
+}
+
+/**
+ * 混合高斯单像素处理流程
+ *
+ * ① 匹配：按 ω/δ 降序，检查 |I_t - μ_i| ≤ D·δ_i
+ * ② 更新：匹配分布更新 μ、δ²、ω；不匹配分布 ω 按 (1-α) 衰减
+ * ③ 背景选择：B = argmin_B ( Σ_{k=1}^{B} ω_k ≥ T_BG )
+ * ④ 前景判定：若当前像素与前 B 个背景分布均不匹配 → 前景
+ */
+function mixtureGaussianProcess(
+  pixel: number,
+  components: GaussianComponent[],
+  alpha: number
+): { isForeground: boolean; components: GaussianComponent[] } {
+  // 按 ω/δ 降序排列
+  const sorted = [...components].sort(
+    (a, b) => b.weight / b.sigma - a.weight / a.sigma
+  );
+  let matched = false;
+  const rho = alpha / Math.max(components[0]?.weight ?? 0.05, 0.01);
+
+  const updated = sorted.map((comp) => {
+    if (!matched && Math.abs(pixel - comp.mean) <= D * comp.sigma) {
+      matched = true;
+      return {
+        weight: (1 - alpha) * comp.weight + alpha,
+        mean: (1 - rho) * comp.mean + rho * pixel,
+        sigma: Math.sqrt(
+          (1 - rho) * comp.sigma ** 2 +
+          rho * (pixel - comp.mean) ** 2
+        ),
+      };
+    }
+    return { ...comp, weight: (1 - alpha) * comp.weight };
+  });
+
+  if (!matched) {
+    // 全不匹配 → 替换最不重要分量
+    const minIdx = updated.reduce(
+      (idx, c, i, arr) => (c.weight < arr[idx].weight ? i : idx), 0
+    );
+    updated[minIdx] = { weight: 0.05, mean: pixel, sigma: 20 / 255 };
+  }
+
+  // 权值归一化
+  const totalW = updated.reduce((s, c) => s + c.weight, 0);
+  const normalized = updated.map((c) => ({
+    ...c,
+    weight: c.weight / totalW,
+  }));
+
+  // 背景选择：按 ω/δ 排序后累计权重达阈值
+  normalized.sort((a, b) => b.weight / b.sigma - a.weight / a.sigma);
+  let cumWeight = 0;
+  const bgCount =
+    normalized.findIndex((c) => {
+      cumWeight += c.weight;
+      return cumWeight >= T_BG;
+    }) + 1;
+
+  // 前景检测
+  const isForeground = !normalized
+    .slice(0, bgCount)
+    .some((c) => Math.abs(pixel - c.mean) <= D * c.sigma);
+
+  return { isForeground, components: normalized };
+}
+`;
+
 const MODEL_OPTIONS = [
   { value: 'mean', label: '均值模型' },
   { value: 'adaptive', label: '自适应背景' },
@@ -84,8 +251,8 @@ const MIXTURE_FORMULA = buildInlineMathML(
 
 /* 混合高斯匹配条件：|I_t - μ_{i,t-1}| ≤ D_1·δ_{i,t-1} */
 const MIXTURE_MATCH = buildInlineMathML(
-  '<mrow><mo>|</mo><msub><mi>I</mi><mi>t</mi></msub><mo>-</mo><msub><mi>μ</mi><mrow><mi>i</mi><mo>,</mo><mi>t</mi><mo>-</mo><mn>1</mn></mrow></msub><mo>|</mo>' +
-  '<mo>≤</mo><msub><mi>D</mi><mn>1</mn></msub><msub><mi>δ</mi><mrow><mi>i</mi><mo>,</mo><mi>t</mi><mo>-</mo><mn>1</mn></mrow></msub></mrow>'
+ '<mrow><mo>|</mo><msub><mi>I</mi><mi>t</mi></msub><mo>-</mo><msub><mi>μ</mi><mrow><mi>i</mi><mo>,</mo><mi>t</mi><mo>-</mo><mn>1</mn></mrow></msub><mo>|</mo>' +
+ '<mo>≤</mo><mi>D</mi><msub><mi>δ</mi><mrow><mi>i</mi><mo>,</mo><mi>t</mi><mo>-</mo><mn>1</mn></mrow></msub></mrow>'
 );
 
 
@@ -99,8 +266,8 @@ const MIXTURE_UPDATE = buildInlineMathML(
 
 /* 混合高斯判定与背景选择合并 */
 const MIXTURE_DETECT_ALL = buildInlineMathML(
-  '<mrow><mtable><mtr><mtd><mtext>背景:</mtext><mi>B</mi><mo>=</mo><munder><mi>min</mi><mi>M</mi></munder><mo>(</mo><munderover><mo>∑</mo><mrow><mi>k</mi><mo>=</mo><mn>1</mn></mrow><mi>M</mi></munderover><msub><mi>ω</mi><mi>k</mi></msub><mo>≥</mo><mi>T</mi><mo>)</mo></mtd></mtr>' +
-  '<mtr><mtd><mtext>前景:</mtext><mo>|</mo><msub><mi>I</mi><mi>t</mi></msub><mo>-</mo><msub><mi>μ</mi><mi>i</mi></msub><mo>|</mo><mo>&gt;</mo><msub><mi>D</mi><mn>2</mn></msub><msub><mi>δ</mi><mi>i</mi></msub><mo>,</mo><mi>i</mi><mo>=</mo><mn>1</mn><mo>,</mo><mn>2</mn><mo>,</mo><mi>⋯</mi><mo>,</mo><mi>B</mi></mtd></mtr></mtable></mrow>'
+  '<mrow><mtable><mtr><mtd><mtext>背景:</mtext><mi>B</mi><mo>=</mo><munder><mrow><mo>argmin</mo></mrow><mi>B</mi></munder><mo>(</mo><munderover><mo>∑</mo><mrow><mi>k</mi><mo>=</mo><mn>1</mn></mrow><mi>B</mi></munderover><msub><mi>ω</mi><mi>k</mi></msub><mo>≥</mo><mi>T</mi><mo>)</mo></mtd></mtr>' +
+  '<mtr><mtd><mtext>前景:</mtext><mo>|</mo><msub><mi>I</mi><mi>t</mi></msub><mo>-</mo><msub><mi>μ</mi><mi>i</mi></msub><mo>|</mo><mo>&gt;</mo><mi>D</mi><msub><mi>δ</mi><mi>i</mi></msub><mo>,</mo><mi>i</mi><mo>=</mo><mn>1</mn><mo>,</mo><mn>2</mn><mo>,</mo><mo>⋯</mo><mo>,</mo><mi>B</mi></mtd></mtr></mtable></mrow>'
 );
 
 
@@ -115,9 +282,9 @@ function modelDescription(model: BackgroundModelType): string {
     case 'adaptive':
       return '用学习率 α 持续更新背景，能适应缓慢光照变化。';
     case 'singleGaussian':
-      return '每个像素用一个高斯分布描述背景，依据均值和标准差判定异常像素。';
+      return '每个像素用一个高斯分布描述背景，依据均值和标准差 δ 判定异常像素。';
     case 'mixtureGaussian':
-      return '每个像素用多个高斯分布表示多模态背景，适合树叶、水面、风扇等动态背景。';
+      return '每个像素用 K 个加权高斯分布表示多模态背景，按 ω/δ 排序后通过累计权重选择背景分布，适合树叶、水面、风扇等动态背景。';
   }
 }
 
@@ -345,7 +512,7 @@ export default function BackgroundModelingSubtractionPage() {
           <FormulaCard
             label="匹配条件"
             mathML={MIXTURE_MATCH}
-            note="将新像素与模型中的高斯分布依序匹配，D₁ 为自定义参数（通常取 2.5）。"
+            note="将新像素与模型中的高斯分布依序匹配，D 为自定义参数（通常取 2.5）。"
           />
           <FormulaCard
             label="匹配时参数更新"
@@ -355,7 +522,7 @@ export default function BackgroundModelingSubtractionPage() {
           <FormulaCard
             label="背景选择与前景检测"
             mathML={MIXTURE_DETECT_ALL}
-            note="按 ω/δ 排序后选择累计权重大于 T 的前 M 个分布作为背景；前景检测条件 D₂ 通常取 2.5。"
+            note="按 ω/δ 排序后选择累计权重大于 T 的前 B 个分布作为背景；前景检测条件 D 通常取 2.5。"
           />
 
       </div>
@@ -371,9 +538,20 @@ export default function BackgroundModelingSubtractionPage() {
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
             <p className="font-semibold text-slate-800">当前帧像素 I(x,y)：</p>
               I({currentPosition.x}, {currentPosition.y}) = {currentGray}
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-            <p className="font-semibold text-slate-800">背景减除差值：</p>
+         </div>
+          {model === 'singleGaussian' ? (
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+              <p className="font-semibold text-slate-800">标准差 δ(x,y)：</p>
+              <p className="text-slate-600">
+                δ({currentPosition.x}, {currentPosition.y}) = {deviationGray}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                前景判定阈值 D·δ = 2.5 × {deviationGray} = {Math.round(2.5 * deviationGray)}，|I-B| = {diffGray}
+              </p>
+            </div>
+          ) : null}
+         <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+           <p className="font-semibold text-slate-800">背景减除差值：</p>
             <p className="text-slate-600">
               |I – B| = |{currentGray} – {backgroundGray}| = {diffGray}
             </p>
@@ -419,11 +597,11 @@ export default function BackgroundModelingSubtractionPage() {
                   <div className="mt-2 border-t border-slate-100 pt-2">
                     <p className="mb-1 font-semibold text-slate-700">匹配判定链式代入：</p>
                     <p>
-                      条件：|I – μ<sub>{index + 1}</sub>| ≤ D₁·δ<sub>{index + 1}</sub>
+                      条件：|I – μ<sub>{index + 1}</sub>| ≤ D·δ<sub>{index + 1}</sub>
                     </p>
                     <p>
                       代入：|{currentGray} – {Math.round(component.mean * 255)}| = {Math.abs(currentGray - Math.round(component.mean * 255))}
-                      &emsp;阈值 D₁δ = 2.5 × {Math.round(component.sigma * 255)} = {Math.round(2.5 * component.sigma * 255)}
+                      &emsp;阈值 D·δ = 2.5 × {Math.round(component.sigma * 255)} = {Math.round(2.5 * component.sigma * 255)}
                     </p>
                     <p>
                       判定结果：
@@ -461,7 +639,7 @@ export default function BackgroundModelingSubtractionPage() {
       parameters={parameters}
       analysisPreview={analysisPreview}
       stepDetails={stepDetails}
-      codeTab={<CodeViewer languages={[{ name: 'TypeScript', code: '// 代码已在算法模块中实现\n// 参见 src/lib/algorithms/simpleBackground.ts' }]} />}
+      codeTab={<CodeViewer languages={[{ name: 'TypeScript', code: BACKGROUND_CODE_TS }]} />}
       currentStep={{ x: currentPosition.x, y: currentPosition.y, kernelSize: 1 }}
       stepInfo={{ current: currentStepIndex, total: width * height }}
       imageLabels={{ input: '当前帧', output: '前景掩膜' }}

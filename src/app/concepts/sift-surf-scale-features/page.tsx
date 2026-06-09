@@ -78,6 +78,36 @@ const EUCLIDEAN_DIST = buildInlineMathML(
   '<mrow><mi>D</mi><mo>(</mo><msub><mi>X</mi><mi>i</mi></msub><mo>,</mo><msub><mi>X</mi><mi>j</mi></msub><mo>)</mo><mo>=</mo><msqrt><munderover><mo>∑</mo><mrow><mi>k</mi><mo>=</mo><mn>0</mn></mrow><mi>n</mi></munderover><msup><mrow><mo>(</mo><msub><mi>X</mi><mrow><mi>i</mi><mi>k</mi></mrow></msub><mo>-</mo><msub><mi>X</mi><mrow><mi>j</mi><mi>k</mi></mrow></msub><mo>)</mo></mrow><mn>2</mn></msup></msqrt></mrow>'
 );
 
+/** DoG 极值点检测 - 26 邻域比较判定 */
+const DOG_EXTREMUM_FORMULA = buildInlineMathML(
+  '<mrow>' +
+  '<mtable>' +
+  '<mtr><mtd><mi>D</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>,</mo><mi>σ</mi><mo>)</mo><mtext> 为局部极值 </mtext><mo>⟺</mo></mtd></mtr>' +
+  '<mtr><mtd><mtext>同层 8 邻域: </mtext><mi>D</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>,</mo><mi>σ</mi><mo>)</mo><mo>&gt;</mo><mi>D</mi><mo>(</mo><mi>x</mi><mo>+</mo><mi>d</mi><mi>x</mi><mo>,</mo><mi>y</mi><mo>+</mo><mi>d</mi><mi>y</mi><mo>,</mo><mi>σ</mi><mo>)</mo><mo>,</mo><mtext> </mtext><mi>d</mi><mi>x</mi><mo>,</mo><mi>d</mi><mi>y</mi><mo>∈</mo><mo>{</mo><mo>-</mo><mn>1</mn><mo>,</mo><mn>0</mn><mo>,</mo><mn>1</mn><mo>}</mo><mo>,</mo><mtext> </mtext><mo>(</mo><mi>d</mi><mi>x</mi><mo>,</mo><mi>d</mi><mi>y</mi><mo>)</mo><mo>≠</mo><mo>(</mo><mn>0</mn><mo>,</mo><mn>0</mn><mo>)</mo></mtd></mtr>' +
+  '<mtr><mtd><mtext>上层 9 邻域: </mtext><mi>D</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>,</mo><mi>σ</mi><mo>)</mo><mo>&gt;</mo><mi>D</mi><mo>(</mo><mi>x</mi><mo>+</mo><mi>d</mi><mi>x</mi><mo>,</mo><mi>y</mi><mo>+</mo><mi>d</mi><mi>y</mi><mo>,</mo><mi>k</mi><mi>σ</mi><mo>)</mo><mo>,</mo><mtext> </mtext><mi>d</mi><mi>x</mi><mo>,</mo><mi>d</mi><mi>y</mi><mo>∈</mo><mo>{</mo><mo>-</mo><mn>1</mn><mo>,</mo><mn>0</mn><mo>,</mo><mn>1</mn><mo>}</mo></mtd></mtr>' +
+  '<mtr><mtd><mtext>下层 9 邻域: </mtext><mi>D</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>,</mo><mi>σ</mi><mo>)</mo><mo>&gt;</mo><mi>D</mi><mo>(</mo><mi>x</mi><mo>+</mo><mi>d</mi><mi>x</mi><mo>,</mo><mi>y</mi><mo>+</mo><mi>d</mi><mi>y</mi><mo>,</mo><mi>σ</mi><mo>/</mo><mi>k</mi><mo>)</mo><mo>,</mo><mtext> </mtext><mi>d</mi><mi>x</mi><mo>,</mo><mi>d</mi><mi>y</mi><mo>∈</mo><mo>{</mo><mo>-</mo><mn>1</mn><mo>,</mo><mn>0</mn><mo>,</mo><mn>1</mn><mo>}</mo></mtd></mtr>' +
+  '<mtr><mtd><mtext>（或全部 </mtext><mo>&lt;</mo><mtext>，为局部极小值）</mtext></mtd></mtr>' +
+  '</mtable>' +
+  '</mrow>'
+);
+
+/** 尺度链式代入: L(x,y,σ) = G(x,y,σ) * I(x,y) = [(1/(2πσ²))e^(-(x²+y²)/(2σ²))] * I(x,y) */
+const SCALE_CHAIN_FORMULA = buildInlineMathML(
+  '<mrow>' +
+  '<mi>L</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>,</mo><mi>σ</mi><mo>)</mo>' +
+  '<mo>=</mo>' +
+  '<mi>G</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>,</mo><mi>σ</mi><mo>)</mo>' +
+  '<mo>*</mo>' +
+  '<mi>I</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo>' +
+  '<mo>=</mo>' +
+  '<mrow><mo>[</mo>' +
+  '<mfrac><mn>1</mn><mrow><mn>2</mn><mi>π</mi><msup><mi>σ</mi><mn>2</mn></msup></mrow></mfrac>' +
+  '<msup><mi>e</mi><mrow><mo>-</mo><mfrac><mrow><msup><mi>x</mi><mn>2</mn></msup><mo>+</mo><msup><mi>y</mi><mn>2</mn></msup></mrow><mrow><mn>2</mn><msup><mi>σ</mi><mn>2</mn></msup></mrow></mfrac></mrow></msup>' +
+  '<mo>]</mo></mrow>' +
+  '<mo>*</mo>' +
+  '<mi>I</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo>' +
+  '</mrow>'
+);
 // ==================== 辅助组件 ====================
 
 /** 8 柱方向直方图 */
@@ -723,7 +753,9 @@ export default function SiftSurfScaleFeaturesPage() {
                 上下层各 9 个像素（共 26 个邻域点）进行比较。
                 若该点的 DoG 值比所有 26 个邻域点都大或都小，则记为候选极值点。
               </p>
-            </TeachingCard>
+           </TeachingCard>
+
+            <FormulaCard label="26 邻域极值判定条件" mathML={DOG_EXTREMUM_FORMULA} />
 
             <TeachingCard>
               <img
@@ -1083,18 +1115,17 @@ export default function SiftSurfScaleFeaturesPage() {
                 </div>
               </TeachingCard>
             )}
+
+            <FormulaCard label="尺度空间链式代入" mathML={SCALE_CHAIN_FORMULA} />
+
           </div>
         );
     }
   }, [step, gaussianScales, dogScales, sigma, numScales, keypoints,
       stepData, selectedKpIdx, sourceImage]);
 
-  // ==================== Main Render ====================
-
-  const originalImage = sourceImage;
-  const resultImage = keypointImage;
-
-  return (
+ // ==================== Main Render ====================
+ return (
     <ConceptLayout
       title="SIFT / SURF 尺度特征"
       subtitle="Scale Invariant Features - 尺度不变的局部特征检测"
@@ -1106,10 +1137,10 @@ export default function SiftSurfScaleFeaturesPage() {
         step === 'descriptor' ? '描述子生成' :
         step === 'surf' ? 'SURF 算法' : '特征匹配'
       }
-      parameterIntro="选择教学步骤与测试图像，调整尺度参数观察关键点变化，选中单个关键点查看其描述子细节。"
-      originalImage={originalImage}
-      resultImage={resultImage}
-      parameters={parameters}
+     parameterIntro="选择教学步骤与测试图像，调整尺度参数观察关键点变化，选中单个关键点查看其描述子细节。"
+     originalImage={sourceImage}
+     resultImage={keypointImage}
+     parameters={parameters}
       analysisPreview={analysisPreview}
       stepDetails={stepDetails}
       imageHints={{

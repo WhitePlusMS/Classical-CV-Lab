@@ -52,38 +52,32 @@ const OUTPUT_OPTIONS = [
   { value: 'tozeroInv', label: 'TOZERO_INV（高值清零）' },
 ] as const;
 
-const OUTPUT_MODE_TEXT: Record<ThresholdOutputMode, {
-  name: string;
-  description: string;
-  formula: (src: number, threshold: number, dst: number) => string;
-}> = {
-  binary: {
-    name: 'BINARY',
-    description: '大于等于阈值的像素输出最大值，其他像素输出 0。适合生成前景掩膜。',
-    formula: (src, threshold, dst) => `dst = src >= T ? 255 : 0 = ${src} >= ${threshold} ? 255 : 0 = ${dst}`,
-  },
-  binaryInv: {
-    name: 'BINARY_INV',
-    description: '大于等于阈值的像素输出 0，其他像素输出最大值。适合目标比背景更暗的情形。',
-    formula: (src, threshold, dst) => `dst = src >= T ? 0 : 255 = ${src} >= ${threshold} ? 0 : 255 = ${dst}`,
-  },
-  trunc: {
-    name: 'TRUNC',
-    description: '大于阈值的像素被截断为阈值，其他像素保留原灰度。该模式不是二值掩膜。',
-    formula: (src, threshold, dst) => `dst = min(src, T) = min(${src}, ${threshold}) = ${dst}`,
-  },
-  tozero: {
-    name: 'TOZERO',
-    description: '大于等于阈值的像素保留原灰度，其他像素置 0。该模式保留亮目标的灰度细节。',
-    formula: (src, threshold, dst) => `dst = src >= T ? src : 0 = ${src} >= ${threshold} ? ${src} : 0 = ${dst}`,
-  },
-  tozeroInv: {
-    name: 'TOZERO_INV',
-    description: '小于阈值的像素保留原灰度，其他像素置 0。该模式保留暗目标的灰度细节。',
-    formula: (src, threshold, dst) => `dst = src >= T ? 0 : src = ${src} >= ${threshold} ? 0 : ${src} = ${dst}`,
-  },
-};
-
+ const OUTPUT_MODE_TEXT: Record<ThresholdOutputMode, {
+   name: string;
+   description: string;
+ }> = {
+   binary: {
+     name: 'BINARY',
+     description: '大于等于阈值的像素输出最大值，其他像素输出 0。适合生成前景掩膜。',
+   },
+   binaryInv: {
+     name: 'BINARY_INV',
+     description: '大于等于阈值的像素输出 0，其他像素输出最大值。适合目标比背景更暗的情形。',
+   },
+   trunc: {
+     name: 'TRUNC',
+     description: '大于阈值的像素被截断为阈值，其他像素保留原灰度。该模式不是二值掩膜。',
+   },
+   tozero: {
+     name: 'TOZERO',
+     description: '大于等于阈值的像素保留原灰度，其他像素置 0。该模式保留亮目标的灰度细节。',
+   },
+   tozeroInv: {
+     name: 'TOZERO_INV',
+     description: '小于阈值的像素保留原灰度，其他像素置 0。该模式保留暗目标的灰度细节。',
+   },
+ };
+ 
 const THRESHOLD_CODE_TS = `function fixedThreshold(image: number[][], threshold: number): number[][] {
   return image.map(row =>
     row.map(gray => (gray * 255 >= threshold ? 1 : 0))
@@ -109,7 +103,7 @@ function otsuThreshold(histogram: number[], total: number): number {
     const mu1 = (totalGray - backgroundGray) / foregroundCount;
     const w0 = backgroundCount / total;
     const w1 = foregroundCount / total;
-    const variance = w0 * w1 * (mu0 - mu1) ** 2;
+     const variance = w0 * w1 * (mu0 - mu1) ** 2; // σ²_B = ω₀ ω₁ (μ₀ - μ₁)²，标准 OTSU 类间方差（w0,w1 已含 ÷total 归一化）
 
     if (variance > maxVariance) {
       maxVariance = variance;
@@ -145,10 +139,87 @@ function byteValue(value: number): number {
 }
 
 function modeFormulaMathML(mode: ThresholdOutputMode, src: number, threshold: number, dst: number): string {
-  const text = OUTPUT_MODE_TEXT[mode].formula(src, threshold, dst);
+  // 每个输出模式的 MathML 分段函数定义 + 代入链
+  const substitution = `
+    <mspace width="0.8em"/>
+    <mi>f</mi><mo>(</mo><msub><mi>x</mi><mn>0</mn></msub><mo>,</mo><msub><mi>y</mi><mn>0</mn></msub><mo>)</mo>
+    <mo>=</mo>${numberNode(src)}
+    <mo>,</mo>
+    <mi>T</mi><mo>=</mo>${numberNode(threshold)}
+    <mo>→</mo>
+    <mi>F</mi><mo>(</mo><msub><mi>x</mi><mn>0</mn></msub><mo>,</mo><msub><mi>y</mi><mn>0</mn></msub><mo>)</mo>
+    <mo>=</mo>${numberNode(dst)}
+  `;
+
+  let piecewise: string;
+
+  switch (mode) {
+    case 'binary':
+      piecewise = `<mo>{</mo>
+        <mtable>
+          <mtr>
+            <mtd><mn>255</mn></mtd>
+            <mtd><mi>f</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>≥</mo><mi>T</mi></mtd>
+          </mtr>
+          <mtr>
+            <mtd><mn>0</mn></mtd>
+            <mtd><mi>f</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>&lt;</mo><mi>T</mi></mtd>
+          </mtr>
+        </mtable>`;
+      break;
+    case 'binaryInv':
+      piecewise = `<mo>{</mo>
+        <mtable>
+          <mtr>
+            <mtd><mn>0</mn></mtd>
+            <mtd><mi>f</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>≥</mo><mi>T</mi></mtd>
+          </mtr>
+          <mtr>
+            <mtd><mn>255</mn></mtd>
+            <mtd><mi>f</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>&lt;</mo><mi>T</mi></mtd>
+          </mtr>
+        </mtable>`;
+      break;
+    case 'trunc':
+      piecewise = `<mi>min</mi><mo>(</mo><mi>f</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>,</mo><mi>T</mi><mo>)</mo>`;
+      break;
+    case 'tozero':
+      piecewise = `<mo>{</mo>
+        <mtable>
+          <mtr>
+            <mtd><mi>f</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo></mtd>
+            <mtd><mi>f</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>≥</mo><mi>T</mi></mtd>
+          </mtr>
+          <mtr>
+            <mtd><mn>0</mn></mtd>
+            <mtd><mi>f</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>&lt;</mo><mi>T</mi></mtd>
+          </mtr>
+        </mtable>`;
+      break;
+    case 'tozeroInv':
+      piecewise = `<mo>{</mo>
+        <mtable>
+          <mtr>
+            <mtd><mn>0</mn></mtd>
+            <mtd><mi>f</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>≥</mo><mi>T</mi></mtd>
+          </mtr>
+          <mtr>
+            <mtd><mi>f</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo></mtd>
+            <mtd><mi>f</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>&lt;</mo><mi>T</mi></mtd>
+          </mtr>
+        </mtable>`;
+      break;
+  }
+
   return buildInlineMathML(`
     <mrow>
-      <mtext>${text}</mtext>
+      <mi>F</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo>
+      <mo>=</mo>
+      <mrow>
+        ${piecewise}
+      </mrow>
+      <mo>,</mo>
+      ${substitution}
     </mrow>
   `);
 }
@@ -187,20 +258,27 @@ function otsuFormulaMathML(threshold: number, bestVariance: number): string {
   return buildInlineMathML(`
     <mrow>
       <msup><mi>T</mi><mo>*</mo></msup>
-      <mo>=</mo><mi>argmax</mi><msub><mi>g</mi><mi>t</mi></msub>
-      <mo>,</mo>
-      <msub><mi>g</mi><mi>t</mi></msub>
       <mo>=</mo>
-      <msub><mi>ω</mi><mn>0</mn></msub>
-      <msub><mi>ω</mi><mn>1</mn></msub>
+      <munder>
+        <mrow><mi>argmax</mi></mrow>
+        <mrow><mn>0</mn><mo>≤</mo><mi>t</mi><mo>≤</mo><mn>255</mn></mrow>
+      </munder>
+      <msubsup><mi>σ</mi><mi>B</mi><mn>2</mn></msubsup><mo>(</mo><mi>t</mi><mo>)</mo>
+      <mspace width="1em"/>
+      <msubsup><mi>σ</mi><mi>B</mi><mn>2</mn></msubsup><mo>(</mo><mi>t</mi><mo>)</mo>
+      <mo>=</mo>
+      <msub><mi>ω</mi><mn>0</mn></msub><mo>(</mo><mi>t</mi><mo>)</mo>
+      <msub><mi>ω</mi><mn>1</mn></msub><mo>(</mo><mi>t</mi><mo>)</mo>
       <msup>
-        <mrow><mo>(</mo><msub><mi>μ</mi><mn>0</mn></msub><mo>-</mo><msub><mi>μ</mi><mn>1</mn></msub><mo>)</mo></mrow>
+        <mrow><mo>(</mo><msub><mi>μ</mi><mn>0</mn></msub><mo>(</mo><mi>t</mi><mo>)</mo><mo>-</mo><msub><mi>μ</mi><mn>1</mn></msub><mo>(</mo><mi>t</mi><mo>)</mo><mo>)</mo></mrow>
         <mn>2</mn>
       </msup>
-      <mo>=</mo><mi>argmax</mi><mo>(</mo><mtext>当前类间方差曲线</mtext><mo>)</mo>
+      <mspace width="1em"/>
+      <msup><mi>T</mi><mo>*</mo></msup>
       <mo>=</mo>${numberNode(threshold)}
-      <mo>,</mo>
-      <msub><mi>g</mi><mi>max</mi></msub><mo>=</mo>${numberNode(bestVariance.toFixed(2))}
+      <mo>,</mo><mspace width="0.5em"/>
+      <msubsup><mi>σ</mi><mi>B</mi><mn>2</mn></msubsup><mo>(</mo><msup><mi>T</mi><mo>*</mo></msup><mo>)</mo>
+      <mo>=</mo>${numberNode(bestVariance.toFixed(2))}
     </mrow>
   `);
 }
@@ -212,14 +290,23 @@ function kittlerFormulaMathML(threshold: number, weightedGraySum: number, gradie
       <mo>=</mo>
       <mfrac>
         <mrow>
-          <mo>∑</mo><mi>grad</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo>
+          <mo>∑</mo><mi>g</mi><mi>r</mi><mi>a</mi><mi>d</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo>
+          <mo>·</mo>
           <mi>f</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo>
         </mrow>
-        <mrow><mo>∑</mo><mi>grad</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo></mrow>
+        <mrow>
+          <mo>∑</mo><mi>g</mi><mi>r</mi><mi>a</mi><mi>d</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo>
+        </mrow>
       </mfrac>
+      <mspace width="0.8em"/>
       <mo>=</mo>
-      <mfrac>${numberNode(weightedGraySum.toFixed(2))}${numberNode(gradientSum.toFixed(2))}</mfrac>
-      <mo>=</mo>${numberNode(threshold)}
+      <mfrac>
+        ${numberNode(weightedGraySum.toFixed(1))}
+        ${numberNode(gradientSum.toFixed(1))}
+      </mfrac>
+      <mspace width="0.8em"/>
+      <mo>=</mo>
+      ${numberNode(threshold)}
     </mrow>
   `);
 }

@@ -180,9 +180,14 @@ function normalizeKernelImage(kernel: number[][]): number[][] {
 export default function LBPGaborTexturePage() {
   const [mode, setMode] = useState<TextureMode>('lbp');
   const [currentPosition, setCurrentPosition] = useState({ x: 10, y: 10 });
-  const [gaborPreset, setGaborPreset] = useState<string>(GABOR_PRESETS[0].label);
+ const [gaborPreset, setGaborPreset] = useState<string>(GABOR_PRESETS[0].label);
+  // ---- LBP 邻域序号映射 ----
+  const lbpRowMap = useMemo(() => [0, 0, 0, 1, 2, 2, 2, 1], []);
+  const lbpColMap = useMemo(() => [0, 1, 2, 2, 2, 1, 0, 0], []);
+  const lbpRow = (i: number): number => lbpRowMap[i] ?? 0;
+  const lbpCol = (i: number): number => lbpColMap[i] ?? 0;
 
-  // ---- 输入数据 ----
+ // ---- 输入数据 ----
   const testImage = useMemo(() => generateTextureTestImage(), []);
   const width = testImage[0]?.length || 0;
   const height = testImage.length;
@@ -506,23 +511,81 @@ export default function LBPGaborTexturePage() {
             <p className="mt-2 text-center text-[10px] text-slate-400">
               中心值（红底） I(c) = {grayVal(currentWindow.center)}，与周围 8 个像素逐一比较
             </p>
-          </div>
+        </div>
 
-          {/* 二进制编码推导 */}
+
+         {/* 阶跃比较：逐个像素代入 */}
           <div className="mb-4 space-y-2 text-xs leading-6">
-            <p className="font-semibold text-slate-700">阶跃比较结果：</p>
-            <div className="flex flex-wrap gap-3">
-              {currentWindow.binaryPattern.map((b, i) => (
-                <span key={i} className="whitespace-nowrap text-slate-600">
-                  s(I({i + 1})−I(c)) = s({grayVal(currentWindow.values[LBP_ROW(i)][LBP_COL(i)])}−{grayVal(currentWindow.center)}) = {b}
-                </span>
-              ))}
+            <p className="font-semibold text-slate-700">Step B: 逐个邻域代入 s(I(p)−I(c))</p>
+            <div className="overflow-x-auto">
+              <table className="mx-auto border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-slate-300">
+                    <th className="px-3 py-1.5 text-left font-semibold text-slate-700">邻域 p</th>
+                    <th className="px-3 py-1.5 text-left font-semibold text-slate-700">I(p)</th>
+                    <th className="px-3 py-1.5 text-left font-semibold text-slate-700">I(c)</th>
+                    <th className="px-3 py-1.5 text-left font-semibold text-slate-700">I(p)−I(c)</th>
+                    <th className="px-3 py-1.5 text-left font-semibold text-slate-700">s(·)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentWindow.binaryPattern.map((b, i) => {
+                    const row = lbpRow(i);
+                    const col = lbpCol(i);
+                    const pv = currentWindow.values[row][col];
+                    const cv = currentWindow.center;
+                    return (
+                      <tr key={i} className="border-b border-slate-100">
+                        <td className="px-3 py-1.5 text-slate-600">
+                          p<sub>{i + 1}</sub>
+                        </td>
+                        <td className="px-3 py-1.5 font-mono text-slate-700">{grayVal(pv)}</td>
+                        <td className="px-3 py-1.5 font-mono text-slate-700">{grayVal(cv)}</td>
+                        <td className="px-3 py-1.5 font-mono text-slate-600">
+                          {grayVal(pv)}−{grayVal(cv)} = {pv - cv >= 0 ? '+' : ''}{Math.round((pv - cv) * 255)}
+                        </td>
+                        <td className="px-3 py-1.5">
+                          <span className={`inline-flex h-6 w-6 items-center justify-center rounded text-[10px] font-mono ${b === 1 ? 'bg-amber-200 text-amber-800' : 'bg-slate-200 text-slate-500'}`}>
+                            {b}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
 
-          {/* 二进制模式与十进制结果 */}
+          {/* 二进制模式与位权重 */}
           <div className="mb-4 space-y-2 text-xs leading-6">
-            <p className="font-semibold text-slate-700">LBP 编码与十进制值：</p>
+            <p className="font-semibold text-slate-700">Step C: 二进制模式（8 位）</p>
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+              <div className="flex flex-wrap items-center gap-1">
+                <span className="mr-1 text-slate-500">二进制：</span>
+                {currentWindow.binaryPattern.map((b, i) => (
+                  <span
+                    key={i}
+                    className={`inline-flex h-7 w-7 items-center justify-center rounded text-[11px] font-mono ${b === 1 ? 'bg-amber-200 text-amber-800' : 'bg-slate-200 text-slate-500'}`}
+                  >
+                    {b}
+                  </span>
+                ))}
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-1">
+                <span className="mr-1 text-slate-500">对应权重：</span>
+                {currentWindow.binaryPattern.map((b, i) => (
+                  <span key={i} className="inline-flex h-7 w-7 items-center justify-center rounded text-[10px] font-mono text-slate-500">
+                    2<sup>{i}</sup>
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* LBP 编码计算 */}
+          <div className="mb-4 space-y-2 text-xs leading-6">
+            <p className="font-semibold text-slate-700">Step D: LBP 码 = Σ s(p)·2^p</p>
             <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
               <p className="text-slate-600">
                 LBP = {currentWindow.binaryPattern.map((b, i) => `${b}·2^${i}`).join(' + ')}
@@ -536,7 +599,6 @@ export default function LBPGaborTexturePage() {
               </p>
             </div>
           </div>
-
           {mode === 'lbp-rotation' && (
             <div className="mb-4 space-y-2 text-xs leading-6">
               <p className="font-semibold text-slate-700">旋转不变 LBP：</p>
@@ -729,8 +791,3 @@ export default function LBPGaborTexturePage() {
   );
 }
 
-// ---- 辅助函数 ----
-const LBP_ROW_MAP = [0, 0, 0, 1, 2, 2, 2, 1];
-const LBP_COL_MAP = [0, 1, 2, 2, 2, 1, 0, 0];
-function LBP_ROW(i: number): number { return LBP_ROW_MAP[i] ?? 0; }
-function LBP_COL(i: number): number { return LBP_COL_MAP[i] ?? 0; }
