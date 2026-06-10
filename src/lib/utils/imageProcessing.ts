@@ -155,6 +155,7 @@ export async function loadImageAsRgb(src: string): Promise<number[][][]> {
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.decoding = 'async';
+  image.crossOrigin = 'anonymous';
 
     image.onload = () => {
       const width = image.naturalWidth;
@@ -204,6 +205,7 @@ export async function loadImageAsGrayscale(src: string): Promise<GrayscaleImage>
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.decoding = 'async';
+  image.crossOrigin = 'anonymous';
 
     image.onload = () => {
       const width = image.naturalWidth;
