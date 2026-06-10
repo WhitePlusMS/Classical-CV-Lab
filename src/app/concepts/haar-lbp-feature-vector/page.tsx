@@ -2,582 +2,786 @@
 
 import React, { useCallback, useMemo, useState } from 'react';
 import {
+  AnchoredOverlay,
+  type AnchoredOverlayPath,
   CodeViewer,
   ConceptLayout,
   FlowColumn,
   FlowColumns,
   FlowNode,
   FormulaCard,
+  ImageCanvas,
+  MathText,
   ProcessRail,
   SelectParam,
   TeachingCard,
   buildInlineMathML,
 } from '@/components';
-
-// ========================================
-// 学习模式定义
-// ========================================
+import {
+  type GrayscaleImage,
+  type HaarFeatureStep,
+  type HaarRegionResult,
+  type HaarTemplateType,
+  type LBPVectorStep,
+  computeHaarResponseMap,
+  generateTextureTestImage,
+  getHaarFeatureStep,
+  getLBPVectorStep,
+} from '@/lib/algorithms';
+import {
+  type ConvolutionTeachingImageType,
+  convolutionTeachingImages,
+} from '@/lib/utils/convolutionTeachingImages';
+import { useGridNavigation } from '@/hooks/useGridNavigation';
 
 type StudyMode = 'haar-template' | 'haar-integral' | 'lbp-vector';
 
-type HaarSubType = 'edge' | 'line' | 'point' | 'diagonal';
+const HAAR_WINDOW_SIZE = 6;
+const LBP_WINDOW_SIZE = 16;
+const LBP_CELL_SIZE = 4;
+const LBP_SAMPLE_OFFSET = Math.floor(LBP_WINDOW_SIZE / 2) + Math.floor(LBP_CELL_SIZE / 2);
 
 const MODE_OPTIONS: { value: StudyMode; label: string }[] = [
-  { value: 'haar-template', label: 'Haar-like 特征模板' },
-  { value: 'haar-integral', label: 'Haar 特征值与积分图' },
-  { value: 'lbp-vector', label: 'LBP 特征向量提取' },
+  { value: 'haar-template', label: 'Haar 模板响应' },
+  { value: 'haar-integral', label: 'Haar 积分图加速' },
+  { value: 'lbp-vector', label: 'LBP 特征向量' },
 ];
 
-const HAAR_SUB_OPTIONS: { value: HaarSubType; label: string }[] = [
+const HAAR_TEMPLATE_OPTIONS: { value: HaarTemplateType; label: string }[] = [
   { value: 'edge', label: '边缘特征' },
   { value: 'line', label: '线特征' },
   { value: 'point', label: '点特征' },
   { value: 'diagonal', label: '对角线特征' },
 ];
 
-const HAAR_EDGE_ITEMS = [
-  { img: '/assets/haar-lbp-feature-vector/haar-edge-x.jpg', desc: 'x 方向边缘特征' },
-  { img: '/assets/haar-lbp-feature-vector/haar-edge-y.jpg', desc: 'y 方向边缘特征' },
-  { img: '/assets/haar-lbp-feature-vector/haar-edge-x-tilted.jpg', desc: 'x 倾斜方向边缘特征' },
-  { img: '/assets/haar-lbp-feature-vector/haar-edge-y-tilted.jpg', desc: 'y 倾斜方向边缘特征' },
+const HAAR_IMAGE_OPTIONS: { value: ConvolutionTeachingImageType; label: string }[] = [
+  { value: 'edge12', label: '阶跃边缘' },
+  { value: 'horizontalEdge12', label: '水平边缘' },
+  { value: 'spot12', label: '亮斑十字' },
+  { value: 'frame12', label: '方框轮廓' },
 ];
 
-const HAAR_LINE_ITEMS = [
-  { img: '/assets/haar-lbp-feature-vector/haar-line-1.jpg', desc: '线特征（水平）' },
-  { img: '/assets/haar-lbp-feature-vector/haar-line-2.jpg', desc: '线特征（竖直）' },
-  { img: '/assets/haar-lbp-feature-vector/haar-line-3-tilted-x3.jpg', desc: 'x 倾斜线特征（3 格）' },
-  { img: '/assets/haar-lbp-feature-vector/haar-line-4-tilted-x4.jpg', desc: 'x 倾斜线特征（4 格）' },
-  { img: '/assets/haar-lbp-feature-vector/haar-line-5.jpg', desc: '线特征' },
-  { img: '/assets/haar-lbp-feature-vector/haar-line-6.jpg', desc: '线特征' },
-  { img: '/assets/haar-lbp-feature-vector/haar-line-7-tilted-y3.jpg', desc: 'y 倾斜线特征（3 格）' },
-  { img: '/assets/haar-lbp-feature-vector/haar-line-8-tilted-y4.jpg', desc: 'y 倾斜线特征（4 格）' },
-];
-
-const HAAR_POINT_ITEMS = [
-  { img: '/assets/haar-lbp-feature-vector/haar-point.jpg', desc: '中心点特征' },
-  { img: '/assets/haar-lbp-feature-vector/haar-point-tilted.jpg', desc: '倾斜点特征' },
-];
-
-const HAAR_DIAGONAL_ITEMS = [
-  { img: '/assets/haar-lbp-feature-vector/haar-diagonal.jpg', desc: '对角线特征' },
-];
-
-// ========================================
-// 公式常量（MathML 格式）
-// ========================================
-
-const FEATURE_VALUE_FORMULA = buildInlineMathML(
-  '<mrow><mi>V</mi><mo>=</mo><munder><mo>∑</mo><mtext>黑区</mtext></munder><mi>p</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo><mo>-</mo><munder><mo>∑</mo><mtext>白区</mtext></munder><mi>p</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo></mrow>'
-);
-
-const FEATURE_VALUE_CHAIN = buildInlineMathML(
-  '<mrow><mi>V</mi><mo>=</mo><munder><mo>∑</mo><mtext>黑区</mtext></munder><mi>p</mi><mo>-</mo><munder><mo>∑</mo><mtext>白区</mtext></munder><mi>p</mi><mo>=</mo><mn>128</mn><mo>-</mo><mn>45</mn><mo>=</mo><mn>83</mn></mrow>'
-);
-
-const INTEGRAL_IMAGE_FORMULA = buildInlineMathML(
-  '<mrow><mi>n</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo><mo>=</mo><munder><mo>∑</mo><mrow><msup><mi>i</mi><mo>′</mo></msup><mo>≤</mo><mi>i</mi><mo>,</mo><msup><mi>j</mi><mo>′</mo></msup><mo>≤</mo><mi>j</mi></mrow></munder><mi>p</mi><mo>(</mo><msup><mi>i</mi><mo>′</mo></msup><mo>,</mo><msup><mi>j</mi><mo>′</mo></msup><mo>)</mo></mrow>'
-);
-
-const FOUR_CORNER_FORMULA = buildInlineMathML(
-  '<mrow><msub><mi>S</mi><mrow><mi>A</mi><mi>B</mi><mi>C</mi><mi>D</mi></mrow></msub><mo>=</mo><mi>D</mi><mo>-</mo><mi>C</mi><mo>-</mo><mi>B</mi><mo>+</mo><mi>A</mi></mrow>'
-);
-
-const LBP_FORMULA = buildInlineMathML(
-  '<mrow><mi>LBP</mi><mo>(</mo><msub><mi>x</mi><mi>c</mi></msub><mo>,</mo><msub><mi>y</mi><mi>c</mi></msub><mo>)</mo><mo>=</mo>' +
-  '<munderover><mo>∑</mo><mrow><mi>p</mi><mo>=</mo><mn>1</mn></mrow><mn>8</mn></munderover>' +
-  '<mi>s</mi><mo>(</mo><mi>I</mi><mo>(</mo><msub><mi>p</mi><mi>i</mi></msub><mo>)</mo><mo>-</mo><mi>I</mi><mo>(</mo><msub><mi>p</mi><mi>c</mi></msub><mo>)</mo><mo>)</mo><msup><mn>2</mn><mrow><mi>p</mi><mo>-</mo><mn>1</mn></mrow></msup></mrow>'
-);
-
-const LBP_THRESHOLD = buildInlineMathML(
-  '<mrow><mi>s</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo><mrow><mo>{</mo><mtable><mtr><mtd><mn>1</mn></mtd><mtd><mtext>若 </mtext><mi>x</mi><mo>≥</mo><mn>0</mn></mtd></mtr><mtr><mtd><mn>0</mn></mtd><mtd><mtext>若 </mtext><mi>x</mi><mo><</mo><mn>0</mn></mtd></mtr></mtable></mrow></mrow>'
-);
-
-const LBP_HISTOGRAM = buildInlineMathML(
-  '<mrow><msub><mi>h</mi><mi>k</mi></msub><mo>(</mo><mi>b</mi><mo>)</mo><mo>=</mo><mfrac><mrow><mtext>cell</mtext><msub><mi>k</mi></msub><mtext>中 LBP 值为</mtext><mi>b</mi><mtext>的像素数</mtext></mrow><mrow><mtext>cell 总像素数</mtext></mrow></mfrac></mrow>'
-);
-
-const FEATURE_VECTOR_FORMULA = buildInlineMathML(
-  '<mrow><mi>v</mi><mo>=</mo><mo>[</mo><msub><mi>h</mi><mn>1</mn></msub><mo>,</mo><msub><mi>h</mi><mn>2</mn></msub><mo>,</mo><mo>⋯</mo><mo>,</mo><msub><mi>h</mi><mi>N</mi></msub><mo>]</mo></mrow>'
-);
-
-// ========================================
-// 代码段
-// ========================================
-
-const HAAR_CODE = '// OpenCV Haar 特征级联分类器检测\n' +
-'cv::CascadeClassifier faceCascade;\n' +
-'faceCascade.load("haarcascade_frontalface.xml");\n' +
-'\n' +
-'std::vector<cv::Rect> faces;\n' +
-'faceCascade.detectMultiScale(img, faces, 1.1, 3);\n' +
-'\n' +
-'// Haar 特征值计算 (积分图加速)\n' +
-'// 对每个 Haar 模板：\n' +
-'//   V = sum(black_region) - sum(white_region)\n' +
-'//   = integral(D) - integral(C) - integral(B) + integral(A)';
-
-const LBP_CODE = '// LBP 特征向量提取 (OpenCV)\n' +
-'cv::Ptr<cv::LBPHFaceRecognizer> model =\n' +
-'    cv::LBPHFaceRecognizer::create(1, 8, 8, 8);\n' +
-'\n' +
-'// 内部流程：\n' +
-'// 1. 将检测窗口划分为 16x16 cell\n' +
-'// 2. 对每个像素与 8 邻域比较，得到 LBP 编码\n' +
-'// 3. 统计每个 cell 的 LBP 直方图并归一化\n' +
-'// 4. 串联所有 cell 直方图 -> 特征向量\n' +
-'model->train(images, labels);\n' +
-'\n' +
-'int label = model->predict(testImg);';
-
-// ========================================
-// 数据定义
-// ========================================
-
-interface HaarSubSection {
-  title: string;
-  description: string;
-  formulaMathML: string;
-}
-
-const HAAR_SUB_SECTIONS: Record<HaarSubType, HaarSubSection> = {
-  edge: {
-    title: '边缘特征（4 种）',
-    description:
-      '边缘特征包括 x 方向、y 方向、x 倾斜方向、y 倾斜方向四种模板。每种模板由黑白两个矩形区域组成，特征值为黑色区域像素和与白色区域像素和之差，用于检测图像中的边缘信息。',
-    formulaMathML: buildInlineMathML(
-      '<mrow><mi>V</mi><mo>=</mo><munder><mo>∑</mo><mtext>黑区</mtext></munder><mi>p</mi><mo>-</mo><munder><mo>∑</mo><mtext>白区</mtext></munder><mi>p</mi></mrow>'
-    ),
-  },
-  line: {
-    title: '线特征（8 种）',
-    description:
-      '线特征包含水平方向、竖直方向及其倾斜方向的共 8 种模板结构。每个模板由三个矩形区域组成（黑白黑或白黑白模式），用于检测图像中呈线状分布的结构。',
-    formulaMathML: buildInlineMathML(
-      '<mrow><mi>V</mi><mo>=</mo><munder><mo>∑</mo><mtext>黑区</mtext></munder><mi>p</mi><mo>-</mo><munder><mo>∑</mo><mtext>白区</mtext></munder><mi>p</mi></mrow>'
-    ),
-  },
-  point: {
-    title: '点特征（中心特征，2 种）',
-    description:
-      '点特征由一个中心矩形与周围矩形区域构成，用于检测图像中心与周边区域的差异，适合检测孤立亮点或暗点区域。',
-    formulaMathML: buildInlineMathML(
-      '<mrow><mi>V</mi><mo>=</mo><munder><mo>∑</mo><mtext>黑区</mtext></munder><mi>p</mi><mo>-</mo><munder><mo>∑</mo><mtext>白区</mtext></munder><mi>p</mi></mrow>'
-    ),
-  },
-  diagonal: {
-    title: '对角线特征（1 种）',
-    description:
-      '对角线特征采用对角划分的黑白矩形结构，用于检测图像中对角线方向上的亮度差异。',
-    formulaMathML: buildInlineMathML(
-      '<mrow><mi>V</mi><mo>=</mo><munder><mo>∑</mo><mtext>黑区</mtext></munder><mi>p</mi><mo>-</mo><munder><mo>∑</mo><mtext>白区</mtext></munder><mi>p</mi></mrow>'
-    ),
-  },
+const HAAR_TEMPLATE_LABELS: Record<HaarTemplateType, string> = {
+  edge: '边缘特征',
+  line: '线特征',
+  point: '点特征',
+  diagonal: '对角线特征',
 };
 
-// ========================================
-// 主页面组件
-// ========================================
+const HAAR_TEMPLATE_NOTES: Record<HaarTemplateType, string> = {
+  edge: '左右两个矩形比较亮度差，适合观察竖直边缘或明暗分界。',
+  line: '中间矩形与两侧矩形比较，适合观察线状结构。',
+  point: '中心小矩形与周围区域比较，适合观察局部亮斑或暗斑。',
+  diagonal: '对角矩形分组比较，适合观察对角方向的明暗结构。',
+};
+
+const HAAR_CODE_TS = `export function getHaarFeatureStep(
+  image: number[][],
+  x: number,
+  y: number,
+  templateType: HaarTemplateType,
+  windowSize: number
+): HaarFeatureStep {
+  const regions = getHaarTemplateRegions(templateType, windowSize);
+  const integralImage = computeIntegralImage(image);
+
+  const regionSums = regions.map(region => {
+    const sum = rectSumByIntegral(integralImage, x + region.x, y + region.y, region.width, region.height);
+    return { ...region, sum };
+  });
+
+  const blackSum = regionSums
+    .filter(region => region.tone === 'black')
+    .reduce((total, region) => total + region.sum, 0);
+  const whiteSum = regionSums
+    .filter(region => region.tone === 'white')
+    .reduce((total, region) => total + region.sum, 0);
+
+  return {
+    x,
+    y,
+    regions: regionSums,
+    featureValue: blackSum - whiteSum,
+  };
+}`;
+
+const LBP_CODE_TS = `export function getLBPVectorStep(
+  image: number[][],
+  x: number,
+  y: number,
+  windowSize = 16,
+  cellSize = 4
+): LBPVectorStep {
+  const cellsPerSide = windowSize / cellSize;
+  const selectedCellX = Math.floor(cellsPerSide / 2);
+  const selectedCellY = Math.floor(cellsPerSide / 2);
+  const histogram = Array.from({ length: 256 }, () => 0);
+
+  for (let row = 0; row < cellSize; row++) {
+    for (let col = 0; col < cellSize; col++) {
+      const px = x + selectedCellX * cellSize + col;
+      const py = y + selectedCellY * cellSize + row;
+      const lbp = getLBPWindow(image, px, py).decimalValue;
+      histogram[lbp] += 1;
+    }
+  }
+
+  return {
+    vectorLength: cellsPerSide * cellsPerSide * 256,
+    histogram: histogram.map(count => count / (cellSize * cellSize)),
+  };
+}`;
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function grayByte(value: number): number {
+  return Math.round(Math.max(0, Math.min(1, value)) * 255);
+}
+
+function formatNumber(value: number): string {
+  return Number.isInteger(value) ? value.toString() : value.toFixed(2);
+}
+
+function buildHaarValueFormula(step: HaarFeatureStep): string {
+  return buildInlineMathML(`
+    <mrow>
+      <mi>V</mi><mo>=</mo>
+      <munder><mo>&#8721;</mo><mtext>黑区</mtext></munder><mi>p</mi>
+      <mo>-</mo>
+      <munder><mo>&#8721;</mo><mtext>白区</mtext></munder><mi>p</mi>
+      <mo>=</mo><mn>${step.blackSum}</mn><mo>-</mo><mn>${step.whiteSum}</mn>
+      <mo>=</mo><mn>${step.featureValue}</mn>
+    </mrow>
+  `);
+}
+
+function buildIntegralFormula(region: HaarFeatureStep['integralRegions'][number]): string {
+  const { a, b, c, d } = region.corners;
+
+  return buildInlineMathML(`
+    <mrow>
+      <mi>S</mi><mo>=</mo><mi>D</mi><mo>-</mo><mi>C</mi><mo>-</mo><mi>B</mi><mo>+</mo><mi>A</mi>
+      <mo>=</mo><mn>${d}</mn><mo>-</mo><mn>${c}</mn><mo>-</mo><mn>${b}</mn><mo>+</mo><mn>${a}</mn>
+      <mo>=</mo><mn>${region.sum}</mn>
+    </mrow>
+  `);
+}
+
+function buildLBPCodeFormula(step: LBPVectorStep): string {
+  const pattern = step.selectedCell.samplePixel.binaryPattern;
+  const terms = pattern
+    .map((bit, index) => ({ bit, value: bit * 2 ** index, index }))
+    .filter(term => term.bit === 1);
+  const expression = terms.length > 0
+    ? terms.map(term => `<mn>${term.value}</mn>`).join('<mo>+</mo>')
+    : '<mn>0</mn>';
+
+  return buildInlineMathML(`
+    <mrow>
+      <mi>LBP</mi><mo>=</mo>
+      <munderover><mo>&#8721;</mo><mrow><mi>p</mi><mo>=</mo><mn>1</mn></mrow><mn>8</mn></munderover>
+      <msub><mi>b</mi><mi>p</mi></msub><msup><mn>2</mn><mrow><mi>p</mi><mo>-</mo><mn>1</mn></mrow></msup>
+      <mo>=</mo>${expression}
+      <mo>=</mo><mn>${step.selectedCell.samplePixel.decimalValue}</mn>
+    </mrow>
+  `);
+}
+
+function buildLBPHistogramFormula(step: LBPVectorStep): string {
+  const topBin = step.selectedCell.nonZeroBins[0];
+  const bin = topBin?.bin ?? 0;
+  const count = topBin?.count ?? 0;
+
+  return buildInlineMathML(`
+    <mrow>
+      <msub><mi>h</mi><mn>${step.selectedCell.index + 1}</mn></msub>
+      <mo>(</mo><mn>${bin}</mn><mo>)</mo>
+      <mo>=</mo>
+      <mfrac><mrow><mtext>bin </mtext><mn>${bin}</mn><mtext> 的像素数</mtext></mrow><mrow><mtext>cell 像素数</mtext></mrow></mfrac>
+      <mo>=</mo><mfrac><mn>${count}</mn><mn>${step.cellSize * step.cellSize}</mn></mfrac>
+      <mo>=</mo><mn>${formatNumber(count / (step.cellSize * step.cellSize))}</mn>
+    </mrow>
+  `);
+}
+
+function buildVectorFormula(step: LBPVectorStep): string {
+  return buildInlineMathML(`
+    <mrow>
+      <mi>dim</mi><mo>(</mo><mi>v</mi><mo>)</mo>
+      <mo>=</mo><mtext>cell 数</mtext><mo>&#x00D7;</mo><mn>256</mn>
+      <mo>=</mo><mn>${step.cellsPerSide}</mn><mo>&#x00D7;</mo><mn>${step.cellsPerSide}</mn><mo>&#x00D7;</mo><mn>256</mn>
+      <mo>=</mo><mn>${step.vectorLength}</mn>
+    </mrow>
+  `);
+}
+
+function getRegionTone(regions: HaarRegionResult[], x: number, y: number): 'black' | 'white' | null {
+  const blackRegion = regions.find(region =>
+    region.tone === 'black' &&
+    x >= region.x &&
+    x < region.x + region.width &&
+    y >= region.y &&
+    y < region.y + region.height
+  );
+
+  if (blackRegion) return 'black';
+
+  const whiteRegion = regions.find(region =>
+    region.tone === 'white' &&
+    x >= region.x &&
+    x < region.x + region.width &&
+    y >= region.y &&
+    y < region.y + region.height
+  );
+
+  return whiteRegion ? 'white' : null;
+}
+
+function HaarWindowMatrix({ step }: { step: HaarFeatureStep }) {
+  return (
+    <div
+      className="grid gap-1"
+      style={{ gridTemplateColumns: `repeat(${step.windowSize}, minmax(0, 1fr))` }}
+    >
+      {step.inputRegion.map((row, rowIndex) =>
+        row.map((value, colIndex) => {
+          const tone = getRegionTone(step.regions, colIndex, rowIndex);
+          const toneClass = tone === 'black'
+            ? 'border-slate-800 bg-slate-800 text-white'
+            : tone === 'white'
+              ? 'border-slate-300 bg-white text-slate-800'
+              : 'border-slate-200 bg-slate-50 text-slate-700';
+
+          return (
+            <div
+              key={`haar-cell-${rowIndex}-${colIndex}`}
+              className={`flex h-8 w-8 items-center justify-center rounded border font-mono text-[10px] font-semibold ${toneClass}`}
+            >
+              {grayByte(value)}
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+function IntegralMatrix({ matrix, x, y, windowSize }: { matrix: GrayscaleImage; x: number; y: number; windowSize: number }) {
+  return (
+    <div
+      className="grid gap-1"
+      style={{ gridTemplateColumns: `repeat(${windowSize}, minmax(0, 1fr))` }}
+    >
+      {Array.from({ length: windowSize }, (_, row) =>
+        Array.from({ length: windowSize }, (_, col) => {
+          const value = matrix[y + row]?.[x + col] ?? 0;
+
+          return (
+            <div
+              key={`integral-cell-${row}-${col}`}
+              className="flex h-8 w-12 items-center justify-center rounded border border-emerald-200 bg-emerald-50 font-mono text-[9px] font-semibold text-emerald-800"
+            >
+              {value}
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+function LBPWindowMatrix({ step }: { step: LBPVectorStep }) {
+  const sample = step.selectedCell.samplePixel;
+
+  return (
+    <div className="space-y-2">
+      <div className="grid w-max grid-cols-3 gap-1">
+        {sample.values.map((row, rowIndex) =>
+          row.map((value, colIndex) => {
+            const isCenter = rowIndex === 1 && colIndex === 1;
+
+            return (
+              <div
+                key={`lbp-sample-${rowIndex}-${colIndex}`}
+                className={`flex h-8 w-8 items-center justify-center rounded border font-mono text-[10px] font-semibold ${
+                  isCenter
+                    ? 'border-red-400 bg-red-50 text-red-700'
+                    : 'border-slate-200 bg-white text-slate-700'
+                }`}
+              >
+                {grayByte(value)}
+              </div>
+            );
+          })
+        )}
+      </div>
+      <div className="flex flex-wrap gap-1">
+        {sample.binaryPattern.map((bit, index) => (
+          <span
+            key={`lbp-bit-${index}`}
+            className={`inline-flex h-7 w-7 items-center justify-center rounded font-mono text-[10px] font-semibold ${
+              bit === 1 ? 'bg-amber-200 text-amber-800' : 'bg-slate-200 text-slate-500'
+            }`}
+          >
+            {bit}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function NonZeroHistogram({ step }: { step: LBPVectorStep }) {
+  const maxCount = Math.max(1, ...step.selectedCell.nonZeroBins.map(item => item.count));
+
+  return (
+    <div className="space-y-2">
+      {step.selectedCell.nonZeroBins.slice(0, 8).map(item => (
+        <div key={`hist-${item.bin}`} className="grid grid-cols-[3rem_minmax(0,1fr)_4.5rem] items-center gap-2 text-xs">
+          <span className="font-mono text-slate-600">{item.bin}</span>
+          <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+            <div
+              className="h-full rounded-full bg-sky-500"
+              style={{ width: `${(item.count / maxCount) * 100}%` }}
+            />
+          </div>
+          <span className="font-mono text-slate-600">
+            {item.count}/{step.cellSize * step.cellSize}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function HaarLbpFeatureVectorPage() {
   const [mode, setMode] = useState<StudyMode>('haar-template');
-  const [haarSubType, setHaarSubType] = useState<HaarSubType>('edge');
+  const [haarTemplateType, setHaarTemplateType] = useState<HaarTemplateType>('edge');
+  const [haarImageType, setHaarImageType] = useState<ConvolutionTeachingImageType>('edge12');
+  const [currentPosition, setCurrentPosition] = useState({ x: 0, y: 0 });
+
+  const textureImage = useMemo(() => generateTextureTestImage(), []);
+  const haarImage = convolutionTeachingImages[haarImageType].image ?? convolutionTeachingImages.edge12.image ?? [];
+  const originalImage = mode === 'lbp-vector' ? textureImage : haarImage;
+  const windowSize = mode === 'lbp-vector' ? LBP_WINDOW_SIZE : HAAR_WINDOW_SIZE;
+  const inputWidth = originalImage[0]?.length ?? 0;
+  const inputHeight = originalImage.length;
+  const validWidth = Math.max(0, inputWidth - windowSize + 1);
+  const validHeight = Math.max(0, inputHeight - windowSize + 1);
+  const safePosition = {
+    x: validWidth > 0 ? clamp(currentPosition.x, 0, validWidth - 1) : 0,
+    y: validHeight > 0 ? clamp(currentPosition.y, 0, validHeight - 1) : 0,
+  };
+
+  const haarStep = useMemo(() => {
+    if (mode === 'lbp-vector') return null;
+    return getHaarFeatureStep(haarImage, safePosition.x, safePosition.y, haarTemplateType, HAAR_WINDOW_SIZE);
+  }, [haarImage, haarTemplateType, mode, safePosition.x, safePosition.y]);
+
+  const lbpStep = useMemo(() => {
+    if (mode !== 'lbp-vector') return null;
+    return getLBPVectorStep(textureImage, safePosition.x, safePosition.y, LBP_WINDOW_SIZE, LBP_CELL_SIZE);
+  }, [mode, safePosition.x, safePosition.y, textureImage]);
+
+  const resultImage = useMemo<GrayscaleImage>(() => {
+    if (mode === 'lbp-vector') return lbpStep?.lbpImage ?? [];
+    return computeHaarResponseMap(haarImage, haarTemplateType, HAAR_WINDOW_SIZE);
+  }, [haarImage, haarTemplateType, lbpStep, mode]);
+
+  const resultWidth = resultImage[0]?.length ?? 0;
+  const resultHeight = resultImage.length;
+  const samplePixel = lbpStep?.selectedCell.samplePixel;
+  const displayCurrentStep = mode === 'lbp-vector' && samplePixel
+    ? {
+        x: samplePixel.x,
+        y: samplePixel.y,
+        kernelSize: LBP_WINDOW_SIZE,
+        regionX: lbpStep.x,
+        regionY: lbpStep.y,
+        regionWidth: LBP_WINDOW_SIZE,
+        regionHeight: LBP_WINDOW_SIZE,
+      }
+    : haarStep
+      ? {
+          x: haarStep.x,
+          y: haarStep.y,
+          kernelSize: HAAR_WINDOW_SIZE,
+          regionX: haarStep.x,
+          regionY: haarStep.y,
+          regionWidth: HAAR_WINDOW_SIZE,
+          regionHeight: HAAR_WINDOW_SIZE,
+        }
+      : null;
+  const currentStepIndex = validWidth > 0 ? safePosition.y * validWidth + safePosition.x : 0;
+  const totalSteps = validWidth * validHeight;
+
+  const handleDirectionMove = useGridNavigation({
+    current: safePosition,
+    bounds: { width: validWidth, height: validHeight },
+    onMove: setCurrentPosition,
+    disabled: validWidth === 0 || validHeight === 0,
+  });
+
+  const resetPosition = useCallback(() => {
+    setCurrentPosition({ x: 0, y: 0 });
+  }, []);
 
   const handleModeChange = useCallback((value: string) => {
     setMode(value as StudyMode);
-  }, []);
+    resetPosition();
+  }, [resetPosition]);
 
-  const handleHaarSubChange = useCallback((value: string) => {
-    setHaarSubType(value as HaarSubType);
-  }, []);
+  const handleTemplateChange = useCallback((value: string) => {
+    setHaarTemplateType(value as HaarTemplateType);
+    resetPosition();
+  }, [resetPosition]);
 
-  // ========================================
-  // mainVisual
-  // ========================================
+  const handleHaarImageChange = useCallback((value: string) => {
+    setHaarImageType(value as ConvolutionTeachingImageType);
+    resetPosition();
+  }, [resetPosition]);
 
-  const mainVisual = useMemo(() => {
-    switch (mode) {
-      case 'haar-template': {
-        const items = haarSubType === 'edge' ? HAAR_EDGE_ITEMS
-          : haarSubType === 'line' ? HAAR_LINE_ITEMS
-          : haarSubType === 'point' ? HAAR_POINT_ITEMS
-          : HAAR_DIAGONAL_ITEMS;
-        return (
-          <div className="flex flex-col items-center gap-4 py-2">
-            <div className="max-w-lg rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200">
-              <img
-                src={items[0].img}
-                alt={items[0].desc}
-                className="w-full max-w-sm rounded-lg object-cover"
-              />
-            </div>
-            {items.length > 1 && (
-              <div className="grid w-full max-w-lg grid-cols-2 gap-2">
-                {items.map((item, idx) => (
-                  <div
-                    key={idx}
-                    className="overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-slate-100"
-                  >
-                    <img
-                      src={item.img}
-                      alt={item.desc}
-                      className="w-full object-cover"
-                    />
-                    <div className="px-2 py-1 text-[10px] font-medium text-slate-600">
-                      {item.desc}
+  const handleInputRegionSelect = useCallback((x: number, y: number) => {
+    if (validWidth === 0 || validHeight === 0) return;
+    setCurrentPosition({
+      x: clamp(x, 0, validWidth - 1),
+      y: clamp(y, 0, validHeight - 1),
+    });
+  }, [validHeight, validWidth]);
+
+  const handleOutputPixelSelect = useCallback((x: number, y: number) => {
+    if (mode === 'lbp-vector') {
+      setCurrentPosition({
+        x: clamp(x - LBP_SAMPLE_OFFSET, 0, validWidth - 1),
+        y: clamp(y - LBP_SAMPLE_OFFSET, 0, validHeight - 1),
+      });
+      return;
+    }
+
+    setCurrentPosition({
+      x: clamp(x, 0, validWidth - 1),
+      y: clamp(y, 0, validHeight - 1),
+    });
+  }, [mode, validHeight, validWidth]);
+
+  const visualOverlayPaths = useMemo<AnchoredOverlayPath[]>(() => {
+    if (!displayCurrentStep) return [];
+
+    return [
+      {
+        id: 'haar-lbp-input-window',
+        tone: 'red',
+        from: {
+          kind: 'region',
+          selector: '.conv-anchor-input-main',
+          x: displayCurrentStep.regionX ?? displayCurrentStep.x,
+          y: displayCurrentStep.regionY ?? displayCurrentStep.y,
+          size: displayCurrentStep.kernelSize,
+          imageWidth: inputWidth,
+          imageHeight: inputHeight,
+        },
+        to: { kind: 'element', selector: '.haar-lbp-anchor-window' },
+      },
+      {
+        id: 'haar-lbp-output',
+        tone: 'emerald',
+        from: {
+          kind: 'pixel',
+          selector: '.conv-anchor-output-main',
+          x: displayCurrentStep.x,
+          y: displayCurrentStep.y,
+          imageWidth: resultWidth,
+          imageHeight: resultHeight,
+        },
+        to: { kind: 'element', selector: '.haar-lbp-anchor-result' },
+      },
+    ];
+  }, [displayCurrentStep, inputHeight, inputWidth, resultHeight, resultWidth]);
+
+  const analysisPreview = useMemo(() => {
+    if ((mode === 'haar-template' || mode === 'haar-integral') && haarStep) {
+      const firstRegion = haarStep.integralRegions[0];
+
+      return (
+        <ProcessRail>
+          <FlowColumns>
+            <FlowColumn align="start">
+              <FlowNode tone="red" className="haar-lbp-anchor-window">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <span className="text-[11px] font-semibold uppercase text-red-700">检测窗口</span>
+                  <span className="font-mono text-[11px] text-red-600">
+                    ({haarStep.x}, {haarStep.y}) / {HAAR_WINDOW_SIZE}x{HAAR_WINDOW_SIZE}
+                  </span>
+                </div>
+                <HaarWindowMatrix step={haarStep} />
+              </FlowNode>
+            </FlowColumn>
+
+            <FlowColumn align="center">
+              <FlowNode tone="amber">
+                <div className="mb-2 text-[11px] font-semibold uppercase text-amber-800">
+                  {mode === 'haar-integral' ? '积分图四角求和' : HAAR_TEMPLATE_LABELS[haarTemplateType]}
+                </div>
+                {mode === 'haar-integral' && firstRegion ? (
+                  <div className="space-y-2 text-xs text-amber-800">
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="rounded-lg border border-amber-200 bg-white px-2 py-1">A={firstRegion.corners.a}</span>
+                      <span className="rounded-lg border border-amber-200 bg-white px-2 py-1">B={firstRegion.corners.b}</span>
+                      <span className="rounded-lg border border-amber-200 bg-white px-2 py-1">C={firstRegion.corners.c}</span>
+                      <span className="rounded-lg border border-amber-200 bg-white px-2 py-1">D={firstRegion.corners.d}</span>
                     </div>
+                    <p className="leading-5">用四个积分值直接得到第一个矩形区域和：{firstRegion.sum}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 text-xs leading-5 text-amber-800">
+                    <p>{HAAR_TEMPLATE_NOTES[haarTemplateType]}</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <span className="rounded-lg border border-slate-300 bg-slate-800 px-2 py-1 text-white">黑区求和</span>
+                      <span className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-slate-700">白区求和</span>
+                    </div>
+                  </div>
+                )}
+              </FlowNode>
+            </FlowColumn>
+
+            <FlowColumn align="end">
+              <FlowNode tone="emerald" className="haar-lbp-anchor-result">
+                <div className="mb-2 text-[11px] font-semibold uppercase text-emerald-700">当前响应</div>
+                <div className="grid gap-2 text-xs">
+                  <div className="rounded-xl border border-emerald-200 bg-white px-3 py-2">
+                    <div className="text-[10px] text-emerald-600">黑区和 - 白区和</div>
+                    <div className="font-mono text-lg font-bold text-emerald-800">
+                      {haarStep.blackSum} - {haarStep.whiteSum} = {haarStep.featureValue}
+                    </div>
+                  </div>
+                  <p className="leading-5 text-slate-500">
+                    右侧结果图显示各个滑动窗口的 Haar 响应强度，绿框对应当前窗口。
+                  </p>
+                </div>
+              </FlowNode>
+            </FlowColumn>
+          </FlowColumns>
+        </ProcessRail>
+      );
+    }
+
+    if (mode === 'lbp-vector' && lbpStep) {
+      return (
+        <ProcessRail>
+          <FlowColumns>
+            <FlowColumn align="start">
+              <FlowNode tone="red" className="haar-lbp-anchor-window">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <span className="text-[11px] font-semibold uppercase text-red-700">检测窗口</span>
+                  <span className="font-mono text-[11px] text-red-600">
+                    {LBP_WINDOW_SIZE}x{LBP_WINDOW_SIZE}
+                  </span>
+                </div>
+                <ImageCanvas
+                  image={lbpStep.inputRegion}
+                  maxDisplaySize={150}
+                  showGrid
+                  selectedRegion={{
+                    x: lbpStep.selectedCell.x,
+                    y: lbpStep.selectedCell.y,
+                    size: lbpStep.selectedCell.size,
+                  }}
+                />
+                <p className="mt-2 text-xs leading-5 text-red-700">
+                  红框窗口被划分为 {lbpStep.cellsPerSide}x{lbpStep.cellsPerSide} 个 cell，当前展开中心 cell。
+                </p>
+              </FlowNode>
+            </FlowColumn>
+
+            <FlowColumn align="center">
+              <FlowNode tone="amber">
+                <div className="mb-2 text-[11px] font-semibold uppercase text-amber-800">3x3 LBP 编码</div>
+                <LBPWindowMatrix step={lbpStep} />
+                <p className="mt-2 text-xs leading-5 text-amber-800">
+                  当前采样像素 ({lbpStep.selectedCell.samplePixel.x}, {lbpStep.selectedCell.samplePixel.y})
+                  的 LBP 值为 {lbpStep.selectedCell.samplePixel.decimalValue}。
+                </p>
+              </FlowNode>
+            </FlowColumn>
+
+            <FlowColumn align="end">
+              <FlowNode tone="emerald" className="haar-lbp-anchor-result">
+                <div className="mb-2 text-[11px] font-semibold uppercase text-emerald-700">cell 直方图</div>
+                <NonZeroHistogram step={lbpStep} />
+                <p className="mt-2 text-xs leading-5 text-emerald-700">
+                  非零 bin 共 {lbpStep.selectedCell.nonZeroBins.length} 个；所有 cell 直方图串联后为 {lbpStep.vectorLength} 维。
+                </p>
+              </FlowNode>
+            </FlowColumn>
+          </FlowColumns>
+        </ProcessRail>
+      );
+    }
+
+    return <div className="py-8 text-center text-slate-400">加载中...</div>;
+  }, [haarStep, haarTemplateType, lbpStep, mode]);
+
+  const stepDetails = useMemo(() => {
+    if ((mode === 'haar-template' || mode === 'haar-integral') && haarStep) {
+      return (
+        <div className="space-y-5">
+          <TeachingCard>
+            <h2 className="mb-3 text-sm font-semibold text-slate-800">
+              {mode === 'haar-integral' ? 'Haar 特征与积分图' : 'Haar 模板响应'}
+            </h2>
+            <p className="text-xs leading-6 text-slate-600">
+              Haar-like 特征把检测窗口切成黑白矩形区域，用黑色区域灰度和减去白色区域灰度和得到一个标量特征。
+              积分图把任意矩形求和转化为四个角点的加减，因此适合大量滑动窗口扫描。
+            </p>
+          </TeachingCard>
+
+          <FormulaCard
+            label="Haar 特征值当前代入"
+            mathML={buildHaarValueFormula(haarStep)}
+            note={`当前模板为 ${HAAR_TEMPLATE_LABELS[haarTemplateType]}，窗口左上角为 (${haarStep.x}, ${haarStep.y})。`}
+          />
+
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+            <TeachingCard>
+              <h3 className="mb-3 text-sm font-semibold text-slate-800">区域求和</h3>
+              <div className="space-y-2">
+                {haarStep.regions.map((region, index) => (
+                  <div
+                    key={`region-sum-${index}`}
+                    className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-xs ${
+                      region.tone === 'black'
+                        ? 'border-slate-700 bg-slate-800 text-white'
+                        : 'border-slate-200 bg-white text-slate-700'
+                    }`}
+                  >
+                    <span>
+                      {region.tone === 'black' ? '黑区' : '白区'} R{index + 1}
+                      {' '}({region.x},{region.y},{region.width}x{region.height})
+                    </span>
+                    <span className="font-mono font-semibold">{region.sum}</span>
                   </div>
                 ))}
               </div>
-            )}
-          </div>
-        );
-      }
-      case 'haar-integral':
-        return (
-          <div className="flex flex-col items-center gap-6 py-2">
-            <div className="max-w-lg rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200">
-              <div className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-amber-600">
-                Haar 特征值计算
-              </div>
-              <div className="flex gap-3">
-                <img
-                  src="/assets/haar-lbp-feature-vector/haar-feature-value-x2.jpg"
-                  alt="Haar x2"
-                  className="w-1/2 rounded-lg object-cover"
-                />
-                <img
-                  src="/assets/haar-lbp-feature-vector/haar-feature-value-y2.jpg"
-                  alt="Haar y2"
-                  className="w-1/2 rounded-lg object-cover"
-                />
-              </div>
-            </div>
-            <div className="max-w-lg rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200">
-              <div className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-emerald-600">
-                积分图
-              </div>
-              <img
-                src="/assets/haar-lbp-feature-vector/haar-integral-image.jpg"
-                alt="积分图"
-                className="w-full max-w-sm rounded-lg object-cover"
-              />
-            </div>
-          </div>
-        );
-      case 'lbp-vector':
-        return (
-          <div className="flex flex-col items-center gap-4 py-2">
-            <ProcessRail>
-              <FlowColumns>
-                <FlowColumn align="start">
-                  <FlowNode tone="red">
-                    <div className="text-[11px] font-semibold text-red-700">划分 cell</div>
-                    <div className="mt-1 text-[10px] leading-4 text-red-600">
-                      检测窗口划分为 16x16 的单元格
-                    </div>
-                  </FlowNode>
-                </FlowColumn>
-                <FlowColumn align="center">
-                  <FlowNode tone="amber">
-                    <div className="text-[11px] font-semibold text-amber-800">计算 LBP 值</div>
-                    <div className="mt-1 text-[10px] leading-4 text-amber-700">
-                      每个像素与 8 邻域比较，得到二进制编码
-                    </div>
-                  </FlowNode>
-                </FlowColumn>
-                <FlowColumn align="center">
-                  <FlowNode tone="sky">
-                    <div className="text-[11px] font-semibold text-sky-700">统计直方图</div>
-                    <div className="mt-1 text-[10px] leading-4 text-sky-700">
-                      对每个 cell 的 LBP 编码值统计并归一化
-                    </div>
-                  </FlowNode>
-                </FlowColumn>
-                <FlowColumn align="end">
-                  <FlowNode tone="emerald">
-                    <div className="text-[11px] font-semibold text-emerald-700">串联特征向量</div>
-                    <div className="mt-1 text-[10px] leading-4 text-emerald-700">
-                      所有 cell 直方图连接为窗口级向量
-                    </div>
-                  </FlowNode>
-                </FlowColumn>
-              </FlowColumns>
-            </ProcessRail>
-          </div>
-        );
-    }
-  }, [haarSubType, mode]);
+            </TeachingCard>
 
-  // ========================================
-  // analysisPreview
-  // ========================================
-
-  const analysisPreview = useMemo(() => {
-    switch (mode) {
-      case 'haar-template': {
-        const section = HAAR_SUB_SECTIONS[haarSubType];
-        return (
-          <ProcessRail>
-            <FlowColumns>
-              <FlowColumn align="start">
-                <FlowNode tone="red">
-                  <div className="text-[11px] font-semibold uppercase text-red-700">Haar 特征模板</div>
-                  <p className="mt-2 text-xs leading-5 text-slate-600">
-                    {section.title}：模板覆盖在检测窗口上，将区域划分为黑色和白色两部分。
-                  </p>
-                </FlowNode>
-              </FlowColumn>
-              <FlowColumn align="center">
-                <FlowNode tone="sky">
-                  <div className="text-[11px] font-semibold uppercase text-sky-700">区域求和</div>
-                  <p className="mt-2 text-xs leading-5 text-sky-700">
-                    分别计算黑色区域和白色区域内所有像素的灰度值之和。
-                  </p>
-                </FlowNode>
-              </FlowColumn>
-              <FlowColumn align="end">
-                <FlowNode tone="emerald">
-                  <div className="text-[11px] font-semibold uppercase text-emerald-700">特征值</div>
-                  <p className="mt-2 text-xs leading-5 text-emerald-700">
-                    黑区灰度和 - 白区灰度和，得到一个标量特征值。
-                  </p>
-                </FlowNode>
-              </FlowColumn>
-            </FlowColumns>
-          </ProcessRail>
-        );
-      }
-      case 'haar-integral':
-        return (
-          <ProcessRail>
-            <FlowColumns>
-              <FlowColumn align="start">
-                <FlowNode tone="red">
-                  <div className="text-[11px] font-semibold uppercase text-red-700">积分图</div>
-                  <p className="mt-2 text-xs leading-5 text-slate-600">
-                    计算原图的积分图，任意点 (i,j) 的值等于左上角区域灰度和。
-                  </p>
-                </FlowNode>
-              </FlowColumn>
-              <FlowColumn align="center">
-                <FlowNode tone="amber">
-                  <div className="text-[11px] font-semibold uppercase text-amber-800">矩形和公式</div>
-                  <p className="mt-2 text-xs leading-5 text-amber-700">
-                    S_ABCD = D - C - B + A，仅需 4 次加减运算。
-                  </p>
-                </FlowNode>
-              </FlowColumn>
-              <FlowColumn align="end">
-                <FlowNode tone="emerald">
-                  <div className="text-[11px] font-semibold uppercase text-emerald-700">快速计算</div>
-                  <p className="mt-2 text-xs leading-5 text-emerald-700">
-                    任意矩形区域的灰度和可在常数时间内求出，大幅加速 Haar 特征计算。
-                  </p>
-                </FlowNode>
-              </FlowColumn>
-            </FlowColumns>
-          </ProcessRail>
-        );
-      case 'lbp-vector':
-        return (
-          <ProcessRail>
-            <FlowColumns>
-              <FlowColumn align="start">
-                <FlowNode tone="red">
-                  <div className="text-[11px] font-semibold uppercase text-red-700">cell 划分</div>
-                  <p className="mt-2 text-xs leading-5 text-slate-600">
-                    检测窗口分为 16x16 像素的 cell，每个 cell 独立处理。
-                  </p>
-                </FlowNode>
-              </FlowColumn>
-              <FlowColumn align="center">
-                <FlowNode tone="amber">
-                  <div className="text-[11px] font-semibold uppercase text-amber-800">LBP 编码</div>
-                  <p className="mt-2 text-xs leading-5 text-amber-700">
-                    每个像素与 8 邻域比较，将比较结果按位编码为 0~255 的十进制数。
-                  </p>
-                </FlowNode>
-              </FlowColumn>
-              <FlowColumn align="center">
-                <FlowNode tone="sky">
-                  <div className="text-[11px] font-semibold uppercase text-sky-700">直方图串联</div>
-                  <p className="mt-2 text-xs leading-5 text-sky-700">
-                    cell 直方图归一化后串联为窗口特征向量，输入分类器进行目标检测。
-                  </p>
-                </FlowNode>
-              </FlowColumn>
-              <FlowColumn align="end">
-                <FlowNode tone="emerald">
-                  <div className="text-[11px] font-semibold uppercase text-emerald-700">特征向量</div>
-                  <p className="mt-2 text-xs leading-5 text-emerald-700">
-                    若窗口含 10x8 个 cell，每个 cell 直方图 256 维，则特征向量为 10x8x256 = 20480 维。
-                  </p>
-                </FlowNode>
-              </FlowColumn>
-            </FlowColumns>
-          </ProcessRail>
-        );
-    }
-  }, [haarSubType, mode]);
-
-  // ========================================
-  // stepDetails
-  // ========================================
-
-  const stepDetails = useMemo(() => {
-    switch (mode) {
-      case 'haar-template': {
-        const section = HAAR_SUB_SECTIONS[haarSubType];
-        return (
-          <div className="space-y-6">
             <TeachingCard>
-              <h2 className="mb-3 text-sm font-semibold text-slate-800">Haar-like 特征</h2>
-              <p className="text-xs leading-6 text-slate-600">
-                Haar-like 特征是一种基于矩形区域灰度差值的特征描述方法，由 Viola 和 Jones
-                提出并广泛应用于人脸检测。常用的 Haar-like 特征包括边缘特征（4 种）、
-                线特征（8 种）、点特征（2 种）和对角线特征（1 种），共计 15 种基本模板。
+              <h3 className="mb-3 text-sm font-semibold text-slate-800">当前窗口矩阵</h3>
+              <HaarWindowMatrix step={haarStep} />
+              <p className="mt-3 text-xs leading-5 text-slate-600">
+                矩阵值为 0~255 灰度值。深色格属于黑区，白色格属于白区，所有显示数值都参与当前特征值计算。
               </p>
             </TeachingCard>
-            <div className="border-t border-slate-200 pt-5">
-              <h2 className="mb-3 text-sm font-semibold text-slate-800">{section.title}</h2>
-              <p className="mb-4 text-xs leading-6 text-slate-600">{section.description}</p>
-              <FormulaCard
-                label="Haar 特征值公式"
-                mathML={section.formulaMathML}
-                note="黑色区域像素值与白色区域像素值之差构成该模板的特征值。"
-              />
-            </div>
           </div>
-        );
-      }
-      case 'haar-integral':
-        return (
-          <div className="space-y-6">
-            <TeachingCard>
-              <h2 className="mb-3 text-sm font-semibold text-slate-800">Haar 特征值</h2>
-              <p className="text-xs leading-6 text-slate-600">
-                每一种 Haar-like 特征的计算方式相同：黑色填充区域的像素值之和减去白色填充区域的像素值之和。
-                这一差值称为该 Haar-like 模板在当前窗口位置上的特征值。
-              </p>
-            </TeachingCard>
-            <FormulaCard
-              label="Haar 特征值"
-              mathML={FEATURE_VALUE_FORMULA}
-              note="V 表示特征值，p(i,j) 表示图像在 (i,j) 处的灰度值。"
-            />
-            <FormulaCard
-              label="特征值示例"
-              mathML={FEATURE_VALUE_CHAIN}
-              note="代入示例数值：黑色区域灰度和为 128，白色区域灰度和为 45，特征值 V = 83。"
-            />
-            <div className="border-t border-slate-200 pt-5">
-              <h2 className="mb-3 text-sm font-semibold text-slate-800">积分图</h2>
-              <p className="mb-4 text-xs leading-6 text-slate-600">
-                积分图（Integral Image）是一种快速计算图像任意矩形区域内像素和的数据结构。
-                积分图像中任意一点 n(i,j) 的值为原图像左上角到该点矩形区域内所有像素灰度值之和。
-              </p>
-              <FormulaCard
-                label="积分图定义"
-                mathML={INTEGRAL_IMAGE_FORMULA}
-                note="n(i,j) 为积分图像在 (i,j) 处的值，p(i',j') 为原图像素灰度值。"
-              />
-              <p className="mb-3 mt-4 text-xs leading-6 text-slate-600">
-                有了积分图后，任意矩形区域 ABCD 的灰度和可通过四个角点的积分图值快速计算：
-              </p>
-              <FormulaCard
-                label="矩形区域快速求和"
-                mathML={FOUR_CORNER_FORMULA}
-                note="A、B、C、D 分别为矩形区域的左上、右上、左下、右下四个角点。仅需 4 次加减运算即可得到任意矩形和。"
-              />
+
+          {mode === 'haar-integral' && (
+            <div className="space-y-4 border-t border-slate-200 pt-5">
               <TeachingCard>
-                <p className="text-xs leading-6 text-slate-700">
-                  <span className="font-semibold text-emerald-700">加速原理：</span>
-                  直接计算矩形区域像素和需要遍历区域内每个像素，时间复杂度为 O(宽 x 高)。
-                  利用积分图后，任意矩形和的查询降至 O(1)，这对于需要大量窗口滑动计算的
-                  Haar 特征提取至关重要。
+                <h3 className="mb-3 text-sm font-semibold text-slate-800">积分图局部矩阵</h3>
+                <div className="overflow-x-auto">
+                  <IntegralMatrix
+                    matrix={haarStep.integralImage}
+                    x={haarStep.x}
+                    y={haarStep.y}
+                    windowSize={haarStep.windowSize}
+                  />
+                </div>
+                <p className="mt-3 text-xs leading-5 text-slate-600">
+                  每个积分值表示从原图左上角到当前位置的矩形灰度和。矩形区域求和只需要四个角点。
                 </p>
               </TeachingCard>
+
+              <div className="grid gap-4 xl:grid-cols-2">
+                {haarStep.integralRegions.map((region, index) => (
+                  <FormulaCard
+                    key={`integral-formula-${index}`}
+                    label={`R${index + 1} 矩形和`}
+                    mathML={buildIntegralFormula(region)}
+                    note={`${region.rect.tone === 'black' ? '黑区' : '白区'}矩形：局部坐标 (${region.rect.x}, ${region.rect.y})，尺寸 ${region.rect.width}x${region.rect.height}。`}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
-        );
-      case 'lbp-vector':
-        return (
-          <div className="space-y-6">
+          )}
+        </div>
+      );
+    }
+
+    if (mode === 'lbp-vector' && lbpStep) {
+      return (
+        <div className="space-y-5">
+          <TeachingCard>
+            <h2 className="mb-3 text-sm font-semibold text-slate-800">LBP 特征向量提取</h2>
+            <p className="text-xs leading-6 text-slate-600">
+              单个 LBP 编码描述一个像素的 3x3 局部纹理；LBP 特征向量则把检测窗口划分为多个 cell，
+              对每个 cell 的 LBP 编码做 256 维直方图统计，再按空间顺序串联成分类器输入。
+            </p>
+          </TeachingCard>
+
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
             <TeachingCard>
-              <h2 className="mb-3 text-sm font-semibold text-slate-800">LBP 特征向量提取</h2>
-              <p className="text-xs leading-6 text-slate-600">
-                LBP（Local Binary Pattern，局部二值模式）特征向量是对检测窗口内纹理信息的统计描述。
-                其基本思想是：将检测窗口划分为若干 cell，对每个像素计算 LBP 编码，
-                统计每个 cell 的直方图，最后将所有 cell 的直方图串联为整图的特征向量。
+              <h3 className="mb-3 text-sm font-semibold text-slate-800">当前 3x3 编码</h3>
+              <LBPWindowMatrix step={lbpStep} />
+              <p className="mt-3 text-xs leading-5 text-slate-600">
+                中心像素灰度为 {grayByte(lbpStep.selectedCell.samplePixel.center)}。
+                邻域像素大于等于中心记为 1，否则记为 0。
               </p>
             </TeachingCard>
-            <div className="border-t border-slate-200 pt-5">
-              <h2 className="mb-3 text-sm font-semibold text-slate-800">步骤一：划分 cell</h2>
-              <p className="mb-3 text-xs leading-6 text-slate-600">
-                首先将检测窗口划分为 16x16 像素的小区域（cell）。
-                每个 cell 将独立进行 LBP 统计，cell 的大小决定了特征描述的粒度。
+
+            <FormulaCard
+              label="当前 LBP 编码代入"
+              mathML={buildLBPCodeFormula(lbpStep)}
+              note="该值只是当前 cell 中一个像素的 LBP 编码，后续还要统计整个 cell 的分布。"
+            />
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+            <TeachingCard>
+              <h3 className="mb-3 text-sm font-semibold text-slate-800">当前 cell 非零直方图 bin</h3>
+              <NonZeroHistogram step={lbpStep} />
+              <p className="mt-3 text-xs leading-5 text-slate-600">
+                当前 cell 是第 {lbpStep.selectedCell.index + 1} 个 cell，
+                尺寸为 {lbpStep.cellSize}x{lbpStep.cellSize}，共有 {lbpStep.cellSize * lbpStep.cellSize} 个 LBP 编码参与统计。
               </p>
-            </div>
-            <div className="border-t border-slate-200 pt-5">
-              <h2 className="mb-3 text-sm font-semibold text-slate-800">步骤二：计算 LBP 值</h2>
-              <p className="mb-3 text-xs leading-6 text-slate-600">
-                对于 cell 中的每个像素，将其 3x3 邻域内 8 个相邻像素的灰度值与中心像素进行比较。
-                若周围像素值大于等于中心像素值，则该位置标记为 1，否则为 0。
-                8 个比较结果构成一个 8 位二进制数，转换为十进制即得到该中心像素的 LBP 值。
-              </p>
-              <FormulaCard
-                label="LBP 编码公式"
-                mathML={LBP_FORMULA}
-                note="(x_c, y_c) 为中心像素坐标；I(p_c) 为中心像素灰度值；I(p_i) 为邻域像素灰度值。"
-              />
-              <FormulaCard
-                label="阈值函数"
-                mathML={LBP_THRESHOLD}
-                note="s(x) 为符号函数；邻域灰度大于等于中心时置 1，否则置 0。"
-              />
-            </div>
-            <div className="border-t border-slate-200 pt-5">
-              <h2 className="mb-3 text-sm font-semibold text-slate-800">步骤三：直方图统计与归一化</h2>
-              <p className="mb-3 text-xs leading-6 text-slate-600">
-                对每个 cell 内的所有 LBP 编码值（0~255）进行直方图统计，然后对直方图进行归一化处理，
-                得到该 cell 的 LBP 分布特征。
-              </p>
+            </TeachingCard>
+
+            <div className="space-y-4">
               <FormulaCard
                 label="cell 直方图归一化"
-                mathML={LBP_HISTOGRAM}
-                note="h_k(b) 为第 k 个 cell 中 LBP 值为 b 的频率，即归一化后的直方图值。"
+                mathML={buildLBPHistogramFormula(lbpStep)}
+                note="这里只展开当前 cell 的一个非零 bin；完整直方图仍为 256 维。"
               />
-            </div>
-            <div className="border-t border-slate-200 pt-5">
-              <h2 className="mb-3 text-sm font-semibold text-slate-800">步骤四：串联特征向量</h2>
-              <p className="mb-3 text-xs leading-6 text-slate-600">
-                将所有 cell 的归一化直方图按照空间顺序依次连接，形成一个长向量，
-                即整幅检测窗口的 LBP 纹理特征向量。该特征向量可以直接送入 SVM、
-                级联分类器等分类器进行目标识别。
-              </p>
               <FormulaCard
-                label="特征向量串联"
-                mathML={FEATURE_VECTOR_FORMULA}
-                note="v 为最终特征向量，h_1 ~ h_N 为各 cell 的归一化直方图。若窗口大小为 160x128，cell 为 16x16，则 cell 数为 10x8=80，特征向量维度为 80x256=20480。"
+                label="窗口特征向量维度"
+                mathML={buildVectorFormula(lbpStep)}
+                note="完整向量来自所有 cell 的 256 维直方图串联，而不是单个 LBP 编码。"
               />
             </div>
-            <TeachingCard>
-              <p className="text-xs leading-6 text-slate-700">
-                <span className="font-semibold">LBP 特征向量与 LBP 编码的区别：</span>
-                LBP 编码描述的是单个像素的局部纹理信息，是一个 0~255 的数值；
-                而 LBP 特征向量是在 cell 维度上对大量 LBP 编码的统计汇总，是送到分类器中的向量。
-                与 Haar 特征相比，LBP 特征对光照变化更鲁棒（基于灰度比较而非绝对值），
-                而 Haar 特征对亮度绝对变化更敏感。
-              </p>
-            </TeachingCard>
           </div>
-        );
-    }
-  }, [haarSubType, mode]);
 
-  // ========================================
-  // parameters
-  // ========================================
+          <TeachingCard>
+            <h3 className="mb-3 text-sm font-semibold text-slate-800">向量摘要</h3>
+            <div className="flex flex-wrap gap-2">
+              {lbpStep.vectorPreview.map((value, index) => (
+                <span
+                  key={`vector-preview-${index}`}
+                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 font-mono text-[11px] text-slate-600"
+                >
+                  v[{index}]={formatNumber(value)}
+                </span>
+              ))}
+            </div>
+            <p className="mt-3 text-xs leading-5 text-slate-600">
+              摘要只显示当前 cell 直方图前 16 项，界面不直接铺开全部 {lbpStep.vectorLength} 个维度，避免遮蔽核心教学过程。
+            </p>
+          </TeachingCard>
+        </div>
+      );
+    }
+
+    return <div className="py-8 text-center text-slate-400">加载中...</div>;
+  }, [haarStep, haarTemplateType, lbpStep, mode]);
 
   const parameters = (
     <div className="space-y-4">
@@ -587,50 +791,87 @@ export default function HaarLbpFeatureVectorPage() {
         onChange={handleModeChange}
         options={MODE_OPTIONS}
       />
-      {mode === 'haar-template' && (
-        <SelectParam
-          label="特征类型"
-          value={haarSubType}
-          onChange={handleHaarSubChange}
-          options={HAAR_SUB_OPTIONS}
-        />
+
+      {mode !== 'lbp-vector' && (
+        <>
+          <SelectParam
+            label="Haar 模板类型"
+            value={haarTemplateType}
+            onChange={handleTemplateChange}
+            options={HAAR_TEMPLATE_OPTIONS}
+          />
+          <SelectParam
+            label="Haar 教学图"
+            value={haarImageType}
+            onChange={handleHaarImageChange}
+            options={HAAR_IMAGE_OPTIONS}
+          />
+        </>
       )}
+
       <div className="rounded-2xl border border-blue-200 bg-blue-50 px-3 py-3">
-        <div className="text-xs font-semibold text-blue-700">说明</div>
+        <div className="text-xs font-semibold text-blue-700">当前窗口</div>
+        <div className="mt-2 rounded-xl bg-white/80 px-3 py-2 font-mono text-sm font-semibold text-blue-800">
+          ({safePosition.x}, {safePosition.y}) / {windowSize}x{windowSize}
+        </div>
         <p className="mt-2 text-xs leading-5 text-blue-700">
-          {mode === 'haar-template' && '15 种 Haar-like 模板分别用于检测不同类型的图像特征。'}
-          {mode === 'haar-integral' && '积分图将矩形求和从 O(n^2) 降为 O(1)，是 Haar 实时计算的关键。'}
-          {mode === 'lbp-vector' && 'LBP 特征向量通过局部纹理模式统计描述窗口，对光照变化有较好鲁棒性。'}
+          {mode === 'lbp-vector'
+            ? `LBP 窗口划分为 ${LBP_WINDOW_SIZE / LBP_CELL_SIZE}x${LBP_WINDOW_SIZE / LBP_CELL_SIZE} 个 cell，中心 cell 展开统计。`
+            : '点击原图或结果图可移动滑动窗口，公式会实时更新当前 Haar 响应。'}
         </p>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-5 text-slate-600">
+        当前有效窗口数：{validWidth}x{validHeight} = {totalSteps}。
       </div>
     </div>
   );
 
-  // ========================================
-  // codeTab
-  // ========================================
-
-  const codeTabContent = useMemo(() => {
-    return mode === 'lbp-vector' ? LBP_CODE : HAAR_CODE;
-  }, [mode]);
+  const codeTabContent = mode === 'lbp-vector' ? LBP_CODE_TS : HAAR_CODE_TS;
+  const imageLabels = mode === 'lbp-vector'
+    ? { input: '纹理测试图', output: 'LBP 编码图' }
+    : { input: 'Haar 教学图', output: 'Haar 响应图' };
+  const imageHints = mode === 'lbp-vector'
+    ? {
+        input: '红框为 16x16 检测窗口，点击可移动窗口',
+        output: '绿框为当前采样像素，点击 LBP 图可反向定位窗口',
+      }
+    : {
+        input: `红框为 ${HAAR_WINDOW_SIZE}x${HAAR_WINDOW_SIZE} Haar 检测窗口`,
+        output: '绿框为当前窗口在响应图中的位置',
+      };
 
   return (
     <ConceptLayout
       title="Haar / LBP 特征向量"
       subtitle="Haar / LBP Feature Vector - 滑动窗口检测中的手工特征"
-      operationLabel={mode === 'haar-template' ? 'Haar 模板计算'
-        : mode === 'haar-integral' ? '积分图加速'
-        : 'LBP 向量提取'}
-      parameterIntro="选择学习模式，观察 Haar 特征模板、特征值计算、积分图原理或 LBP 特征向量的提取流程。"
-      mainVisual={mainVisual}
+      operationLabel={
+        mode === 'haar-template'
+          ? 'Haar 模板响应'
+          : mode === 'haar-integral'
+            ? '积分图求和'
+            : 'LBP 向量提取'
+      }
+      parameterIntro="选择 Haar 或 LBP 教学模式后，点击图像或使用方向键移动滑动窗口，观察公式和统计结果实时刷新。"
+      originalImage={originalImage}
+      resultImage={resultImage}
       parameters={parameters}
       analysisPreview={analysisPreview}
       stepDetails={stepDetails}
+      visualOverlay={visualOverlayPaths.length > 0 ? <AnchoredOverlay paths={visualOverlayPaths} /> : null}
       codeTab={<CodeViewer languages={[{ name: 'TypeScript', code: codeTabContent }]} />}
-      originalImage={null}
-      resultImage={null}
+      currentStep={displayCurrentStep}
+      currentStepLabel={mode === 'lbp-vector' ? '当前 LBP 采样像素' : '当前响应窗口'}
+      stepInfo={totalSteps > 0 ? { current: currentStepIndex, total: totalSteps } : null}
+      imageLabels={imageLabels}
+      imageHints={imageHints}
+      showOriginalGrid
+      originalRegionMarker="frame"
       singlePageScroll
+      navigationHintText="方向键移动 / 点击原图或结果图定位窗口"
+      onDirectionMove={handleDirectionMove}
+      onInputRegionSelect={handleInputRegionSelect}
+      onOutputPixelSelect={handleOutputPixelSelect}
     />
   );
 }
-

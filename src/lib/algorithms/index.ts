@@ -9,3 +9,4 @@ export * from './equalization';
 export * from './sharpening';
 export * from './cameraCalibration';
 export * from './lbpGabor';
+export * from './haarLbpFeatureVector';
