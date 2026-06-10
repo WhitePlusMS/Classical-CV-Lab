@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useCallback, useMemo, useState } from 'react';
 import {
@@ -17,7 +17,6 @@ import {
 } from '@/components';
 import { computeSiftSurf, type SiftKeypoint } from '@/lib/algorithms/siftSurf';
 import {
-  createLenaImage,
   createRectangleImage,
   createCircleImage,
 } from '@/lib/utils/sampleImages';
@@ -38,7 +37,6 @@ const TEACHING_STEPS = [
 type TeachingStepKey = (typeof TEACHING_STEPS)[number]['key'];
 
 const IMAGE_OPTIONS: { value: string; label: string }[] = [
-  { value: 'lena', label: 'Lena' },
   { value: 'rectangle', label: '矩形' },
   { value: 'circle', label: '圆形' },
 ];
@@ -227,7 +225,7 @@ function renderKeypointOverlay(
 
 export default function SiftSurfScaleFeaturesPage() {
   const [step, setStep] = useState<TeachingStepKey>('overview');
-  const [imageType, setImageType] = useState<string>('lena');
+  const [imageType, setImageType] = useState<string>('rectangle');
   const [sigma, setSigma] = useState(1.0);
   const [numScales, setNumScales] = useState(3);
   const [selectedKpIdx, setSelectedKpIdx] = useState(0);
@@ -238,7 +236,7 @@ export default function SiftSurfScaleFeaturesPage() {
     switch (imageType) {
       case 'rectangle': return createRectangleImage();
       case 'circle': return createCircleImage();
-      default: return createLenaImage();
+      default: return createRectangleImage();
     }
   }, [imageType]);
 

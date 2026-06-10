@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   CodeViewer,
   ConceptLayout,
@@ -22,14 +22,8 @@ import {
   createThresholdScene,
 } from '@/lib/algorithms/simpleBackground';
 import { GrayscaleImage } from '@/lib/algorithms/types';
-import {
-  centerCropGrayscaleImage,
-  loadImageAsGrayscale,
-  resizeGrayscaleImage,
-} from '@/lib/utils/imageProcessing';
 
 type ThresholdMethod = 'manual' | 'otsu' | 'kittler';
-type ThresholdExampleType = ThresholdSceneType | 'lena';
 
 const METHOD_OPTIONS = [
   { value: 'manual', label: '固定阈值 T' },
@@ -38,7 +32,6 @@ const METHOD_OPTIONS = [
 ] as const;
 
 const SCENE_OPTIONS = [
-  { value: 'lena', label: 'Lena 图' },
   { value: 'bimodal', label: '双峰前景' },
   { value: 'spotlight', label: '光斑目标' },
   { value: 'noisyObject', label: '含噪目标' },
@@ -407,39 +400,12 @@ function countNonZero(image: GrayscaleImage): number {
   return image.reduce((sum, row) => sum + row.filter(pixel => pixel > 0).length, 0);
 }
 
-function createFallbackImage(): GrayscaleImage {
-  return createThresholdScene('bimodal');
-}
-
 export default function ThresholdAutoThresholdPage() {
-  const [sceneType, setSceneType] = useState<ThresholdExampleType>('lena');
+  const [sceneType, setSceneType] = useState<ThresholdSceneType>('bimodal');
   const [method, setMethod] = useState<ThresholdMethod>('otsu');
   const [manualThreshold, setManualThreshold] = useState(128);
   const [outputMode, setOutputMode] = useState<ThresholdOutputMode>('binary');
-  const [lenaImage, setLenaImage] = useState<GrayscaleImage | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    loadImageAsGrayscale('/assets/lena-original.jpg')
-      .then(image => {
-        if (!cancelled) {
-          setLenaImage(resizeGrayscaleImage(centerCropGrayscaleImage(image), 128));
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setLenaImage(null);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const originalImage = useMemo(() => {
-    if (sceneType === 'lena') return lenaImage ?? createFallbackImage();
-    return createThresholdScene(sceneType);
-  }, [lenaImage, sceneType]);
+  const originalImage = useMemo(() => createThresholdScene(sceneType), [sceneType]);
 
   const otsuResult = useMemo(() => otsuThreshold(originalImage), [originalImage]);
   const kittlerResult = useMemo(() => computeKittlerGradientThreshold(originalImage), [originalImage]);
@@ -489,7 +455,7 @@ export default function ThresholdAutoThresholdPage() {
   }, []);
 
   const handleSceneChange = useCallback((value: string) => {
-    setSceneType(value as ThresholdExampleType);
+    setSceneType(value as ThresholdSceneType);
   }, []);
 
   const handleOutputModeChange = useCallback((value: string) => {
