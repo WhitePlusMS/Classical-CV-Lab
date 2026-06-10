@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AnchoredOverlay,
   type AnchoredOverlayPath,
@@ -19,7 +19,7 @@ import {
 } from '@/components';
 import {
   BackgroundModelType,
-  createBackgroundModel,
+  createBackgroundTeachingSequence,
 } from '@/lib/algorithms/simpleBackground';
 import { useGridNavigation } from '@/hooks/useGridNavigation';
 
@@ -239,8 +239,8 @@ const GAUSSIAN_INIT = buildInlineMathML(
 
 /* 单高斯模型更新 */
 const GAUSSIAN_UPDATE = buildInlineMathML(
-  '<mrow><mtable><mtr><mtd><msub><mi>μ</mi><mi>t</mi></msub><mo>=</mo><mi>α</mi><msub><mi>μ</mi><mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow></msub><mo>+</mo><mo>(</mo><mn>1</mn><mo>-</mo><mi>α</mi><mo>)</mo><msub><mi>I</mi><mi>t</mi></msub></mtd></mtr>' +
-  '<mtr><mtd><msubsup><mi>δ</mi><mi>t</mi><mn>2</mn></msubsup><mo>=</mo><mi>α</mi><msubsup><mi>δ</mi><mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow><mn>2</mn></msubsup><mo>+</mo><mo>(</mo><mn>1</mn><mo>-</mo><mi>α</mi><mo>)</mo><msup><mrow><mo>(</mo><msub><mi>I</mi><mi>t</mi></msub><mo>-</mo><msub><mi>μ</mi><mi>t</mi></msub><mo>)</mo></mrow><mn>2</mn></msup></mtd></mtr></mtable></mrow>'
+  '<mrow><mtable><mtr><mtd><msub><mi>μ</mi><mi>t</mi></msub><mo>=</mo><mo>(</mo><mn>1</mn><mo>-</mo><mi>α</mi><mo>)</mo><msub><mi>μ</mi><mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow></msub><mo>+</mo><mi>α</mi><msub><mi>I</mi><mi>t</mi></msub></mtd></mtr>' +
+  '<mtr><mtd><msubsup><mi>δ</mi><mi>t</mi><mn>2</mn></msubsup><mo>=</mo><mo>(</mo><mn>1</mn><mo>-</mo><mi>α</mi><mo>)</mo><msubsup><mi>δ</mi><mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow><mn>2</mn></msubsup><mo>+</mo><mi>α</mi><msup><mrow><mo>(</mo><msub><mi>I</mi><mi>t</mi></msub><mo>-</mo><msub><mi>μ</mi><mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow></msub><mo>)</mo></mrow><mn>2</mn></msup></mtd></mtr></mtable></mrow>'
 );
 
 /* 混合高斯概率：P(X_t) = Σ w_i·G_i */
@@ -277,6 +277,10 @@ function grayAt(image: number[][], x: number, y: number): number {
   return Math.round((image[y]?.[x] ?? 0) * 255);
 }
 
+function grayValue(value: number): number {
+  return Math.round(value * 255);
+}
+
 function countForegroundPixels(mask: number[][]): number {
   return mask.reduce(
     (total, row) => total + row.reduce((rowTotal, pixel) => rowTotal + (pixel > 0 ? 1 : 0), 0),
@@ -305,15 +309,28 @@ export default function BackgroundModelingSubtractionPage() {
   const [model, setModel] = useState<BackgroundModelType>('mean');
   const [threshold, setThreshold] = useState(58);
   const [learningRate, setLearningRate] = useState(12);
-  const [currentPosition, setCurrentPosition] = useState({ x: 30, y: 14 });
+  const [currentFrameIndex, setCurrentFrameIndex] = useState(12);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [currentPosition, setCurrentPosition] = useState({ x: 48, y: 42 });
 
   const result = useMemo(
-    () => createBackgroundModel(model, threshold, learningRate),
-    [learningRate, model, threshold]
+    () => createBackgroundTeachingSequence(model, threshold, learningRate, currentFrameIndex, currentPosition),
+    [currentFrameIndex, currentPosition, learningRate, model, threshold]
   );
   const width = result.current[0]?.length || 0;
   const height = result.current.length;
   const currentStepIndex = currentPosition.y * width + currentPosition.x;
+  const frameCount = result.frames.length;
+
+  useEffect(() => {
+    if (!isPlaying || frameCount === 0) return;
+
+    const timer = window.setInterval(() => {
+      setCurrentFrameIndex(prev => (prev + 1) % frameCount);
+    }, 650);
+
+    return () => window.clearInterval(timer);
+  }, [frameCount, isPlaying]);
 
   const handleModelChange = useCallback((value: string) => {
     setModel(value as BackgroundModelType);
@@ -328,6 +345,11 @@ export default function BackgroundModelingSubtractionPage() {
 
   const handlePixelSelect = useCallback((x: number, y: number) => {
     setCurrentPosition({ x, y });
+  }, []);
+
+  const handleFrameChange = useCallback((value: number) => {
+    setIsPlaying(false);
+    setCurrentFrameIndex(value);
   }, []);
 
   const currentGray = grayAt(result.current, currentPosition.x, currentPosition.y);
@@ -352,6 +374,47 @@ export default function BackgroundModelingSubtractionPage() {
   const decisionClassName = maskValue > 0 ? 'font-semibold text-red-600' : 'font-semibold text-emerald-600';
   const mainVisual = (
     <div className="space-y-4">
+      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-slate-800">连续帧小人运动序列</div>
+            <div className="mt-1 text-xs leading-5 text-slate-500">
+              公共序列生成器输出 {width}×{height}、{frameCount} 帧；当前显示第 {currentFrameIndex + 1} 帧。
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsPlaying(prev => !prev)}
+            className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-white"
+          >
+            {isPlaying ? '暂停' : '播放'}
+          </button>
+        </div>
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {result.frames.map((frame, index) => (
+            <button
+              key={`film-${index}`}
+              type="button"
+              onClick={() => handleFrameChange(index)}
+              className={`shrink-0 rounded-xl border px-1.5 py-1.5 transition ${
+                index === currentFrameIndex
+                  ? 'border-red-300 bg-red-50 shadow-sm'
+                  : 'border-slate-200 bg-white hover:border-slate-300'
+              }`}
+            >
+              <ImageCanvas
+                image={frame}
+                maxDisplaySize={48}
+                showGrid={false}
+              />
+              <div className="mt-1 text-center font-mono text-[10px] text-slate-500">
+                t={index + 1}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="grid gap-3 lg:grid-cols-4">
         <div className="rounded-2xl border border-red-200 bg-white px-3 py-3 shadow-sm">
           <div className="mb-2 flex items-center justify-between gap-2">
@@ -458,8 +521,9 @@ export default function BackgroundModelingSubtractionPage() {
     </div>
   );
   const analysisPreview = (
-    <ProcessRail>
-      <FlowColumns>
+    <div className="space-y-4">
+      <ProcessRail>
+        <FlowColumns>
         <FlowColumn align="start">
           <FlowNode tone="red" className="max-w-sm">
             <div className="mb-2 flex items-center justify-between gap-3">
@@ -523,8 +587,64 @@ export default function BackgroundModelingSubtractionPage() {
             </div>
           </FlowNode>
         </FlowColumn>
-      </FlowColumns>
-    </ProcessRail>
+        </FlowColumns>
+      </ProcessRail>
+
+      <TeachingCard>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-slate-800">当前像素时间序列</div>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              观察 ({currentPosition.x}, {currentPosition.y}) 在连续帧中的观测值、背景估计和前景判定。
+            </p>
+          </div>
+          <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+            当前 t = {currentFrameIndex + 1}
+          </div>
+        </div>
+        <div className="overflow-x-auto pb-1">
+          <div className="flex min-w-max items-end gap-1.5">
+            {result.pixelTimeline.map(point => (
+              <button
+                key={`timeline-${point.frameIndex}`}
+                type="button"
+                onClick={() => handleFrameChange(point.frameIndex)}
+                className={`flex w-9 flex-col items-center rounded-lg border px-1.5 py-2 ${
+                  point.frameIndex === currentFrameIndex
+                    ? 'border-red-300 bg-red-50'
+                    : 'border-slate-200 bg-white'
+                }`}
+                title={`t=${point.frameIndex + 1}`}
+              >
+                <div className="flex h-16 items-end gap-0.5">
+                  <div
+                    className="w-2 rounded-t bg-red-400"
+                    style={{ height: `${Math.max(3, point.current * 64)}px` }}
+                  />
+                  <div
+                    className="w-2 rounded-t bg-amber-400"
+                    style={{ height: `${Math.max(3, point.background * 64)}px` }}
+                  />
+                </div>
+                <div className={`mt-1 h-2 w-2 rounded-full ${point.mask > 0 ? 'bg-red-500' : 'bg-emerald-500'}`} />
+                <div className="mt-1 font-mono text-[9px] text-slate-500">{point.frameIndex + 1}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="mt-3 grid gap-2 text-xs leading-5 text-slate-600 md:grid-cols-3">
+          <div className="rounded-xl bg-red-50 px-3 py-2 text-red-700">
+            红条 I<sub>t</sub>：当前像素观测值，当前帧为 {currentGray}。
+          </div>
+          <div className="rounded-xl bg-amber-50 px-3 py-2 text-amber-800">
+            黄条 B<sub>t</sub>/μ<sub>t</sub>：背景估计，当前帧为 {backgroundGray}。
+          </div>
+          <div className="rounded-xl bg-slate-50 px-3 py-2">
+            下方圆点：红色表示该帧判为前景，绿色表示背景。
+          </div>
+        </div>
+      </TeachingCard>
+    </div>
   );
   const visualOverlayPaths = useMemo<AnchoredOverlayPath[]>(() => {
     if (width === 0 || height === 0) return [];
@@ -574,171 +694,374 @@ export default function BackgroundModelingSubtractionPage() {
   const visualOverlay = visualOverlayPaths.length > 0 ? (
     <AnchoredOverlay paths={visualOverlayPaths} />
   ) : null;
-  // ========================================
-  // stepDetails - 按课件顺序组织
-  // ========================================
-  const stepDetails = (
-    <div className="space-y-6">
+  const trainingFrames = result.frames.slice(0, Math.min(8, result.frames.length));
+  const trainingPixelValues = trainingFrames.map(frame => grayAt(frame, currentPosition.x, currentPosition.y));
+  const trainingMeanGray = trainingPixelValues.length > 0
+    ? Math.round(trainingPixelValues.reduce((sum, value) => sum + value, 0) / trainingPixelValues.length)
+    : 0;
+  const trainingBackgroundLikeCount = trainingPixelValues.filter(value => Math.abs(value - trainingMeanGray) <= threshold).length;
+  const trainingBackgroundMajority = trainingFrames.length > 0 && trainingBackgroundLikeCount > trainingFrames.length / 2;
+  const previousBackgroundImage = result.backgroundHistory[Math.max(0, currentFrameIndex - 1)] ?? result.background;
+  const previousBackgroundGray = grayAt(previousBackgroundImage, currentPosition.x, currentPosition.y);
+  const adaptiveUpdatedGray = Math.round(alphaValue * currentGray + (1 - alphaValue) * previousBackgroundGray);
+  const lowerGaussianBound = Math.max(0, backgroundGray - gaussianLimit);
+  const upperGaussianBound = Math.min(255, backgroundGray + gaussianLimit);
+  const sortedMixtureComponents = [...result.mixtureComponents].sort(
+    (a, b) => b.weight / Math.max(0.001, b.sigma) - a.weight / Math.max(0.001, a.sigma)
+  );
+  const backgroundComponentCount = sortedMixtureComponents.filter(component => component.background).length;
 
-      {/* ----- 1. 背景减除概述 ----- */}
+  const renderMeanDerivation = () => (
+    <div className="space-y-4">
       <TeachingCard>
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">背景减除法</h2>
-        <p className="text-xs leading-6 text-slate-600">
-          适用于摄像机静止情形，其关键是背景建模。典型方法包括均值模型、自适应背景模型、单高斯模型和混合高斯模型。
-        </p>
-      </TeachingCard>
-
-      {/* ----- 2. 均值模型 ----- */}
-      <div className="border-t border-slate-200 pt-5">
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">（1）均值模型</h2>
-        <p className="mb-3 text-xs leading-6 text-slate-600">
-          前提：在前 K 帧图像中，某像素点在超过一半的时间里呈现场景背景像素值。用前 K 帧的平均值作为背景估计。
-        </p>
-        <figure className="mb-4">
-          <img
-            src="/assets/simple-background/course-mean-model.jpg"
-            alt="均值模型示意图"
-            className="w-full max-w-lg rounded-xl object-cover"
-          />
-          <figcaption className="mt-2 text-xs text-slate-500">均值模型：用前 K 帧平均值近似背景</figcaption>
-        </figure>
-        <FormulaCard
-          label="背景减除判定"
-          mathML={SUBTRACTION_FORMULA}
-          note={'当前阈值 T = ' + threshold + '，当前位置差值 |I-B| = ' + diffGray + '。差值超过 T 则判为前景。'}
-        />
-      </div>
-
-      {/* ----- 3. 自适应背景模型 ----- */}
-      <div className="border-t border-slate-200 pt-5">
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">（2）自适应背景模型</h2>
-        <p className="mb-3 text-xs leading-6 text-slate-600">
-          用第一帧初始化背景 B₁(x,y) = I₁(x,y)，之后按学习率 α 持续更新，适应缓慢光照变化。默认 α = 0.03，T = 60。
-        </p>
-        <div className="mb-4 flex gap-4">
-          <figure className="flex-1">
-            <img
-              src="/assets/simple-background/course-adaptive-current.jpg"
-              alt="当前帧 k"
-              className="w-full max-w-xs rounded-xl object-cover"
-            />
-            <figcaption className="mt-2 text-xs text-slate-500">当前帧 I<sub>k</sub></figcaption>
-          </figure>
-          <figure className="flex-1">
-            <img
-              src="/assets/simple-background/course-adaptive-previous.jpg"
-              alt="前一帧背景 k-1"
-              className="w-full max-w-xs rounded-xl object-cover"
-            />
-            <figcaption className="mt-2 text-xs text-slate-500">前一帧背景 B<sub>k-1</sub></figcaption>
-          </figure>
-        </div>
-        <FormulaCard
-          label="初始化 B₁(x,y) = I₁(x,y)，之后逐帧更新："
-          mathML={ADAPTIVE_BG_FORMULA}
-          note={'当前学习率 α ≈ ' + (learningRate / 100).toFixed(2) + '，α 越大则背景更新越快。'}
-        />
-      </div>
-
-      {/* ----- 4. 单高斯模型 ----- */}
-      <div className="border-t border-slate-200 pt-5">
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">（3）单高斯模型</h2>
-        <p className="mb-3 text-xs leading-6 text-slate-600">
-          图像中每一个像素点的颜色值作为一个随机过程，假设该点的像素值出现的概率服从高斯分布。
-        </p>
-        <div className="mb-4 space-y-3">
-          <FormulaCard
-            label="单高斯概率密度"
-            mathML={GAUSSIAN_PDF}
-            note={'μ_t 和 δ_t 分别为 t 时刻像素高斯分布的期望和标准差。'}
-          />
-          <FormulaCard
-            label="前景判定"
-            mathML={GAUSSIAN_DETECT}
-            note={'当前位置 |I-μ| = ' + diffGray + '，若超过 λ·δ 则判为前景。λ 通常取 2.5～3。'}
-          />
-          <FormulaCard
-            label="模型初始化"
-            mathML={GAUSSIAN_INIT}
-            note="第一帧初始化均值，std_init 通常设置为 20。"
-          />
-          <FormulaCard
-            label="模型更新"
-            mathML={GAUSSIAN_UPDATE}
-            note="背景像素匹配后，按学习率 α 更新均值与方差。"
-          />
-        </div>
-        <figure className="mb-4">
-          <img
-            src="/assets/simple-background/course-single-gaussian.jpg"
-            alt="单高斯模型效果"
-            className="w-full max-w-md rounded-xl object-cover"
-          />
-          <figcaption className="mt-2 text-xs text-slate-500">单高斯模型：像素灰度值在时间域上的高斯分布</figcaption>
-        </figure>
-        <TeachingCard>
-          <p className="text-xs leading-6 text-slate-700">
-            <span className="font-semibold text-emerald-700">优点：</span>在室内或不是很复杂的室外环境中，能达到很好的检测效果，处理速度快，分割对象比较完整。{'<br />'}
-            <span className="font-semibold text-red-600">缺点：</span>对于复杂变化的背景（如树枝摇晃），噪声增多，背景模型不稳定，容易误判。
-          </p>
-        </TeachingCard>
-      </div>
-      {/* ----- 5. 混合高斯模型 ----- */}
-      <div className="border-t border-slate-200 pt-5">
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">（4）混合高斯模型</h2>
-        <p className="mb-3 text-xs leading-6 text-slate-600">
-          针对复杂背景（特别是有微小重复运动的场合，如摇动的树叶、灌木丛、旋转的风扇、海面波涛等），
-          采用多个单高斯函数描述场景背景，利用在线估计更新模型。
-        </p>
-        <TeachingCard>
-          <div className="space-y-1 text-xs leading-5 text-slate-700">
-            <p><span className="font-semibold">算法流程：</span></p>
-            <ol className="list-inside list-decimal space-y-1 pl-2">
-              <li>模型初始化 — 取第一帧像素值初始化各高斯分布的均值、权值和方差</li>
-              <li>模型匹配与参数更新 — 新像素按 ω<sub>i</sub>/δ<sub>i</sub> 降序依次匹配，更新参数</li>
-              <li>生成背景分布 — 按 ω/δ 排序，累计权重大于阈值的前 M 个分布作为背景</li>
-              <li>检测前景 — 若当前像素与 B 个背景分布均不匹配，则判为前景</li>
-            </ol>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-800">均值模型动态推导</h2>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              用前 {trainingFrames.length} 帧估计当前像素的背景均值，再与第 {currentFrameIndex + 1} 帧比较。
+            </p>
           </div>
-        </TeachingCard>
-        <figure className="mb-4">
-          <img
-            src="/assets/simple-background/course-mixture-gaussian.jpg"
-            alt="混合高斯模型流程"
-            className="w-full max-w-2xl rounded-xl object-cover"
-          />
-          <figcaption className="mt-2 text-xs text-slate-500">混合高斯模型算法流程图</figcaption>
-        </figure>
-        <div className="mb-4 space-y-3">
+          <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">
+            K = {trainingFrames.length}
+          </span>
+        </div>
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+          <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+            <div className="mb-2 text-xs font-semibold text-slate-700">前 K 帧训练序列</div>
+            <div className="flex gap-2">
+              {trainingFrames.map((frame, index) => (
+                <div key={`mean-frame-${index}`} className="shrink-0 rounded-xl border border-slate-200 bg-white px-2 py-2">
+                  <ImageCanvas image={frame} maxDisplaySize={58} showGrid={false} highlightPixel={currentPosition} />
+                  <div className="mt-1 text-center font-mono text-[10px] text-slate-500">
+                    I{index + 1}={trainingPixelValues[index]}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-3">
+            <FormulaCard
+              label="均值背景估计"
+              mathML={buildInlineMathML('<mrow><msub><mi>B</mi><mi>t</mi></msub><mo>=</mo><mfrac><mn>1</mn><mi>K</mi></mfrac><munderover><mo>∑</mo><mrow><mi>j</mi><mo>=</mo><mn>1</mn></mrow><mi>K</mi></munderover><msub><mi>I</mi><mi>j</mi></msub></mrow>')}
+              note={'当前像素训练均值 = ' + trainingMeanGray + '，背景图中 B = ' + backgroundGray + '。'}
+            />
+            <div className="grid gap-2 text-xs leading-5 text-slate-700 sm:grid-cols-3 lg:grid-cols-1">
+              <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2">
+                <div className="font-semibold text-amber-800">课件前提</div>
+                <div className="mt-1">
+                  前 K 帧中该像素多数时间应呈现背景值。本页当前统计：{trainingBackgroundLikeCount}/{trainingFrames.length} 帧接近均值，
+                  <span className={trainingBackgroundMajority ? 'font-semibold text-emerald-700' : 'font-semibold text-red-600'}>
+                    {trainingBackgroundMajority ? '满足' : '不满足'}
+                  </span>
+                  多数背景假设。
+                </div>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                <div className="font-semibold text-slate-800">历史帧与当前帧分工</div>
+                <div className="mt-1">历史帧只用于估计 B，当前帧 I<sub>t</sub> 只用于和 B 做差分判定。</div>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                <div className="font-semibold text-slate-800">课件默认值映射</div>
+                <div className="mt-1">课件示例常用 T=60、K=3；本页 T 可调，K 固定为 {trainingFrames.length} 帧以增强连续序列稳定性。</div>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs leading-6 text-slate-700">
+              <div className="font-semibold text-slate-800">当前帧判定</div>
+              <div className="mt-1">
+                |I<sub>t</sub> - B<sub>t</sub>| = |{currentGray} - {backgroundGray}| = {diffGray}，
+                T = {threshold}，结果：
+                <span className={decisionClassName}> {decisionText}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </TeachingCard>
+    </div>
+  );
+
+  const renderAdaptiveDerivation = () => (
+    <div className="space-y-4">
+      <TeachingCard>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-800">自适应背景动态推导</h2>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              当前位置使用当前帧和上一背景递推更新，α 直接控制背景吸收运动目标的速度。
+            </p>
+          </div>
+          <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-800">
+            α = {alphaValue.toFixed(2)}
+          </span>
+        </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className="rounded-2xl border border-red-200 bg-white px-3 py-3">
+            <div className="mb-2 text-xs font-semibold text-red-700">当前帧 I<sub>t</sub></div>
+            <ImageCanvas image={result.current} maxDisplaySize={150} showGrid={false} highlightPixel={currentPosition} />
+            <div className="mt-2 font-mono text-sm font-semibold text-red-700">I = {currentGray}</div>
+          </div>
+          <div className="rounded-2xl border border-amber-200 bg-white px-3 py-3">
+            <div className="mb-2 text-xs font-semibold text-amber-700">上一背景 B<sub>t-1</sub></div>
+            <ImageCanvas image={previousBackgroundImage} maxDisplaySize={150} showGrid={false} highlightPixel={currentPosition} />
+            <div className="mt-2 font-mono text-sm font-semibold text-amber-800">B<sub>t-1</sub> = {previousBackgroundGray}</div>
+          </div>
+          <div className="rounded-2xl border border-emerald-200 bg-white px-3 py-3">
+            <div className="mb-2 text-xs font-semibold text-emerald-700">更新后背景</div>
+            <ImageCanvas image={result.background} maxDisplaySize={150} showGrid={false} highlightPixel={currentPosition} />
+            <div className="mt-2 font-mono text-sm font-semibold text-emerald-700">B<sub>t</sub> ≈ {adaptiveUpdatedGray}</div>
+          </div>
+        </div>
+        <FormulaCard
+          label="递推代入"
+          mathML={ADAPTIVE_BG_FORMULA}
+          note={'代入当前像素：' + alphaValue.toFixed(2) + ' × ' + currentGray + ' + ' + (1 - alphaValue).toFixed(2) + ' × ' + previousBackgroundGray + ' ≈ ' + adaptiveUpdatedGray + '。'}
+        />
+        <div className="mt-3 grid gap-3 text-xs leading-5 text-slate-700 md:grid-cols-3">
+          <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+            <div className="font-semibold text-slate-800">初始化</div>
+            <div className="mt-1">第一帧可直接作为初始背景：B<sub>1</sub>(x,y)=I<sub>1</sub>(x,y)。</div>
+          </div>
+          <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">
+            <div className="font-semibold text-blue-800">两项加权</div>
+            <div className="mt-1">当前帧贡献 α，上一背景贡献 1-α；α 越大，运动目标越快被吸收到背景。</div>
+          </div>
+          <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2">
+            <div className="font-semibold text-amber-800">递推闭环</div>
+            <div className="mt-1">本轮更新后的 B<sub>t</sub> 会在下一帧成为 B<sub>t-1</sub>，这就是课件中“前一背景 = 当前背景”的含义。</div>
+          </div>
+        </div>
+      </TeachingCard>
+    </div>
+  );
+
+  const renderSingleGaussianDerivation = () => (
+    <div className="space-y-4">
+      <TeachingCard>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-800">单高斯模型动态推导</h2>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              当前像素用一个高斯分布描述背景，重点看 I<sub>t</sub> 是否落在 μ ± 2.5δ 区间内。
+            </p>
+          </div>
+          <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-800">
+            μ={backgroundGray} / δ={deviationGray}
+          </span>
+        </div>
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+            <div className="mb-3 text-xs font-semibold text-slate-700">像素时间序列与匹配区间</div>
+            <div className="flex h-32 items-end gap-1 overflow-x-auto border-b border-slate-200 pb-2">
+              {result.pixelTimeline.map(point => (
+                <button
+                  key={`gaussian-point-${point.frameIndex}`}
+                  type="button"
+                  onClick={() => handleFrameChange(point.frameIndex)}
+                  className={`flex w-7 shrink-0 flex-col items-center gap-1 rounded-md border px-1 py-1 ${
+                    point.frameIndex === currentFrameIndex ? 'border-red-300 bg-red-50' : 'border-slate-200 bg-slate-50'
+                  }`}
+                >
+                  <div
+                    className="w-2 rounded-t bg-red-400"
+                    style={{ height: `${Math.max(4, point.current * 88)}px` }}
+                  />
+                  <div className={`h-1.5 w-1.5 rounded-full ${point.mask > 0 ? 'bg-red-500' : 'bg-emerald-500'}`} />
+                </button>
+              ))}
+            </div>
+            <div className="mt-3 grid gap-2 text-xs leading-5 text-slate-600 md:grid-cols-3">
+              <div className="rounded-xl bg-sky-50 px-3 py-2">下界 μ - 2.5δ = {lowerGaussianBound}</div>
+              <div className="rounded-xl bg-sky-50 px-3 py-2">当前 I<sub>t</sub> = {currentGray}</div>
+              <div className="rounded-xl bg-sky-50 px-3 py-2">上界 μ + 2.5δ = {upperGaussianBound}</div>
+            </div>
+          </div>
+          <div className="space-y-3">
+            <FormulaCard
+              label="像素时间分布"
+              mathML={GAUSSIAN_PDF}
+              note="课件强调每个像素的时间灰度值可看作随机过程，背景值集中在高斯分布的均值附近。"
+            />
+            <FormulaCard
+              label="模型初始化"
+              mathML={GAUSSIAN_INIT}
+              note="第一帧初始化均值，初始标准差给模型一个可容纳微小波动的范围。"
+            />
+            <FormulaCard
+              label="单高斯前景判定"
+              mathML={GAUSSIAN_DETECT}
+              note={'当前 |I-μ| = ' + diffGray + '，2.5δ = ' + gaussianLimit + '，结果：' + decisionText + '。'}
+            />
+            <FormulaCard
+              label="单高斯模型更新"
+              mathML={GAUSSIAN_UPDATE}
+              note={'α = ' + alphaValue.toFixed(2) + '，当前 μ = ' + backgroundGray + '，δ = ' + deviationGray + '。'}
+            />
+          </div>
+        </div>
+        <div className="mt-3 grid gap-3 text-xs leading-5 text-slate-700 md:grid-cols-2">
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2">
+            <div className="font-semibold text-emerald-800">适合场景</div>
+            <div className="mt-1">室内或变化较小的室外环境，背景灰度围绕一个稳定中心波动，分割目标通常较完整。</div>
+          </div>
+          <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2">
+            <div className="font-semibold text-red-700">局限</div>
+            <div className="mt-1">树枝摇晃、水面反光等复杂背景会形成多个稳定取值，一个高斯峰不足以描述。</div>
+          </div>
+        </div>
+      </TeachingCard>
+    </div>
+  );
+
+  const renderMixtureGaussianDerivation = () => (
+    <div className="space-y-4">
+      <TeachingCard>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-800">混合高斯模型动态流程</h2>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              不再使用静态“流程图”截图；这里直接用当前像素和当前分量展示匹配、排序、背景选择和前景判定。
+            </p>
+          </div>
+          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800">
+            当前 I = {currentGray}
+          </span>
+        </div>
+        <div className="grid gap-3 lg:grid-cols-4">
+          <div className="rounded-2xl border border-red-200 bg-white px-3 py-3">
+            <div className="mb-2 text-xs font-semibold text-red-700">1. 匹配分量</div>
+            <div className="space-y-2 text-xs leading-5">
+              {sortedMixtureComponents.map((component, index) => {
+                const meanGray = grayValue(component.mean);
+                const sigmaGray = Math.max(1, grayValue(component.sigma));
+                const distance = Math.abs(currentGray - meanGray);
+                const limit = Math.round(2.5 * sigmaGray);
+                const matched = distance <= limit;
+                return (
+                  <div key={`match-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                    <div className="flex items-center justify-between">
+                      <span>G{index + 1}: |{currentGray}-{meanGray}|={distance}</span>
+                      <span className={matched ? 'font-semibold text-emerald-600' : 'font-semibold text-red-600'}>
+                        {matched ? '匹配' : '不匹配'}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-slate-500">阈值 2.5δ = {limit}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-amber-200 bg-white px-3 py-3">
+            <div className="mb-2 text-xs font-semibold text-amber-700">2. 更新参数</div>
+            <div className="space-y-2 text-xs leading-5 text-slate-700">
+              <div className="rounded-xl bg-amber-50 px-3 py-2">匹配分量：ω、μ、δ² 按 α 更新</div>
+              <div className="rounded-xl bg-slate-50 px-3 py-2">未匹配分量：ω 按 (1-α) 衰减</div>
+              <div className="rounded-xl bg-slate-50 px-3 py-2">当前 α = {alphaValue.toFixed(2)}</div>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-sky-200 bg-white px-3 py-3">
+            <div className="mb-2 text-xs font-semibold text-sky-700">3. 按 ω/δ 排序</div>
+            <div className="space-y-2 text-xs leading-5">
+              {sortedMixtureComponents.map((component, index) => (
+                <div key={`sort-${index}`} className="rounded-xl border border-sky-100 bg-sky-50 px-3 py-2">
+                  G{index + 1}: ω/δ = {(component.weight / Math.max(0.001, component.sigma)).toFixed(2)}
+                  <span className={component.background ? 'ml-2 font-semibold text-emerald-700' : 'ml-2 font-semibold text-red-600'}>
+                    {component.background ? '背景' : '前景候选'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-emerald-200 bg-white px-3 py-3">
+            <div className="mb-2 text-xs font-semibold text-emerald-700">4. 输出判定</div>
+            <div className="rounded-xl bg-emerald-50 px-3 py-3 text-xs leading-6 text-slate-700">
+              当前像素与背景模型差分为 {diffGray}，阈值 T = {threshold}。
+              <div className={`mt-2 text-sm ${decisionClassName}`}>{decisionText}</div>
+            </div>
+          </div>
+        </div>
+        <div className="mt-3 grid gap-3 text-xs leading-5 text-slate-700 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
+            <div className="font-semibold text-emerald-800">多峰分布含义</div>
+            <div className="mt-2">
+              课件曲线表达的是同一个像素在时间上可能有多个常见灰度峰。本页当前有 {sortedMixtureComponents.length} 个分量，
+              其中 {backgroundComponentCount} 个被标记为背景分量。
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              {sortedMixtureComponents.map((component, index) => (
+                <div key={`mixture-peak-${index}`} className="rounded-xl border border-white bg-white px-3 py-2">
+                  <div className="font-semibold text-slate-800">G{index + 1}</div>
+                  <div className="mt-1 font-mono text-[11px] text-slate-500">
+                    ω={component.weight.toFixed(2)} / μ={grayValue(component.mean)} / δ={grayValue(component.sigma)}
+                  </div>
+                  <div className={component.background ? 'mt-1 font-semibold text-emerald-700' : 'mt-1 font-semibold text-red-600'}>
+                    {component.background ? '背景峰' : '前景候选峰'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+            <div className="font-semibold text-slate-800">适合场景</div>
+            <div className="mt-2">
+              摇动树叶、灌木、旋转风扇、海面波纹等动态背景，单高斯会把正常波动误判为前景，混合高斯用多个背景峰吸收这些重复变化。
+            </div>
+          </div>
+        </div>
+        <div className="mt-3 grid gap-3 lg:grid-cols-2">
           <FormulaCard
             label="混合高斯概率"
             mathML={MIXTURE_FORMULA}
-            note={'K 个高斯分布的加权和，w_i,t 为第 i 个高斯分布的权值。'}
+            note="多个高斯分量共同描述同一个像素在时间上的多模态背景。"
           />
           <FormulaCard
             label="匹配条件"
             mathML={MIXTURE_MATCH}
-            note="将新像素与模型中的高斯分布依序匹配，D 为自定义参数（通常取 2.5）。"
+            note="新像素先与各分量比较，距离落在 D·δ 范围内才认为匹配。"
           />
           <FormulaCard
-            label="匹配时参数更新"
+            label="匹配后的参数更新"
             mathML={MIXTURE_UPDATE}
-            note={'α = ' + (learningRate / 100).toFixed(2) + ' 为学习率，ρ ≈ α/ω_i 为参数学习率。匹配分布更新 μ、δ² 与 ω；不匹配分布仅 ω 按 (1-α) 衰减。'}
+            note={'匹配分量按 α 或 ρ 更新；当前 α = ' + alphaValue.toFixed(2) + '。'}
           />
           <FormulaCard
             label="背景选择与前景检测"
             mathML={MIXTURE_DETECT_ALL}
-            note="按 ω/δ 排序后选择累计权重大于 T 的前 B 个分布作为背景；前景检测条件 D 通常取 2.5。"
+            note="按 ω/δ 排序后，累计权重大于阈值的分量视为背景分布。"
           />
+        </div>
+      </TeachingCard>
+    </div>
+  );
 
-      </div>
-      </div>
+  const activeDerivation = (() => {
+    switch (model) {
+      case 'mean':
+        return renderMeanDerivation();
+      case 'adaptive':
+        return renderAdaptiveDerivation();
+      case 'singleGaussian':
+        return renderSingleGaussianDerivation();
+      case 'mixtureGaussian':
+        return renderMixtureGaussianDerivation();
+    }
+  })();
+  // ========================================
+  // stepDetails - 当前模型动态推导
+  // ========================================
+  const stepDetails = (
+    <div className="space-y-6">
+      <TeachingCard>
+        <h2 className="mb-3 text-sm font-semibold text-slate-800">背景减除法</h2>
+        <p className="text-xs leading-6 text-slate-600">
+          当前页面使用连续帧小人运动序列讲解背景建模：先建立长期背景，再比较当前帧与背景模型，差异超过判定条件的位置输出为前景。
+        </p>
+      </TeachingCard>
 
-      {/* ----- 6. 当前像素链式代入 ----- */}
+      {activeDerivation}
+
       <div className="border-t border-slate-200 pt-5">
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">当前像素代入</h2>
+        <h2 className="mb-3 text-sm font-semibold text-slate-800">当前像素总结</h2>
         <p className="mb-4 text-xs leading-6 text-slate-600">
-          对当前位置 ({currentPosition.x}, {currentPosition.y}) 代入各模型公式：
+          对当前位置 ({currentPosition.x}, {currentPosition.y}) 和第 {currentFrameIndex + 1} 帧做统一代入。
         </p>
         <div className="space-y-3 text-xs leading-6">
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
@@ -772,60 +1095,31 @@ export default function BackgroundModelingSubtractionPage() {
           </div>
         </div>
       </div>
-      {model === 'mixtureGaussian' ? (
-        <div className="border-t border-slate-200 pt-5">
-          <h2 className="mb-3 text-sm font-semibold text-slate-800">混合高斯各分量链式代入</h2>
-          <p className="mb-4 text-xs leading-6 text-slate-600">
-            对当前位置 ({currentPosition.x}, {currentPosition.y})，灰度值 I = {currentGray}，
-            各高斯分量 G<sub>i</sub> 的代入结果如下：
-          </p>
-          <div className="space-y-3">
-            {result.mixtureComponents.map((component, index) => (
-              <div key={index} className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-                <div className="mb-2 font-semibold text-slate-800">
-                  分量 G<sub>{index + 1}</sub> {component.background ? '（背景分布）' : '（前景候选）'}
-                </div>
-                <div className="mt-2 space-y-1 text-xs leading-5 text-slate-600">
-                  <p>
-                    权值公式：ω<sub>{index + 1}</sub> = {component.weight.toFixed(2)}
-                  </p>
-                  <p>
-                    均值公式：μ<sub>{index + 1}</sub> = {Math.round(component.mean * 255)}
-                    &emsp;（归一化值 {component.mean.toFixed(3)}）
-                  </p>
-                  <p>
-                    标准差公式：δ<sub>{index + 1}</sub> = {Math.round(component.sigma * 255)}
-                    &emsp;（归一化值 {component.sigma.toFixed(3)}）
-                  </p>
-                  <div className="mt-2 border-t border-slate-100 pt-2">
-                    <p className="mb-1 font-semibold text-slate-700">匹配判定链式代入：</p>
-                    <p>
-                      条件：|I – μ<sub>{index + 1}</sub>| ≤ D·δ<sub>{index + 1}</sub>
-                    </p>
-                    <p>
-                      代入：|{currentGray} – {Math.round(component.mean * 255)}| = {Math.abs(currentGray - Math.round(component.mean * 255))}
-                      &emsp;阈值 D·δ = 2.5 × {Math.round(component.sigma * 255)} = {Math.round(2.5 * component.sigma * 255)}
-                    </p>
-                    <p>
-                      判定结果：
-                      <span className={Math.abs(currentGray - Math.round(component.mean * 255)) <= Math.round(2.5 * component.sigma * 255) ? 'font-semibold text-emerald-600' : 'font-semibold text-red-600'}>
-                        {Math.abs(currentGray - Math.round(component.mean * 255)) <= Math.round(2.5 * component.sigma * 255)
-                          ? '匹配（属于该高斯分布）'
-                          : '不匹配（前景候选）'}
-                      </span>
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
     </div>
   );
   const parameters = (
     <div className="space-y-4">
       <SelectParam label="背景模型" value={model} onChange={handleModelChange} options={MODEL_OPTIONS} />
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <span className="text-xs font-semibold text-slate-700">连续帧播放</span>
+          <button
+            type="button"
+            onClick={() => setIsPlaying(prev => !prev)}
+            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
+          >
+            {isPlaying ? '暂停' : '播放'}
+          </button>
+        </div>
+        <SliderParam
+          label="当前帧 t"
+          value={currentFrameIndex + 1}
+          onChange={value => handleFrameChange(value - 1)}
+          min={1}
+          max={Math.max(1, frameCount)}
+          step={1}
+        />
+      </div>
       {model === 'mean' ? (
         <>
           <SliderParam label="前景阈值 T" value={threshold} onChange={setThreshold} min={10} max={120} step={1} />
@@ -845,8 +1139,9 @@ export default function BackgroundModelingSubtractionPage() {
       ) : null}
       {model === 'singleGaussian' ? (
         <div className="space-y-3">
+          <SliderParam label="学习率 α" value={learningRate} onChange={setLearningRate} min={1} max={40} step={1} unit="%" />
           <div className="rounded-2xl border border-sky-200 bg-sky-50 px-3 py-3 text-xs leading-5 text-sky-800">
-            单高斯演示使用 μ 和 δ 判定，不使用前景阈值 T。当前 λ 固定为 2.5。
+            单高斯演示使用 μ 和 δ 判定，不使用前景阈值 T。α 控制 μ/δ 的逐帧更新速度，λ 固定为 2.5。
           </div>
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
@@ -863,8 +1158,9 @@ export default function BackgroundModelingSubtractionPage() {
       {model === 'mixtureGaussian' ? (
         <>
           <SliderParam label="前景阈值 T" value={threshold} onChange={setThreshold} min={10} max={120} step={1} />
+          <SliderParam label="学习率 α" value={learningRate} onChange={setLearningRate} min={1} max={40} step={1} unit="%" />
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-xs leading-5 text-emerald-800">
-            当前页用混合高斯背景图生成差分，再用 T 生成掩膜；分量权重与均值在右侧代入区展示。
+            混合高斯教学版按连续帧更新背景分量；T 控制掩膜，α 控制分量吸收新像素的速度。
           </div>
           <div className="space-y-2">
             {result.mixtureComponents.map((component, index) => (
