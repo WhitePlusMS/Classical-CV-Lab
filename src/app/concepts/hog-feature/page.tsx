@@ -1,45 +1,40 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CodeViewer,
   ConceptLayout,
+  FlowColumn,
+  FlowColumns,
+  FlowNode,
   FormulaCard,
+  ImageCanvas,
+  ProcessRail,
   SelectParam,
   TeachingCard,
   buildInlineMathML,
 } from '@/components';
+import { useGridNavigation } from '@/hooks/useGridNavigation';
+import { GrayscaleImage } from '@/lib/algorithms/types';
+import {
+  HogCellStep,
+  getHogCellStepAt,
+  renderHogVisualization,
+} from '@/lib/algorithms/hog';
+import {
+  centerCropGrayscaleImage,
+  loadImageAsGrayscale,
+  resizeGrayscaleImage,
+} from '@/lib/utils/imageProcessing';
 
-const GRAD_HORIZ = buildInlineMathML(
-  '<mrow><msub><mi>f</mi><mi>i</mi></msub><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo><mo>=</mo>' +
-  '<mfrac><mrow><mi>∂</mi><mi>f</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo></mrow><mrow><mi>∂</mi><mi>i</mi></mrow></mfrac>' +
-  '<mo>=</mo><mi>f</mi><mo>(</mo><mi>i</mi><mo>+</mo><mn>1</mn><mo>,</mo><mi>j</mi><mo>)</mo><mo>-</mo>' +
-  '<mi>f</mi><mo>(</mo><mi>i</mi><mo>-</mo><mn>1</mn><mo>,</mo><mi>j</mi><mo>)</mo></mrow>'
-);
+const CELL_SIZE = 8;
+const CELL_RENDER_SIZE = 24;
 
-const GRAD_VERT = buildInlineMathML(
-  '<mrow><msub><mi>f</mi><mi>j</mi></msub><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo><mo>=</mo>' +
-  '<mfrac><mrow><mi>∂</mi><mi>f</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo></mrow><mrow><mi>∂</mi><mi>j</mi></mrow></mfrac>' +
-  '<mo>=</mo><mi>f</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>+</mo><mn>1</mn><mo>)</mo><mo>-</mo>' +
-  '<mi>f</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>-</mo><mn>1</mn><mo>)</mo></mrow>'
-);
-
-const GRAD_MAG = buildInlineMathML(
-  '<mrow><mi>M</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo><mo>=</mo>' +
-  '<msqrt><mrow><msubsup><mi>f</mi><mi>i</mi><mn>2</mn></msubsup><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo>' +
-  '<mo>+</mo><msubsup><mi>f</mi><mi>j</mi><mn>2</mn></msubsup><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo></mrow></msqrt></mrow>'
-);
-
-const GRAD_ORIENT = buildInlineMathML(
-  '<mrow><mi>θ</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo><mo>=</mo>' +
-  '<mi>arctan</mi><mfrac><mrow><msub><mi>f</mi><mi>i</mi></msub><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo></mrow>' +
-  '<mrow><msub><mi>f</mi><mi>j</mi></msub><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo></mrow></mfrac></mrow>'
-);
 const NBINS_OPTIONS = [
-  { value: '6', label: '6个方向（30°/柱）' },
-  { value: '9', label: '9个方向（20°/柱）' },
-  { value: '12', label: '12个方向（15°/柱）' },
-  { value: '18', label: '18个方向（10°/柱）' },
+  { value: '6', label: '6 个方向（30°/柱）' },
+  { value: '9', label: '9 个方向（20°/柱）' },
+  { value: '12', label: '12 个方向（15°/柱）' },
+  { value: '18', label: '18 个方向（10°/柱）' },
 ];
 
 const BLOCK_OPTIONS = [
@@ -47,297 +42,503 @@ const BLOCK_OPTIONS = [
   { value: '3', label: '3×3 cells' },
 ];
 
-const HOG_CODE = [
-  '// OpenCV HOGDescriptor 行人检测示例（C++）',
-  '#include <opencv2/opencv.hpp>',
-  '',
-  'cv::HOGDescriptor hog(',
-  '  cv::Size(64, 128),  // winSize',
-  '  cv::Size(16, 16),   // blockSize',
-  '  cv::Size(8, 8),     // blockStride',
-  '  cv::Size(8, 8),     // cellSize',
-  '  9                    // nbins',
-  ');',
-  '',
-  'hog.setSVMDetector(cv::HOGDescriptor::getDefaultPeopleDetector());',
-  '',
-  'cv::Mat img = cv::imread("pedestrian.jpg");',
-  'std::vector<cv::Rect> found;',
-  'hog.detectMultiScale(img, found);',
-  '',
-  'for (const auto& rect : found) {',
-  '  cv::rectangle(img, rect, cv::Scalar(0, 0, 255), 2);',
-  '}',
-  'cv::imshow("HOG Pedestrian Detection", img);',
-  'cv::waitKey(0);',
-].join('\n');
+const HOG_CODE = `function computeHogCell(image, cellX, cellY, cellSize, nbins) {
+  const gradient = sobelGradient(image);
+  const histogram = new Array(nbins).fill(0);
+  const anglePerBin = 180 / nbins;
+
+  for (let y = 0; y < cellSize; y++) {
+    for (let x = 0; x < cellSize; x++) {
+      const px = cellX * cellSize + x;
+      const py = cellY * cellSize + y;
+      const theta = unsigned180(gradient.direction[py][px]);
+      const bin = Math.floor(theta / anglePerBin);
+      histogram[bin] += gradient.magnitude[py][px];
+    }
+  }
+
+  return histogram;
+}
+
+function normalizeBlock(cellHistograms) {
+  const vector = cellHistograms.flat();
+  const norm = Math.sqrt(vector.reduce((s, v) => s + v * v, 0) + 1e-6);
+  return vector.map(v => v / norm);
+}`;
+
+function formatNumber(value: number, digits = 2): string {
+  return Number.isFinite(value) ? value.toFixed(digits) : '0.00';
+}
+
+function getPixel(image: GrayscaleImage, x: number, y: number): number {
+  const height = image.length;
+  const width = image[0]?.length ?? 0;
+  if (x < 0 || y < 0 || x >= width || y >= height) return 0;
+  return image[y][x];
+}
+
+function buildGradientSubstitutionMathML(step: HogCellStep, image: GrayscaleImage): string {
+  const { sample } = step;
+  const left = getPixel(image, sample.x - 1, sample.y);
+  const right = getPixel(image, sample.x + 1, sample.y);
+  const up = getPixel(image, sample.x, sample.y - 1);
+  const down = getPixel(image, sample.x, sample.y + 1);
+
+  return buildInlineMathML(`
+    <mrow>
+      <msub><mi>G</mi><mi>x</mi></msub><mo>=</mo><mi>I</mi><mo>(</mo><mi>x</mi><mo>+</mo><mn>1</mn><mo>,</mo><mi>y</mi><mo>)</mo><mo>-</mo><mi>I</mi><mo>(</mo><mi>x</mi><mo>-</mo><mn>1</mn><mo>,</mo><mi>y</mi><mo>)</mo>
+      <mo>=</mo><mi>I</mi><mo>(</mo><mn>${sample.x + 1}</mn><mo>,</mo><mn>${sample.y}</mn><mo>)</mo><mo>-</mo><mi>I</mi><mo>(</mo><mn>${sample.x - 1}</mn><mo>,</mo><mn>${sample.y}</mn><mo>)</mo>
+      <mo>=</mo><mn>${formatNumber(right)}</mn><mo>-</mo><mn>${formatNumber(left)}</mn>
+      <mo>=</mo><mn>${formatNumber(sample.gx)}</mn>
+      <mspace width="1em"/>
+      <msub><mi>G</mi><mi>y</mi></msub><mo>=</mo><mi>I</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>+</mo><mn>1</mn><mo>)</mo><mo>-</mo><mi>I</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>-</mo><mn>1</mn><mo>)</mo>
+      <mo>=</mo><mi>I</mi><mo>(</mo><mn>${sample.x}</mn><mo>,</mo><mn>${sample.y + 1}</mn><mo>)</mo><mo>-</mo><mi>I</mi><mo>(</mo><mn>${sample.x}</mn><mo>,</mo><mn>${sample.y - 1}</mn><mo>)</mo>
+      <mo>=</mo><mn>${formatNumber(down)}</mn><mo>-</mo><mn>${formatNumber(up)}</mn>
+      <mo>=</mo><mn>${formatNumber(sample.gy)}</mn>
+    </mrow>
+  `);
+}
+
+function buildMagnitudeSubstitutionMathML(step: HogCellStep): string {
+  const { sample } = step;
+  return buildInlineMathML(`
+    <mrow>
+      <mi>M</mi><mo>=</mo><msqrt><mrow><msubsup><mi>G</mi><mi>x</mi><mn>2</mn></msubsup><mo>+</mo><msubsup><mi>G</mi><mi>y</mi><mn>2</mn></msubsup></mrow></msqrt>
+      <mo>=</mo><msqrt><mrow><msup><mn>${formatNumber(sample.gx)}</mn><mn>2</mn></msup><mo>+</mo><msup><mn>${formatNumber(sample.gy)}</mn><mn>2</mn></msup></mrow></msqrt>
+      <mo>=</mo><mn>${formatNumber(sample.magnitude)}</mn>
+    </mrow>
+  `);
+}
+
+function buildBinSubstitutionMathML(step: HogCellStep): string {
+  const anglePerBin = 180 / step.nbins;
+  return buildInlineMathML(`
+    <mrow>
+      <mi>bin</mi>
+      <mo>=</mo>
+      <mo>floor</mo><mo>(</mo>
+      <mfrac><mi>θ</mi><mrow><mn>180</mn><mo>/</mo><mi>nBins</mi></mrow></mfrac>
+      <mo>)</mo>
+      <mo>=</mo>
+      <mo>floor</mo><mo>(</mo>
+      <mfrac><mn>${formatNumber(step.sample.direction, 1)}</mn><mrow><mn>180</mn><mo>/</mo><mn>${step.nbins}</mn></mrow></mfrac>
+      <mo>)</mo>
+      <mo>=</mo>
+      <mo>floor</mo><mo>(</mo>
+      <mfrac><mn>${formatNumber(step.sample.direction, 1)}</mn><mn>${formatNumber(anglePerBin, 1)}</mn></mfrac>
+      <mo>)</mo>
+      <mo>=</mo><mn>${step.sample.bin}</mn>
+    </mrow>
+  `);
+}
+
+function buildSvmInputFormulaMathML(featureDim: number, totalBlocks: number): string {
+  return buildInlineMathML(`
+    <mrow>
+      <mi>x</mi>
+      <mo>=</mo>
+      <mi>concat</mi><mo>(</mo><msub><mi>v</mi><mn>1</mn></msub><mo>,</mo><msub><mi>v</mi><mn>2</mn></msub><mo>,</mo><mo>...</mo><mo>,</mo><msub><mi>v</mi><mn>${totalBlocks}</mn></msub><mo>)</mo>
+      <mo>&#x2208;</mo><msup><mi>R</mi><mn>${featureDim}</mn></msup>
+      <mspace width="1em"/>
+      <mi>score</mi><mo>=</mo><mi>w</mi><mo>&#x22C5;</mo><mi>x</mi><mo>+</mo><mi>b</mi>
+      <mspace width="1em"/>
+      <mi>score</mi><mo>&gt;</mo><mn>0</mn><mo>&#x21D2;</mo><mtext>pedestrian</mtext>
+      <mo>,</mo>
+      <mi>score</mi><mo>&#x2264;</mo><mn>0</mn><mo>&#x21D2;</mo><mtext>background</mtext>
+    </mrow>
+  `);
+}
+
+function MatrixView({
+  title,
+  matrix,
+  formatter = value => formatNumber(value),
+}: {
+  title: string;
+  matrix: number[][];
+  formatter?: (value: number) => string;
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="mb-1 text-[11px] font-semibold text-slate-600">{title}</div>
+      <div
+        className="grid gap-0.5"
+        style={{ gridTemplateColumns: `repeat(${matrix[0]?.length ?? 0}, minmax(0, 1fr))` }}
+      >
+        {matrix.flatMap((row, y) =>
+          row.map((value, x) => (
+            <div
+              key={`${title}-${y}-${x}`}
+              className="flex h-7 min-w-7 items-center justify-center rounded border border-slate-200 bg-white font-mono text-[9px] text-slate-700"
+            >
+              {formatter(value)}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HistogramBars({ values }: { values: number[] }) {
+  const maxValue = Math.max(...values, 1e-6);
+  return (
+    <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${values.length}, minmax(0, 1fr))` }}>
+      {values.map((value, index) => (
+        <div key={`hist-${index}`} className="flex min-w-0 flex-col items-center">
+          <div className="flex h-24 w-full items-end rounded bg-slate-100">
+            <div
+              className="w-full rounded-t bg-amber-500"
+              style={{ height: `${Math.max(6, (value / maxValue) * 100)}%` }}
+            />
+          </div>
+          <div className="mt-1 font-mono text-[9px] text-slate-500">{index}</div>
+          <div className="font-mono text-[8px] text-slate-400">{formatNumber(value, 1)}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function BlockCellsView({ step }: { step: HogCellStep }) {
+  return (
+    <div
+      className="grid gap-1"
+      style={{ gridTemplateColumns: `repeat(${step.cellsPerBlock}, minmax(0, 1fr))` }}
+    >
+      {step.blockCells.map(cell => {
+        const active = cell.cellX === step.cellX && cell.cellY === step.cellY;
+        return (
+          <div
+            key={`block-cell-${cell.cellX}-${cell.cellY}`}
+            className={`rounded border px-2 py-2 text-center text-[10px] ${
+              active
+                ? 'border-emerald-400 bg-emerald-50 text-emerald-800'
+                : 'border-slate-200 bg-white text-slate-600'
+            }`}
+          >
+            <div className="font-mono font-semibold">({cell.cellX},{cell.cellY})</div>
+            <div className="mt-1 text-[9px]">Σ={formatNumber(cell.histogram.reduce((s, v) => s + v, 0), 1)}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function HogFeaturePage() {
   const [nbins, setNbins] = useState(9);
   const [cellsPerBlock, setCellsPerBlock] = useState(2);
+  const [rawImage, setRawImage] = useState<GrayscaleImage | null>(null);
+  const [currentCell, setCurrentCell] = useState({ x: 8, y: 8 });
 
-  const winWidth = 64;
-  const winHeight = 128;
-  const cellSize = 8;
-  const cellsX = winWidth / cellSize;
-  const cellsY = winHeight / cellSize;
-  const blockSize = cellsPerBlock * cellSize;
-  const blockStride = cellSize;
-  const blocksX = (cellsX - cellsPerBlock) / 1 + 1;
-  const blocksY = (cellsY - cellsPerBlock) / 1 + 1;
+  useEffect(() => {
+    let cancelled = false;
+    loadImageAsGrayscale('/assets/lena-original.jpg')
+      .then(image => {
+        if (!cancelled) {
+          setRawImage(resizeGrayscaleImage(centerCropGrayscaleImage(image), 256));
+        }
+      })
+      .catch(error => {
+        console.error('加载 HOG Lena 示例图失败:', error);
+        if (!cancelled) setRawImage(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const originalImage = rawImage ?? [];
+  const imageWidth = originalImage[0]?.length ?? 0;
+  const imageHeight = originalImage.length;
+  const cellsX = Math.floor(imageWidth / CELL_SIZE);
+  const cellsY = Math.floor(imageHeight / CELL_SIZE);
+  const safeCell = {
+    x: cellsX > 0 ? Math.min(currentCell.x, cellsX - 1) : 0,
+    y: cellsY > 0 ? Math.min(currentCell.y, cellsY - 1) : 0,
+  };
+  const anglePerBin = 180 / nbins;
+  const blocksX = Math.max(0, cellsX - cellsPerBlock + 1);
+  const blocksY = Math.max(0, cellsY - cellsPerBlock + 1);
   const totalBlocks = blocksX * blocksY;
   const featureDim = totalBlocks * cellsPerBlock * cellsPerBlock * nbins;
-  const anglePerBin = 180 / nbins;
+
+  const currentHogStep = useMemo(
+    () => rawImage ? getHogCellStepAt(rawImage, safeCell.x, safeCell.y, CELL_SIZE, nbins, cellsPerBlock) : null,
+    [cellsPerBlock, nbins, rawImage, safeCell.x, safeCell.y]
+  );
+
+  const resultImage = useMemo(
+    () =>
+      rawImage
+        ? renderHogVisualization(rawImage, CELL_SIZE, nbins, cellsPerBlock, safeCell.x, safeCell.y, CELL_RENDER_SIZE)
+        : [],
+    [cellsPerBlock, nbins, rawImage, safeCell.x, safeCell.y]
+  );
+
+  const handleDirectionMove = useGridNavigation({
+    current: currentHogStep ? safeCell : null,
+    bounds: { width: cellsX, height: cellsY },
+    onMove: setCurrentCell,
+    disabled: !currentHogStep,
+  });
+
+  const handleInputRegionSelect = useCallback((x: number, y: number) => {
+    setCurrentCell({
+      x: Math.floor(x / CELL_SIZE),
+      y: Math.floor(y / CELL_SIZE),
+    });
+  }, []);
+
+  const handleOutputPixelSelect = useCallback((x: number, y: number) => {
+    setCurrentCell({
+      x: Math.floor(x / CELL_RENDER_SIZE),
+      y: Math.floor(y / CELL_RENDER_SIZE),
+    });
+  }, []);
+
   const parameters = (
     <div className="space-y-4">
       <div className="rounded-2xl border border-blue-200 bg-blue-50 px-3 py-3">
-        <div className="text-xs font-semibold text-blue-700">窗口 / cell 参数</div>
+        <div className="text-xs font-semibold text-blue-700">当前 cell</div>
         <p className="mt-2 text-xs leading-5 text-blue-700">
-          检测窗口固定为 64&times;128（行人检测标准），cell 固定为 8&times;8 像素。
+          原图按 {CELL_SIZE}×{CELL_SIZE} 像素划分为 {cellsX}×{cellsY} 个 cell。点击原图可选择一个 cell。
         </p>
-        <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-          <div className="rounded-xl bg-white/80 px-3 py-2 text-blue-800">
-            <div className="font-semibold">窗口</div>
-            <div>64 x 128</div>
-          </div>
-          <div className="rounded-xl bg-white/80 px-3 py-2 text-blue-800">
-            <div className="font-semibold">cell</div>
-            <div>8 x 8</div>
-          </div>
+        <div className="mt-2 rounded-xl bg-white/80 px-3 py-2 font-mono text-sm font-semibold text-blue-800">
+          cell ({safeCell.x}, {safeCell.y})
         </div>
       </div>
-      <SelectParam label="方向数 nbins" value={String(nbins)} onChange={value => setNbins(Number(value))} options={NBINS_OPTIONS} />
-      <SelectParam label="block 大小 (cells)" value={String(cellsPerBlock)} onChange={value => setCellsPerBlock(Number(value))} options={BLOCK_OPTIONS} />
+
+      <SelectParam
+        label="方向数 nbins"
+        value={String(nbins)}
+        onChange={value => setNbins(Number(value))}
+        options={NBINS_OPTIONS}
+      />
+      <SelectParam
+        label="block 大小 (cells)"
+        value={String(cellsPerBlock)}
+        onChange={value => setCellsPerBlock(Number(value))}
+        options={BLOCK_OPTIONS}
+      />
+
       <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3">
-        <div className="text-[11px] font-semibold text-amber-800">特征向量维度</div>
+        <div className="text-[11px] font-semibold text-amber-800">当前窗口特征维度</div>
         <div className="mt-1 text-2xl font-bold text-amber-900">{featureDim.toLocaleString()}</div>
-        <p className="mt-1 text-[10px] leading-4 text-amber-700">{blocksX}&times;{blocksY} blocks x {cellsPerBlock}&times;{cellsPerBlock} cells/block x {nbins} bins</p>
+        <p className="mt-1 text-[10px] leading-4 text-amber-700">
+          {blocksX}×{blocksY} blocks × {cellsPerBlock}×{cellsPerBlock} cells/block × {nbins} bins
+        </p>
       </div>
     </div>
   );
 
-  const stepDetails = (
+  const analysisPreview = currentHogStep ? (
+    <ProcessRail>
+      <FlowColumns>
+        <FlowColumn align="start">
+          <FlowNode tone="red">
+            <div className="mb-2 text-[11px] font-semibold uppercase text-red-700">输入 cell</div>
+            <ImageCanvas image={currentHogStep.pixelRegion} maxDisplaySize={150} showGrid />
+            <p className="mt-2 text-xs leading-5 text-slate-600">
+              原图第 {safeCell.y * CELL_SIZE + 1}-{safeCell.y * CELL_SIZE + CELL_SIZE} 行，
+              第 {safeCell.x * CELL_SIZE + 1}-{safeCell.x * CELL_SIZE + CELL_SIZE} 列。
+            </p>
+          </FlowNode>
+        </FlowColumn>
+
+        <FlowColumn align="center">
+          <FlowNode tone="amber">
+            <div className="mb-2 text-[11px] font-semibold uppercase text-amber-700">梯度计算</div>
+            <MatrixView title="M 梯度幅值" matrix={currentHogStep.magnitudeRegion} formatter={value => formatNumber(value, 1)} />
+          </FlowNode>
+          <FlowNode tone="sky">
+            <div className="mb-2 text-[11px] font-semibold uppercase text-sky-700">bin 投票</div>
+            <MatrixView title="方向 bin" matrix={currentHogStep.binRegion} formatter={value => String(Math.round(value))} />
+          </FlowNode>
+        </FlowColumn>
+
+        <FlowColumn align="end">
+          <FlowNode tone="emerald">
+            <div className="mb-2 text-[11px] font-semibold uppercase text-emerald-700">当前 cell 直方图</div>
+            <HistogramBars values={currentHogStep.histogram} />
+          </FlowNode>
+          <FlowNode tone="slate">
+            <div className="mb-2 text-[11px] font-semibold uppercase text-slate-600">所属 block</div>
+            <BlockCellsView step={currentHogStep} />
+          </FlowNode>
+        </FlowColumn>
+      </FlowColumns>
+    </ProcessRail>
+  ) : null;
+
+  const stepDetails = currentHogStep ? (
     <div className="space-y-6">
       <TeachingCard>
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">HOG 特征</h2>
-        <p className="text-xs leading-6 text-slate-600">
-          HOG（Histogram of Oriented Gradient，方向梯度直方图）是一种在计算机视觉中用于
-          目标检测的特征描述算子。它通过计算和统计图像局部区域的梯度方向直方图来构成特征。
-          HOG 特征结合 SVM 分类器在行人检测中取得了巨大成功。
-        </p>
-        <p className="mt-2 text-xs leading-5 text-slate-500">
-          核心思想：目标的局部外形可以通过梯度或边缘的方向密度分布来描述，而无需知道对应的梯度或边缘的确切位置。
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-800">当前 cell 的真实 HOG 计算</h2>
+            <p className="mt-2 text-xs leading-6 text-slate-600">
+              选中 cell ({currentHogStep.cellX}, {currentHogStep.cellY})，先对其中每个像素计算 Sobel 梯度，
+              再按方向 bin 累加梯度幅值，最后把所属 block 内的 cell 直方图串联并归一化。
+            </p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            每柱角度：{formatNumber(anglePerBin, 1)}°
+          </div>
+        </div>
       </TeachingCard>
 
-      <div className="border-t border-slate-200 pt-5">
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">（1）梯度计算</h2>
+      <section className="border-t border-slate-200 pt-4">
+        <h2 className="mb-3 text-sm font-semibold text-slate-800">代表像素代入</h2>
         <p className="mb-3 text-xs leading-6 text-slate-600">
-          对图像中每个像素，计算水平方向和垂直方向的梯度，进而求得梯度幅值和方向。
+          代表像素选取当前 cell 内梯度幅值最大的像素，便于观察方向投票如何发生。
         </p>
-        <div className="mb-4 space-y-3">
+        <div className="space-y-3">
           <FormulaCard
-            label="水平梯度"
-            mathML={GRAD_HORIZ}
-            note="f_i(i,j) 表示像素点 (i,j) 在水平方向（i 方向）的一阶差分。"
-          />
-          <FormulaCard
-            label="垂直梯度"
-            mathML={GRAD_VERT}
-            note="f_j(i,j) 表示像素点 (i,j) 在垂直方向（j 方向）的一阶差分。"
+            label={`像素 (${currentHogStep.sample.x}, ${currentHogStep.sample.y}) 的一阶差分`}
+            mathML={buildGradientSubstitutionMathML(currentHogStep, originalImage)}
+            note="这里使用 Sobel 梯度场中的水平和垂直响应，数值来自当前 Lena 图。"
           />
           <FormulaCard
             label="梯度幅值"
-            mathML={GRAD_MAG}
-            note="M(i,j) 为梯度强度，反映该像素处灰度变化的剧烈程度。"
+            mathML={buildMagnitudeSubstitutionMathML(currentHogStep)}
+            note="梯度幅值作为投票权重，边缘越强，对直方图贡献越大。"
           />
           <FormulaCard
-            label="梯度方向"
-            mathML={GRAD_ORIENT}
-            note="&#x3b8;(i,j) 的取值范围为 0&#x00b0;~180&#x00b0;（未取符号），180&#x00b0; 与 0&#x00b0; 视为同一方向。"
+            label="方向落入的 bin"
+            mathML={buildBinSubstitutionMathML(currentHogStep)}
+            note={`nbins=${nbins} 时，每个方向柱覆盖 ${formatNumber(anglePerBin, 1)}°。`}
           />
         </div>
-      </div>
+      </section>
 
-      <div className="border-t border-slate-200 pt-5">
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">（2）Cell &mdash; Block &mdash; Window 三层结构</h2>
-        <p className="mb-3 text-xs leading-6 text-slate-600">
-          HOG 特征采用由小到大的分块方式，逐级统计梯度信息，最终形成描述目标区域的特征向量。
-        </p>
-        <div className="mb-4 space-y-3">
-          <TeachingCard>
-            <div className="flex items-start gap-4">
-              <figure className="w-44 flex-shrink-0">
-                <img
-                  src="/assets/hog-feature/51fab89fe3c21eb6e0502002d9fe415b235f18ca816ed697b126d07de0470ff6.jpg"
-                  alt="Cell 结构"
-                  className="w-full rounded-lg object-cover"
-                />
-                <figcaption className="mt-1 text-[10px] text-slate-500">8&times;8 cell</figcaption>
-              </figure>
-              <div className="flex-1 space-y-2">
-                <h3 className="text-xs font-semibold text-slate-700">Cell（胞元）&mdash; 8&times;8 像素</h3>
-                <p className="text-[11px] leading-5 text-slate-600">
-                  cell 是 HOG 特征计算的最小单元。每个 cell 包含 64 个像素。
-                  对 cell 内所有像素的梯度信息按方向投票，得到该 cell 的方向梯度直方图。
-                </p>
-              </div>
-            </div>
-          </TeachingCard>
-
-          <TeachingCard>
-            <div className="flex items-start gap-4">
-              <figure className="w-44 flex-shrink-0">
-                <img
-                  src="/assets/hog-feature/2f0ecb6e50bd50fe008a475be7d7361fa6c2045e74132d11d5133cc3c85e24ad.jpg"
-                  alt="Block 结构"
-                  className="w-full rounded-lg object-cover"
-                />
-                <figcaption className="mt-1 text-[10px] text-slate-500">Block 滑动</figcaption>
-              </figure>
-              <div className="flex-1 space-y-2">
-                <h3 className="text-xs font-semibold text-slate-700">Block（块）&mdash; {cellsPerBlock}&times;{cellsPerBlock} cells</h3>
-                <p className="text-[11px] leading-5 text-slate-600">
-                  block 由 {cellsPerBlock}&times;{cellsPerBlock} 个相邻的 cell 组成（大小
-                  {blockSize}&times;{blockSize} 像素）。block 在窗口内以 {blockStride} 像素为步长滑动。
-                </p>
-              </div>
-            </div>
-          </TeachingCard>
-
-          <TeachingCard>
-            <div className="flex items-start gap-4">
-              <figure className="w-44 flex-shrink-0">
-                <img
-                  src="/assets/hog-feature/e9cd01d1b4e487b84b70d020c603c4c9df9a99519669dc507a59e3ab6f06d945.jpg"
-                  alt="Window 结构"
-                  className="w-full rounded-lg object-cover"
-                />
-                <figcaption className="mt-1 text-[10px] text-slate-500">检测窗口</figcaption>
-              </figure>
-              <div className="flex-1 space-y-2">
-                <h3 className="text-xs font-semibold text-slate-700">Window（窗口）&mdash; 64&times;128</h3>
-                <p className="text-[11px] leading-5 text-slate-600">
-                  检测窗口是最终要描述的目标区域。对于行人检测，标准窗口大小为 64&times;128 像素。
-                  窗口内共有 8&times;16 = 128 个 cell，构成 {blocksX}&times;{blocksY} = {totalBlocks} 个 block。
-                </p>
-              </div>
-            </div>
-          </TeachingCard>
-
-          <figure className="mb-4">
-            <img
-              src="/assets/hog-feature/32517170209fcbd2136ab4b9160fb61d5a7f078cd82673815993a5d28398bac8.jpg"
-              alt="方向梯度直方图"
-              className="w-full max-w-md rounded-xl object-cover"
-            />
-            <figcaption className="mt-2 text-xs text-slate-500">
-              block 内 cell 的方向直方图可视化（18 个柱，每个 20 度）
-            </figcaption>
-          </figure>
+      <section className="border-t border-slate-200 pt-4">
+        <h2 className="mb-3 text-sm font-semibold text-slate-800">当前 cell 的矩阵展开</h2>
+        <div className="grid gap-4 xl:grid-cols-2">
+          <MatrixView title="原始灰度" matrix={currentHogStep.pixelRegion} formatter={value => formatNumber(value, 2)} />
+          <MatrixView title="Gx 水平梯度" matrix={currentHogStep.gxRegion} formatter={value => formatNumber(value, 2)} />
+          <MatrixView title="Gy 垂直梯度" matrix={currentHogStep.gyRegion} formatter={value => formatNumber(value, 2)} />
+          <MatrixView title="bin 编号" matrix={currentHogStep.binRegion} formatter={value => String(Math.round(value))} />
         </div>
-      </div>
+      </section>
 
-      <div className="border-t border-slate-200 pt-5">
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">（3）方向直方图与特征向量构建</h2>
-        <p className="mb-3 text-xs leading-6 text-slate-600">
-          梯度方向范围 0&#x00b0;~180&#x00b0;（无符号）被等分为 {nbins} 个区间，
-          每个区间跨度为 {anglePerBin}&#x00b0;。每个 cell 的直方图向量长度为 {nbins}。
-        </p>
-        <TeachingCard>
-          <div className="space-y-2 text-xs leading-6 text-slate-600">
-            <p><span className="font-semibold text-slate-800">步骤 1：梯度计算</span> &mdash; 对窗口内每个像素计算梯度幅值和方向。</p>
-            <p><span className="font-semibold text-slate-800">步骤 2：cell 直方图统计</span> &mdash; 在每个 8&times;8 cell 内，将像素梯度按方向投到 {nbins} 个柱中，幅值作为投票权重。</p>
-            <p><span className="font-semibold text-slate-800">步骤 3：block 归一化</span> &mdash; 将 {cellsPerBlock}&times;{cellsPerBlock} 个 cell 串联为 block 向量并做 L2 归一化。</p>
-            <p><span className="font-semibold text-slate-800">步骤 4：窗口特征串联</span> &mdash; 将所有 block 向量级联，形成最终的 HOG 特征向量，维度为 {featureDim.toLocaleString()}。</p>
-          </div>
-        </TeachingCard>
-      </div>
+      <section className="border-t border-slate-200 pt-4">
+        <h2 className="mb-3 text-sm font-semibold text-slate-800">block 归一化</h2>
+        <div className="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
+          <TeachingCard>
+            <div className="text-xs leading-6 text-slate-600">
+              当前 block 从 cell ({currentHogStep.blockX}, {currentHogStep.blockY}) 开始，
+              覆盖 {cellsPerBlock}×{cellsPerBlock} 个 cell。先串联这些 cell 的方向直方图，再做 L2 归一化。
+            </div>
+            <div className="mt-3">
+              <BlockCellsView step={currentHogStep} />
+            </div>
+          </TeachingCard>
+          <TeachingCard>
+            <div className="text-xs font-semibold text-slate-800">归一化向量摘要</div>
+            <div className="mt-2 text-xs leading-6 text-slate-600">
+              向量长度：{currentHogStep.normalizedBlock.length}，
+              L2 范数：{formatNumber(currentHogStep.blockNorm, 3)}
+            </div>
+            <div className="mt-3 grid grid-cols-6 gap-1">
+              {currentHogStep.normalizedBlock.slice(0, 24).map((value, index) => (
+                <div key={`norm-${index}`} className="rounded border border-slate-200 bg-white px-1.5 py-1 text-center font-mono text-[9px] text-slate-600">
+                  {formatNumber(value, 2)}
+                </div>
+              ))}
+            </div>
+          </TeachingCard>
+        </div>
+      </section>
 
-      <div className="border-t border-slate-200 pt-5">
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">（4）OpenCV HOGDescriptor 参数</h2>
-        <p className="mb-3 text-xs leading-6 text-slate-600">
-          OpenCV 提供了 <code>HOGDescriptor</code> 类来方便地创建 HOG 描述子。
-        </p>
-        <figure className="mb-4">
-          <img
-            src="/assets/hog-feature/d800bc8aa9e513e8b7f87a75236a1e79227b5cb0e9b941f84ddb4409a4bb9771.jpg"
-            alt="HOGDescriptor 参数"
-            className="w-full max-w-xl rounded-xl object-cover"
-          />
-          <figcaption className="mt-2 text-xs text-slate-500">OpenCV HOGDescriptor 构造与参数</figcaption>
-        </figure>
+      <section className="border-t border-slate-200 pt-4">
+        <h2 className="mb-3 text-sm font-semibold text-slate-800">HOG 特征向量如何交给分类器</h2>
         <TeachingCard>
-          <div className="space-y-2 text-xs leading-6 text-slate-600">
-            <p><span className="font-semibold text-slate-800">_winSize</span> &mdash; 检测窗口大小（64&times;128），决定目标区域。</p>
-            <p><span className="font-semibold text-slate-800">_blockSize</span> &mdash; block 大小（{blockSize}&times;{blockSize}），需为 cellSize 的整数倍。</p>
-            <p><span className="font-semibold text-slate-800">_blockStride</span> &mdash; block 滑动步长（{blockStride}&times;{blockStride}），通常等于 cellSize。</p>
-            <p><span className="font-semibold text-slate-800">_cellSize</span> &mdash; cell 大小（8&times;8），HOG 的最小统计单元。</p>
-            <p><span className="font-semibold text-slate-800">_nbins</span> &mdash; 方向直方图的柱数（{nbins}），每个柱跨度 {anglePerBin}&#x00b0;。</p>
-          </div>
-        </TeachingCard>
-      </div>
-
-      <div className="border-t border-slate-200 pt-5">
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">（5）HOG + SVM 行人检测流程</h2>
-        <p className="mb-3 text-xs leading-6 text-slate-600">
-          完整的 HOG + SVM 行人检测系统由训练和检测两个阶段组成：
-        </p>
-        <figure className="mb-4">
-          <img
-            src="/assets/hog-feature/7f72a6bf3312414f671166926ecf87aca437e7438530b42102fbb59d66000282.jpg"
-            alt="HOG 行人检测结果"
-            className="w-full max-w-md rounded-xl object-cover"
-          />
-          <figcaption className="mt-2 text-xs text-slate-500">
-            HOG 可视化与行人检测结果
-          </figcaption>
-        </figure>
-        <TeachingCard>
-          <div className="space-y-2 text-xs leading-6 text-slate-600">
-            <p className="font-semibold text-slate-700">训练阶段：</p>
-            <ol className="ml-4 list-inside list-decimal space-y-1">
-              <li>收集正样本（行人图像）和负样本（非行人图像），统一缩放至 64&times;128。</li>
-              <li>对每张样本图像提取 HOG 特征向量。</li>
-              <li>将特征向量和标签输入 SVM 分类器进行训练。</li>
-              <li>得到训练好的 SVM 模型。</li>
-            </ol>
-            <div className="mt-3 border-t border-slate-100 pt-3">
-              <p className="font-semibold text-slate-700">检测阶段：</p>
-              <ol className="ml-4 list-inside list-decimal space-y-1">
-                <li>对输入图像构建图像金字塔。</li>
-                <li>通过滑动窗口依次提取每个窗口的 HOG 特征。</li>
-                <li>用训练好的 SVM 分类器对窗口进行分类。</li>
-                <li>对检测结果进行非极大值抑制（NMS），合并重叠框。</li>
-              </ol>
+          <div className="space-y-3 text-xs leading-6 text-slate-600">
+            <p>
+              当前 cell 直方图只描述一个局部区域；多个 cell 组成 block，归一化后得到 block 向量。
+              对一个检测窗口而言，所有 block 向量按扫描顺序串联，才形成完整的 HOG 特征向量。
+              这个向量就是 SVM 分类器的输入 <span className="font-mono text-slate-800">x</span>。
+            </p>
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="border-l-2 border-amber-300 pl-3">
+                <div className="font-semibold text-amber-700">窗口 → HOG 向量</div>
+                <p>
+                  当前窗口有 {totalBlocks} 个 block，每个 block 包含 {cellsPerBlock}×{cellsPerBlock} 个 cell，
+                  每个 cell 有 {nbins} 个方向柱，最终得到 {featureDim.toLocaleString()} 维向量。
+                </p>
+              </div>
+              <div className="border-l-2 border-sky-300 pl-3">
+                <div className="font-semibold text-sky-700">HOG 向量 → SVM 判别</div>
+                <p>
+                  SVM 不直接看原图像素，而是读取 HOG 向量，计算
+                  <span className="font-mono text-slate-800"> score = w·x + b </span>
+                  来判断该窗口更像目标还是背景。
+                </p>
+              </div>
+              <div className="border-l-2 border-emerald-300 pl-3">
+                <div className="font-semibold text-emerald-700">多个窗口 → 候选框</div>
+                <p>
+                  检测时会在图像上滑动很多窗口，每个窗口得到一个 score。只有高分窗口才进入后续合并与筛选。
+                </p>
+              </div>
             </div>
           </div>
-        </TeachingCard>
-        <figure className="mt-4">
-          <img
-            src="/assets/hog-feature/d0561a7305d60a4114e6984d1c32dc083db79ee7d209616dcfd9d4455d717a9a.jpg"
-            alt="HOG 检测效果"
-            className="w-full max-w-lg rounded-xl object-cover"
+          <FormulaCard
+            className="mt-4"
+            label="分类器输入与判别形式"
+            mathML={buildSvmInputFormulaMathML(featureDim, totalBlocks)}
+            note="该页只演示 HOG 特征如何构造；SVM 权重、滑动窗口扫描和 NMS 属于分类器检测流水线页。"
           />
-          <figcaption className="mt-2 text-xs text-slate-500">
-            基于 HOG + SVM 的行人检测效果示例
-          </figcaption>
-        </figure>
-      </div>
+        </TeachingCard>
+      </section>
     </div>
+  ) : (
+    <div className="py-8 text-center text-slate-400">加载 HOG 示例图...</div>
   );
 
   return (
     <ConceptLayout
       title="HOG 特征"
       subtitle="Histogram of Oriented Gradient - 方向梯度直方图"
-      operationLabel="HOG 特征提取"
-      parameterIntro="调节方向数 nbins 和 block 大小，观察 HOG 特征维度的变化。"
+      operationLabel="HOG 统计"
+      parameterIntro="点击 Lena 图选择一个 8×8 cell，或用方向键移动；方向数和 block 大小会同步刷新直方图、公式和归一化向量。"
       parameters={parameters}
       stepDetails={stepDetails}
-      codeTab={<CodeViewer languages={[{ name: 'C++', code: HOG_CODE }]} />}
-      originalImage={null}
-      resultImage={null}
+      analysisPreview={analysisPreview}
+      codeTab={<CodeViewer languages={[{ name: 'TypeScript', code: HOG_CODE }]} />}
+      originalImage={originalImage}
+      resultImage={resultImage}
+      imageLabels={{ input: 'Lena 原图', output: 'HOG cell/block 可视化' }}
+      imageHints={{
+        input: `红框为当前 ${CELL_SIZE}×${CELL_SIZE} cell，可点击切换`,
+        output: '白框为当前 cell，灰框为所属 block，可点击切换',
+      }}
+      maxDisplaySize={400}
+      showOriginalGrid={false}
+      originalRegionMarker="frame"
+      currentStep={
+        currentHogStep
+          ? {
+              x: currentHogStep.cellX * CELL_SIZE,
+              y: currentHogStep.cellY * CELL_SIZE,
+              kernelSize: CELL_SIZE,
+              outputX: currentHogStep.cellX * CELL_RENDER_SIZE + Math.floor(CELL_RENDER_SIZE / 2),
+              outputY: currentHogStep.cellY * CELL_RENDER_SIZE + Math.floor(CELL_RENDER_SIZE / 2),
+            }
+          : null
+      }
+      stepInfo={
+        cellsX > 0 && cellsY > 0
+          ? { current: safeCell.y * cellsX + safeCell.x, total: cellsX * cellsY }
+          : null
+      }
+      navigationHintText="方向键移动 cell / 点击原图或 HOG 图切换 cell"
+      onDirectionMove={handleDirectionMove}
+      onInputRegionSelect={handleInputRegionSelect}
+      onOutputPixelSelect={handleOutputPixelSelect}
       singlePageScroll
     />
   );
