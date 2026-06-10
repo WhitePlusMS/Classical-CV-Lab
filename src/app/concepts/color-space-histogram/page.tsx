@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CodeViewer,
   ConceptLayout,
@@ -16,9 +16,8 @@ import {
   buildInlineMathML,
 } from '@/components';
 import { generateRgbImage } from '@/lib/algorithms/grayscale';
-import { generateExampleImage } from '@/lib/algorithms/histogram';
 import { useGridNavigation } from '@/hooks/useGridNavigation';
-import { clamp } from '@/lib/utils/imageProcessing';
+import { clamp, loadImageAsGrayscale, resizeGrayscaleImage, centerCropGrayscaleImage } from '@/lib/utils/imageProcessing';
 
 type DisplayMode = 'rgb' | 'r' | 'g' | 'b' | 'h' | 's' | 'v';
 
@@ -146,10 +145,27 @@ export default function ColorSpaceHistogramPage() {
   const [currentPosition, setCurrentPosition] = useState({ x: 5, y: 5 });
   const [threshold, setThreshold] = useState(50);
 
-  const rgbImage = useMemo(() => {
-    const gray = generateExampleImage('standard');
-    return generateRgbImage(gray);
+  const [graySource, setGraySource] = useState<number[][] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    // 加载课程阈值教学原图作为真实图像源
+    loadImageAsGrayscale('/assets/simple-background/threshold-original.jpg')
+      .then(image => {
+        if (!cancelled) {
+          setGraySource(resizeGrayscaleImage(centerCropGrayscaleImage(image), 64));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setGraySource(null);
+      });
+    return () => { cancelled = true; };
   }, []);
+
+  const rgbImage = useMemo(() => {
+    if (!graySource) return [];
+    return generateRgbImage(graySource);
+  }, [graySource]);
 
   const width = rgbImage[0]?.length || 0;
   const height = rgbImage.length;

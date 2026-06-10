@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CodeViewer,
   ConceptLayout,
@@ -13,7 +13,7 @@ import {
   TeachingCard,
   buildInlineMathML,
 } from '@/components';
-import { generateExampleImage } from '@/lib/algorithms/histogram';
+import { loadImageAsGrayscale, resizeGrayscaleImage, centerCropGrayscaleImage } from '@/lib/utils/imageProcessing';
 
 // ========================================
 // 代码示例
@@ -164,8 +164,25 @@ export default function HistogramTemplateMatchingPage() {
     setHistMethod(value as HistMethod);
   }, []);
 
-  const originalImage = useMemo(() => generateExampleImage('standard'), []);
-  const resultImage = useMemo(() => generateExampleImage('standard'), []);
+  const [originalImage, setOriginalImage] = useState<number[][]>([]);
+  const [resultImage, setResultImage] = useState<number[][]>([]);
+
+  // 加载课程模板匹配实验原图和结果图作为教学主图
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      loadImageAsGrayscale('/assets/histogram-template-matching/original-image.jpg'),
+      loadImageAsGrayscale('/assets/histogram-template-matching/matching-final-result.jpg'),
+    ]).then(([orig, result]) => {
+      if (!cancelled) {
+        setOriginalImage(resizeGrayscaleImage(centerCropGrayscaleImage(orig), 128));
+        setResultImage(resizeGrayscaleImage(centerCropGrayscaleImage(result), 128));
+      }
+    }).catch(() => {
+      if (!cancelled) { setOriginalImage([]); setResultImage([]); }
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   // 当前直方图方法信息
   const currentHistMethod = useMemo(
@@ -577,8 +594,8 @@ export default function HistogramTemplateMatchingPage() {
       stepDetails={stepDetails}
       codeTab={<CodeViewer languages={codeSections} />}
       imageHints={{
-        input: '示例图（12×12）',
-        output: '示例图（12×12）',
+        input: '模板匹配原图',
+        output: '匹配结果图',
       }}
       showOriginalGrid={false}
       originalRegionMarker="dot"
