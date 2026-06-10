@@ -1,936 +1,1140 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  AnchoredOverlay,
+  type AnchoredOverlayPath,
   CodeViewer,
   ConceptLayout,
   FlowColumn,
   FlowColumns,
   FlowNode,
   FormulaCard,
+  ImageCanvas,
   ProcessRail,
-  SelectParam,
   TeachingCard,
   buildInlineMathML,
 } from '@/components';
+import { useGridNavigation } from '@/hooks/useGridNavigation';
+import {
+  type CandidateWindow,
+  type DetectionPipelineConfig,
+  type DetectionScanProgress,
+  type DetectionScanStep,
+  type GrayscaleImage,
+  type TeachingDetectionBox,
+  computeDetectionScoreMap,
+  createClassifierTeachingImage,
+  formatFeatureValue,
+  formatGrayByte,
+  getDetectionWindowStep,
+  getScanProgressAt,
+} from '@/lib/algorithms';
 
-/* ========================================
-   常量定义
-   ======================================== */
+type TaskStage = 'intro' | 'training' | 'feature' | 'classifier' | 'scan' | 'result' | 'compare';
 
-/** 可选的展示主题 */
-type TopicKey = 'overview' | 'features' | 'svm' | 'cascade' | 'sliding';
+interface StageItem {
+  key: TaskStage;
+  label: string;
+  summary: string;
+}
 
-const TOPIC_OPTIONS: { value: TopicKey; label: string }[] = [
-  { value: 'overview', label: '检测流程概览' },
-  { value: 'features', label: '特征提取' },
-  { value: 'svm', label: 'SVM 分类器' },
-  { value: 'cascade', label: '级联分类器' },
-  { value: 'sliding', label: '滑动窗口检测' },
+const TASK_STAGES: StageItem[] = [
+  { key: 'intro', label: '任务', summary: '找出图中的目标' },
+  { key: 'training', label: '训练', summary: '正样本与负样本' },
+  { key: 'feature', label: '特征', summary: '窗口变成数值' },
+  { key: 'classifier', label: '判定', summary: '逐级过滤背景' },
+  { key: 'scan', label: '扫描', summary: '窗口扫完整图' },
+  { key: 'result', label: '输出', summary: '候选框合并' },
+  { key: 'compare', label: '对比', summary: '替换特征路线' },
 ];
 
-const IMG = '/assets/classifier-detection-pipeline';
+const MAIN_CONFIG: DetectionPipelineConfig = {
+  mode: 'haar-cascade',
+  windowSize: 6,
+  haarTemplateType: 'edge',
+  cascadeThresholds: [0.04, 0.07, 0.1],
+};
 
-/* ========================================
-   公式常量（MathML 链式格式）
-   ======================================== */
+const TRAINING_SAMPLE_WINDOWS = {
+  positive: { x: 13, y: 12, width: 6, height: 6 },
+  negative: { x: 3, y: 22, width: 6, height: 6 },
+};
 
-const SVM_HYPERPLANE = buildInlineMathML(`
-  <mrow>
-    <mi>w</mi><mo>&#x22C5;</mo><mi>x</mi><mo>+</mo><mi>b</mi><mo>=</mo><mn>0</mn>
-  </mrow>
-`);
-
-const SVM_DECISION = buildInlineMathML(`
-  <mrow>
-    <mi>f</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo>
-    <mi>s</mi><mi>i</mi><mi>g</mi><mi>n</mi><mo>(</mo>
-    <mi>w</mi><mo>&#x22C5;</mo><mi>x</mi><mo>+</mo><mi>b</mi>
-    <mo>)</mo>
-  </mrow>
-`);
-
-const SVM_MARGIN = buildInlineMathML(`
-  <mrow>
-    <mi>m</mi><mi>a</mi><mi>r</mi><mi>g</mi><mi>i</mi><mi>n</mi>
-    <mo>=</mo><mfrac><mn>2</mn><mrow><mo>&#x2016;</mo><mi>w</mi><mo>&#x2016;</mo></mrow></mfrac>
-  </mrow>
-`);
-
-const SVM_KERNEL = buildInlineMathML(`
-  <mrow>
-    <mi>K</mi><mo>(</mo><msub><mi>x</mi><mi>i</mi></msub><mo>,</mo>
-    <msub><mi>x</mi><mi>j</mi></msub><mo>)</mo>
-    <mo>=</mo>
-    <mi>&#x3C6;</mi><mo>(</mo><msub><mi>x</mi><mi>i</mi></msub><mo>)</mo>
-    <mo>&#x22C5;</mo>
-    <mi>&#x3C6;</mi><mo>(</mo><msub><mi>x</mi><mi>j</mi></msub><mo>)</mo>
-  </mrow>
-`);
-
-const SVM_CHAIN_SUB = buildInlineMathML(`
-  <mrow>
-    <mi>f</mi><mo>(</mo><mi>x</mi><mo>)</mo>
-    <mo>=</mo>
-    <mi>s</mi><mi>i</mi><mi>g</mi><mi>n</mi><mo>(</mo>
-    <mi>w</mi><mo>&#x22C5;</mo><mi>x</mi><mo>+</mo><mi>b</mi>
-    <mo>)</mo>
-    <mo>=</mo>
-    <mi>s</mi><mi>i</mi><mi>g</mi><mi>n</mi><mo>(</mo>
-    <mo>[</mo><mn>1</mn><mo>,</mo><mo>-</mo><mn>1</mn><mo>]</mo>
-    <mo>&#x22C5;</mo>
-    <mo>[</mo><mn>2</mn><mo>,</mo><mn>1</mn><mo>]</mo>
-    <mo>+</mo><mn>0</mn>
-    <mo>)</mo>
-    <mo>=</mo>
-    <mi>s</mi><mi>i</mi><mi>g</mi><mi>n</mi><mo>(</mo>
-    <mn>2</mn><mo>-</mo><mn>1</mn>
-    <mo>)</mo>
-    <mo>=</mo>
-    <mo>+</mo><mn>1</mn>
-  </mrow>
-`);
-
-const HOG_MAGNITUDE = buildInlineMathML(`
-  <mrow>
-    <mi>M</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo>
-    <mo>=</mo>
-    <msqrt>
-      <msubsup><mi>f</mi><mi>i</mi><mn>2</mn></msubsup>
-      <mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo>
-      <mo>+</mo>
-      <msubsup><mi>f</mi><mi>j</mi><mn>2</mn></msubsup>
-      <mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo>
-    </msqrt>
-  </mrow>
-`);
-
-const HOG_THETA = buildInlineMathML(`
-  <mrow>
-    <mi>&#x3B8;</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo>
-    <mo>=</mo>
-    <mi>arctan</mi>
-    <mfrac>
-      <msub><mi>f</mi><mi>i</mi></msub><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo>
-      <msub><mi>f</mi><mi>j</mi></msub><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo>
-    </mfrac>
-  </mrow>
-`);
-
-const LBP_FORMULA = buildInlineMathML(`
-  <mrow>
-    <mi>L</mi><mi>B</mi><mi>P</mi><mo>(</mo><msub><mi>P</mi><mi>c</mi></msub><mo>)</mo>
-    <mo>=</mo>
-    <munderover><mo>&#x2211;</mo><mrow><mi>n</mi><mo>=</mo><mn>0</mn></mrow><mn>7</mn></munderover>
-    <mi>s</mi><mo>(</mo><msub><mi>p</mi><mi>n</mi></msub><mo>-</mo><msub><mi>p</mi><mi>c</mi></msub><mo>)</mo>
-    <mo>&#x22C5;</mo><msup><mn>2</mn><mi>n</mi></msup>
-  </mrow>
-`);
-
-const LBP_SIGN = buildInlineMathML(`
-  <mrow>
-    <mi>s</mi><mo>(</mo><mi>x</mi><mo>)</mo>
-    <mo>=</mo>
-    <mrow><mo>{</mo>
-      <mtable>
-        <mtr><mtd><mn>1</mn></mtd><mtd><mtext>当 </mtext><mi>x</mi><mo>&#x2265;</mo><mn>0</mn></mtd></mtr>
-        <mtr><mtd><mn>0</mn></mtd><mtd><mtext>其他</mtext></mtd></mtr>
-      </mtable>
-    </mrow>
-  </mrow>
-`);
-
-const HAAR_FORMULA = buildInlineMathML(`
-  <mrow>
-    <mi>f</mi><mo>(</mo><mi>x</mi><mo>)</mo>
-    <mo>=</mo>
-    <munder><mo>&#x2211;</mo><mtext>white</mtext></munder>
-    <mi>p</mi><mo>(</mo><mi>x</mi><mo>)</mo>
-    <mo>-</mo>
-    <munder><mo>&#x2211;</mo><mtext>black</mtext></munder>
-    <mi>p</mi><mo>(</mo><mi>x</mi><mo>)</mo>
-  </mrow>
-`);
-
-const INTEGRAL_FORMULA = buildInlineMathML(`
-  <mrow>
-    <msub><mi>S</mi><mrow><mi>A</mi><mi>B</mi><mi>C</mi><mi>D</mi></mrow></msub>
-    <mo>=</mo>
-    <mi>D</mi><mo>-</mo><mi>C</mi><mo>-</mo><mi>B</mi><mo>+</mo><mi>A</mi>
-  </mrow>
-`);
-
-const OPENCV_SVM_CODE = `// OpenCV SVM 训练与预测典型流程
-
-// 1. 创建 SVM 对象
+const OPENCV_SVM_CODE = `// 训练阶段：正样本/负样本 -> 特征向量 -> SVM
 Ptr<SVM> svm = SVM::create();
-
-// 2. 设置 SVM 类型（C_SVC 支持非线性）
 svm->setType(SVM::C_SVC);
-
-// 3. 设置核函数（POLY 多项式核 / RBF 径向基核）
 svm->setKernel(SVM::POLY);
-// svm->setKernel(SVM::RBF);
-
-// 4. 设置算法终止条件（最大迭代次数 + 精度阈值）
-svm->setTermCriteria(
-  TermCriteria(TermCriteria::MAX_ITER, 3000, 1e-6)
-);
-
-// 5. 训练支持向量机
-svm->train(trainDataMat, ROW_SAMPLE, labelsMat);
-
-// 6. 保存训练好的模型
+svm->setTermCriteria(TermCriteria(TermCriteria::MAX_ITER, 3000, 1e-6));
+svm->train(trainingDataMat, ROW_SAMPLE, labelsMat);
 svm->save("svm_model.xml");
 
-// 7. （预测时）导入模型
-// Ptr<SVM> svm = SVM::load<SVM>("svm_model.xml");
-
-// 8. 对新样本进行分类预测
-float response = svm->predict(testSample);
-
-// 9. 获取支持向量
+// 检测阶段：滑动窗口 -> 提取特征 -> 分类器预测
+float response = svm->predict(windowFeature);
 Mat supportVectors = svm->getSupportVectors();`;
 
-/* ========================================
-   页面组件
-   ======================================== */
+const TEACHING_DETECTION_CODE = `function scanImage(image) {
+  const candidates = [];
+
+  for (const window of slidingWindows(image)) {
+    const haarValue = computeHaarFeature(window);
+
+    // Cascade：前级快速拒绝，后级继续精细判断
+    if (!passStage1(haarValue)) continue;
+    if (!passStage2(haarValue)) continue;
+    if (!passStage3(haarValue)) continue;
+
+    candidates.push(window);
+  }
+
+  return mergeOverlappedCandidates(candidates);
+}`;
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function getStageIndex(stage: TaskStage): number {
+  return TASK_STAGES.findIndex(item => item.key === stage);
+}
+
+function buildHaarFeatureFormula(step: DetectionScanStep | null): string {
+  const haarStep = step?.windowStep.haarStep;
+  if (!haarStep) {
+    return buildInlineMathML('<mrow><mi>V</mi><mo>=</mo><mn>0</mn></mrow>');
+  }
+
+  return buildInlineMathML(`
+    <mrow>
+      <mi>V</mi><mo>=</mo>
+      <munder><mo>&#8721;</mo><mtext>黑区</mtext></munder><mi>p</mi>
+      <mo>-</mo>
+      <munder><mo>&#8721;</mo><mtext>白区</mtext></munder><mi>p</mi>
+      <mo>=</mo><mn>${haarStep.blackSum}</mn><mo>-</mo><mn>${haarStep.whiteSum}</mn>
+      <mo>=</mo><mn>${haarStep.featureValue}</mn>
+    </mrow>
+  `);
+}
+
+function buildCascadeFormula(step: DetectionScanStep | null): string {
+  const cascadeStages = step?.windowStep.cascadeStages ?? [];
+  const finalStage = cascadeStages.find(stage => stage.entered && !stage.passed) ?? cascadeStages[cascadeStages.length - 1];
+
+  if (!finalStage) {
+    return buildInlineMathML('<mrow><mi>stage</mi><mo>=</mo><mtext>等待扫描</mtext></mrow>');
+  }
+
+  return buildInlineMathML(`
+    <mrow>
+      <msub><mi>S</mi><mn>${finalStage.stage}</mn></msub>
+      <mo>:</mo>
+      <mo>|</mo><mi>V</mi><mo>|</mo><mo>&#x2265;</mo><msub><mi>T</mi><mn>${finalStage.stage}</mn></msub>
+      <mo>=</mo><mn>${formatFeatureValue(finalStage.inputValue, 3)}</mn>
+      <mo>&#x2265;</mo><mn>${formatFeatureValue(finalStage.threshold, 3)}</mn>
+      <mo>&#x21D2;</mo><mtext>${finalStage.passed ? '通过' : '拒绝'}</mtext>
+    </mrow>
+  `);
+}
+
+function buildScanProgressFormula(progress: DetectionScanProgress): string {
+  return buildInlineMathML(`
+    <mrow>
+      <mtext>扫描进度</mtext>
+      <mo>=</mo>
+      <mfrac><mn>${progress.scannedCount}</mn><mn>${progress.total}</mn></mfrac>
+      <mspace width="1em"/>
+      <mtext>候选窗口</mtext><mo>=</mo><mn>${progress.candidateCount}</mn>
+      <mspace width="1em"/>
+      <mtext>最终框</mtext><mo>=</mo><mn>${progress.detections.length}</mn>
+    </mrow>
+  `);
+}
+
+function cropImageRegion(
+  image: GrayscaleImage,
+  region: { x: number; y: number; width: number; height: number }
+): GrayscaleImage {
+  return Array.from({ length: region.height }, (_, row) =>
+    Array.from({ length: region.width }, (_, col) => image[region.y + row]?.[region.x + col] ?? 0)
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  tone = 'slate',
+}: {
+  label: string;
+  value: string;
+  tone?: 'slate' | 'red' | 'amber' | 'emerald';
+}) {
+  const toneClass = {
+    slate: 'border-slate-200 bg-white text-slate-800',
+    red: 'border-red-200 bg-red-50 text-red-700',
+    amber: 'border-amber-200 bg-amber-50 text-amber-800',
+    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+  }[tone];
+
+  return (
+    <div className={`rounded-xl border px-3 py-2 ${toneClass}`}>
+      <div className="text-[10px] opacity-75">{label}</div>
+      <div className="mt-1 font-mono text-sm font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function StageStepper({
+  activeStage,
+  onStageChange,
+}: {
+  activeStage: TaskStage;
+  onStageChange: (stage: TaskStage) => void;
+}) {
+  const activeIndex = getStageIndex(activeStage);
+
+  return (
+    <div className="space-y-2">
+      {TASK_STAGES.map((stage, index) => {
+        const active = stage.key === activeStage;
+        const completed = index < activeIndex;
+
+        return (
+          <button
+            key={stage.key}
+            type="button"
+            onClick={() => onStageChange(stage.key)}
+            className={`w-full rounded-xl border px-3 py-2 text-left transition ${
+              active
+                ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                : completed
+                  ? 'border-slate-200 bg-white text-slate-700'
+                  : 'border-slate-200 bg-slate-50 text-slate-500'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
+                active
+                  ? 'bg-emerald-600 text-white'
+                  : completed
+                    ? 'bg-slate-700 text-white'
+                    : 'bg-white text-slate-500'
+              }`}>
+                {index + 1}
+              </span>
+              <span className="text-sm font-semibold">{stage.label}</span>
+            </div>
+            <div className="mt-1 pl-8 text-xs leading-5">{stage.summary}</div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function WindowMatrix({ image }: { image: GrayscaleImage }) {
+  const size = image[0]?.length ?? 0;
+
+  return (
+    <div
+      className="grid gap-1"
+      style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}
+    >
+      {image.flatMap((row, y) =>
+        row.map((value, x) => (
+          <div
+            key={`window-${y}-${x}`}
+            className="flex h-7 min-w-7 items-center justify-center rounded border border-slate-200 bg-white font-mono text-[9px] text-slate-700"
+          >
+            {formatGrayByte(value)}
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+function CascadeStageList({ step }: { step: DetectionScanStep | null }) {
+  const stages = step?.windowStep.cascadeStages ?? [];
+
+  return (
+    <div className="grid gap-2">
+      {stages.map(stage => (
+        <div
+          key={`stage-${stage.stage}`}
+          className={`rounded-xl border px-3 py-2 text-xs ${
+            !stage.entered
+              ? 'border-slate-200 bg-slate-50 text-slate-400'
+              : stage.passed
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                : 'border-red-200 bg-red-50 text-red-700'
+          }`}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="font-semibold">第 {stage.stage} 级强分类器</span>
+            <span className="font-mono">
+              {stage.entered
+                ? `${formatFeatureValue(stage.inputValue, 3)} / ${formatFeatureValue(stage.threshold, 3)}`
+                : '未进入'}
+            </span>
+          </div>
+          <p className="mt-1 leading-5">
+            {stage.entered
+              ? `${stage.weakClassifierCount} 个弱分类器参与判断，结果：${stage.passed ? '通过' : '拒绝'}。`
+              : '前一级已经拒绝，后续级不再计算。'}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DetectionBoard({
+  image,
+  currentStep,
+  scannedSteps,
+  candidates,
+  detections,
+  trainingSamples,
+  size = 'normal',
+  onWindowSelect,
+}: {
+  image: GrayscaleImage;
+  currentStep: DetectionScanStep | null;
+  scannedSteps: DetectionScanStep[];
+  candidates: CandidateWindow[];
+  detections: TeachingDetectionBox[];
+  trainingSamples?: {
+    positive: { x: number; y: number; width: number; height: number };
+    negative: { x: number; y: number; width: number; height: number };
+  };
+  size?: 'normal' | 'large';
+  onWindowSelect?: (x: number, y: number) => void;
+}) {
+  const imageWidth = image[0]?.length ?? 1;
+  const imageHeight = image.length || 1;
+  const maxWidthClass = size === 'large' ? 'max-w-[34rem]' : 'max-w-[25rem]';
+
+  const boxStyle = (box: { x: number; y: number; width: number; height: number }) => ({
+    left: `${(box.x / imageWidth) * 100}%`,
+    top: `${(box.y / imageHeight) * 100}%`,
+    width: `${(box.width / imageWidth) * 100}%`,
+    height: `${(box.height / imageHeight) * 100}%`,
+  });
+
+  const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!onWindowSelect) return;
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = Math.floor(((event.clientX - rect.left) / rect.width) * imageWidth);
+    const y = Math.floor(((event.clientY - rect.top) / rect.height) * imageHeight);
+
+    onWindowSelect(clamp(x, 0, imageWidth - 1), clamp(y, 0, imageHeight - 1));
+  };
+
+  return (
+    <div
+      className={`relative w-full ${maxWidthClass} overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm ${onWindowSelect ? 'cursor-crosshair' : ''}`}
+      onClick={handleClick}
+    >
+      <div
+        className="grid aspect-square"
+        style={{ gridTemplateColumns: `repeat(${imageWidth}, minmax(0, 1fr))` }}
+      >
+        {image.flatMap((row, y) =>
+          row.map((value, x) => (
+            <div
+              key={`pixel-${y}-${x}`}
+              style={{ backgroundColor: `rgb(${formatGrayByte(value)} ${formatGrayByte(value)} ${formatGrayByte(value)})` }}
+            />
+          ))
+        )}
+      </div>
+
+      {scannedSteps.slice(-80).map(step => (
+        <div
+          key={`scanned-${step.index}`}
+          className={`pointer-events-none absolute box-border border ${
+            step.status === 'candidate'
+              ? 'border-amber-400 bg-amber-300/10'
+              : 'border-slate-400/40 bg-slate-500/5'
+          }`}
+          style={boxStyle({ x: step.x, y: step.y, width: step.windowStep.windowSize, height: step.windowStep.windowSize })}
+        />
+      ))}
+
+      {candidates.map(candidate => (
+        <div
+          key={`candidate-${candidate.sourceIndex}`}
+          className="pointer-events-none absolute box-border border-2 border-amber-500 bg-amber-300/10"
+          style={boxStyle(candidate)}
+        />
+      ))}
+
+      {detections.map((detection, index) => (
+        <div
+          key={`detection-${index}`}
+          className="pointer-events-none absolute box-border border-[3px] border-emerald-500 bg-emerald-300/10 shadow-[0_0_0_1px_rgba(255,255,255,0.9)]"
+          style={boxStyle(detection)}
+        />
+      ))}
+
+      {trainingSamples && (
+        <>
+          <div
+            className="pointer-events-none absolute box-border border-[3px] border-emerald-500 bg-emerald-300/10 shadow-[0_0_0_1px_rgba(255,255,255,0.9)]"
+            style={boxStyle(trainingSamples.positive)}
+          />
+          <div
+            className="pointer-events-none absolute rounded-md bg-emerald-600 px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-sm"
+            style={{ left: `${(trainingSamples.positive.x / imageWidth) * 100}%`, top: `${(trainingSamples.positive.y / imageHeight) * 100}%` }}
+          >
+            正样本
+          </div>
+          <div
+            className="pointer-events-none absolute box-border border-[3px] border-slate-500 bg-slate-300/10 shadow-[0_0_0_1px_rgba(255,255,255,0.9)]"
+            style={boxStyle(trainingSamples.negative)}
+          />
+          <div
+            className="pointer-events-none absolute rounded-md bg-slate-700 px-1.5 py-0.5 text-[10px] font-semibold text-white shadow-sm"
+            style={{ left: `${(trainingSamples.negative.x / imageWidth) * 100}%`, top: `${(trainingSamples.negative.y / imageHeight) * 100}%` }}
+          >
+            负样本
+          </div>
+        </>
+      )}
+
+      {currentStep && (
+        <div
+          className="pointer-events-none absolute box-border border-[3px] border-red-600 bg-red-500/10"
+          style={boxStyle({
+            x: currentStep.x,
+            y: currentStep.y,
+            width: currentStep.windowStep.windowSize,
+            height: currentStep.windowStep.windowSize,
+          })}
+        />
+      )}
+    </div>
+  );
+}
+
+function RouteCompare() {
+  const routes = [
+    {
+      name: 'Haar + Cascade',
+      role: '快速过滤大量背景窗口',
+      scene: '人脸、固定结构目标',
+      note: '前几级很简单，先把明显背景排除，后几级只处理少数疑似目标。',
+    },
+    {
+      name: 'HOG + SVM',
+      role: '用梯度结构描述目标轮廓',
+      scene: '行人、边缘轮廓清楚的目标',
+      note: 'HOG 页学到的是特征向量怎么来，SVM 负责把向量分成目标或背景。',
+    },
+    {
+      name: 'LBP + SVM',
+      role: '用局部纹理统计描述窗口',
+      scene: '纹理差异明显的目标',
+      note: 'Haar/LBP 页学到的是窗口如何变成纹理直方图，分类器读取的是这些统计值。',
+    },
+  ];
+
+  return (
+    <div className="grid gap-3 lg:grid-cols-3">
+      {routes.map(route => (
+        <TeachingCard key={route.name}>
+          <div className="text-sm font-semibold text-slate-800">{route.name}</div>
+          <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+            {route.role}
+          </div>
+          <p className="mt-3 text-xs leading-6 text-slate-600">{route.note}</p>
+          <div className="mt-3 text-[11px] font-medium text-slate-500">典型场景：{route.scene}</div>
+        </TeachingCard>
+      ))}
+    </div>
+  );
+}
 
 export default function ClassifierDetectionPipelinePage() {
-  const [topic, setTopic] = useState<TopicKey>('overview');
+  const [taskStage, setTaskStage] = useState<TaskStage>('intro');
+  const [scanIndex, setScanIndex] = useState(0);
+  const [autoScan, setAutoScan] = useState(false);
 
-  const mainVisual = useMemo(() => {
-    if (topic === 'overview') {
-      return (
-        <ProcessRail>
-          <FlowColumns>
-            <FlowColumn align="start">
-              <FlowNode tone="red">
-                <div className="mb-2 text-xs font-semibold text-red-700">样本采集</div>
-                <div className="max-w-[10rem] space-y-1 text-[11px] leading-5 text-slate-600">
-                  <p>采集正样本（目标）和负样本（背景），构成训练数据集。</p>
-                  <p className="mt-2 text-[10px] text-red-500">正例 + 负例</p>
-                </div>
-              </FlowNode>
-            </FlowColumn>
-            <FlowColumn align="center">
-              <FlowNode tone="amber">
-                <div className="mb-2 text-xs font-semibold text-amber-800">特征提取</div>
-                <div className="max-w-[10rem] space-y-1 text-[11px] leading-5 text-slate-600">
-                  <p>从每个样本中计算特征向量：HOG、LBP 或 Haar。</p>
-                  <p className="mt-2 text-[10px] text-amber-600">HOG / LBP / Haar</p>
-                </div>
-              </FlowNode>
-            </FlowColumn>
-            <FlowColumn align="center">
-              <FlowNode tone="amber">
-                <div className="mb-2 text-xs font-semibold text-amber-800">分类器训练</div>
-                <div className="max-w-[10rem] space-y-1 text-[11px] leading-5 text-slate-600">
-                  <p>用特征向量训练分类器（SVM、级联分类器等）。</p>
-                  <p className="mt-2 text-[10px] text-amber-600">SVM / Cascade</p>
-                </div>
-              </FlowNode>
-            </FlowColumn>
-            <FlowColumn align="end">
-              <FlowNode tone="emerald">
-                <div className="mb-2 text-xs font-semibold text-emerald-700">滑动窗口检测</div>
-                <div className="max-w-[10rem] space-y-1 text-[11px] leading-5 text-slate-600">
-                  <p>用训练好的分类器逐窗口扫描输入图像，输出检测结果。</p>
-                  <p className="mt-2 text-[10px] text-emerald-600">检测框 + 置信度</p>
-                </div>
-              </FlowNode>
-            </FlowColumn>
-          </FlowColumns>
-        </ProcessRail>
-      );
+  const originalImage = useMemo(() => createClassifierTeachingImage(), []);
+  const positiveTrainingSample = useMemo(
+    () => cropImageRegion(originalImage, TRAINING_SAMPLE_WINDOWS.positive),
+    [originalImage]
+  );
+  const negativeTrainingSample = useMemo(
+    () => cropImageRegion(originalImage, TRAINING_SAMPLE_WINDOWS.negative),
+    [originalImage]
+  );
+  const scoreImage = useMemo(() => computeDetectionScoreMap(originalImage, MAIN_CONFIG), [originalImage]);
+  const progress = useMemo(
+    () => getScanProgressAt(originalImage, MAIN_CONFIG, scanIndex),
+    [originalImage, scanIndex]
+  );
+  const fullProgress = useMemo(
+    () => getScanProgressAt(originalImage, MAIN_CONFIG, Number.MAX_SAFE_INTEGER),
+    [originalImage]
+  );
+  const currentScanStep = progress.currentStep;
+  const currentWindowStep = currentScanStep?.windowStep ?? null;
+  const currentStepIndex = currentScanStep?.index ?? 0;
+  const stageIndex = getStageIndex(taskStage);
+  const canSelectWindow = taskStage === 'feature' || taskStage === 'classifier' || taskStage === 'scan';
+  const canShowCurrentWindow = canSelectWindow;
+  const canUseResponseMap = taskStage === 'feature' || taskStage === 'classifier';
+  const canShowScanState = taskStage === 'scan' || taskStage === 'result';
+  const displayedProgress = taskStage === 'result' ? fullProgress : progress;
+
+  useEffect(() => {
+    if (!autoScan || taskStage !== 'scan') return;
+
+    const timer = window.setInterval(() => {
+      setScanIndex(prevIndex => {
+        if (prevIndex >= progress.total - 1) {
+          window.clearInterval(timer);
+          setAutoScan(false);
+          setTaskStage('result');
+          return prevIndex;
+        }
+
+        return prevIndex + 1;
+      });
+    }, 180);
+
+    return () => window.clearInterval(timer);
+  }, [autoScan, progress.total, taskStage]);
+
+  const goStage = useCallback((stage: TaskStage) => {
+    setTaskStage(stage);
+    if (stage === 'scan' && taskStage !== 'scan') {
+      setScanIndex(0);
     }
-
-    if (topic === 'features') {
-      return (
-        <ProcessRail>
-          <FlowColumns>
-            <FlowColumn align="start">
-              <FlowNode tone="red">
-                <div className="mb-2 text-xs font-semibold text-red-700">输入图像</div>
-                <figure className="mt-2">
-                  <img
-                    src={`${IMG}/51fab89fe3c21eb6e0502002d9fe415b235f18ca816ed697b126d07de0470ff6.jpg`}
-                    alt="HOG 输入图像窗口划分"
-                    className="w-48 rounded-xl object-cover"
-                  />
-                  <figcaption className="mt-1 text-[10px] text-slate-500">
-                    图像划分为 cell &rarr; block &rarr; window
-                  </figcaption>
-                </figure>
-              </FlowNode>
-            </FlowColumn>
-            <FlowColumn align="center">
-              <FlowNode tone="amber">
-                <div className="mb-2 text-xs font-semibold text-amber-800">特征向量计算</div>
-                <div className="max-w-[10rem] space-y-2 text-[11px] leading-5 text-slate-600">
-                  <p>HOG：计算梯度方向直方图</p>
-                  <p>LBP：比较邻域灰度生成二进制编码</p>
-                  <p>Haar：积分图计算矩形区域差值</p>
-                </div>
-              </FlowNode>
-            </FlowColumn>
-            <FlowColumn align="end">
-              <FlowNode tone="emerald">
-                <div className="mb-2 text-xs font-semibold text-emerald-700">特征向量输出</div>
-                <div className="max-w-[10rem] text-[11px] leading-5 text-slate-600">
-                  <p>所有特征级联形成特征向量，作为分类器的输入。</p>
-                  <p className="mt-2 font-mono text-[10px] text-emerald-600">
-                    维度：数千至数万
-                  </p>
-                </div>
-              </FlowNode>
-            </FlowColumn>
-          </FlowColumns>
-        </ProcessRail>
-      );
+    if (stage !== 'scan') {
+      setAutoScan(false);
     }
+  }, [taskStage]);
 
-    if (topic === 'svm') {
-      return (
-        <ProcessRail>
-          <FlowColumns>
-            <FlowColumn align="start">
-              <FlowNode tone="red">
-                <div className="mb-2 text-xs font-semibold text-red-700">两类样本</div>
-                <figure className="mt-2">
-                  <img
-                    src={`${IMG}/48d3cf2834681475358da495c813bca46255d7da52a0dc99b7ef1e2b46f10d92.jpg`}
-                    alt="两类分类问题"
-                    className="w-48 rounded-xl object-cover"
-                  />
-                  <figcaption className="mt-1 text-[10px] text-slate-500">
-                    红色圆圈与绿色方块
-                  </figcaption>
-                </figure>
-              </FlowNode>
-            </FlowColumn>
-            <FlowColumn align="center">
-              <FlowNode tone="amber">
-                <div className="mb-2 text-xs font-semibold text-amber-800">寻找最优分类面</div>
-                <div className="max-w-[10rem] space-y-2 text-[11px] leading-5 text-slate-600">
-                  <p>众多分类线中，只有使分类间隔最大的那条才是最优的。</p>
-                  <figure className="mt-2">
-                    <img
-                      src={`${IMG}/8fe1382671d6600ca5dd433c2895ed1cfdeac15e37d339652612c9a1d88209a9.jpg`}
-                      alt="分类间隔 margin"
-                      className="w-48 rounded-xl object-cover"
-                    />
-                    <figcaption className="mt-1 text-[10px] text-slate-500">
-                      H：分类线，H<sub>1</sub>与H<sub>2</sub>间隔为 margin
-                    </figcaption>
-                  </figure>
-                </div>
-              </FlowNode>
-            </FlowColumn>
-            <FlowColumn align="end">
-              <FlowNode tone="emerald">
-                <div className="mb-2 text-xs font-semibold text-emerald-700">最大间隔分类</div>
-                <figure className="mt-2">
-                  <img
-                    src={`${IMG}/a8dcd1161728cd8396d534207745b560e60c51088741e9abf86a542b5c91a77d.jpg`}
-                    alt="最大间隔"
-                    className="w-48 rounded-xl object-cover"
-                  />
-                  <figcaption className="mt-1 text-[10px] text-slate-500">
-                    margin 越大，抗干扰能力越强
-                  </figcaption>
-                </figure>
-              </FlowNode>
-            </FlowColumn>
-          </FlowColumns>
-        </ProcessRail>
-      );
-    }
+  const goPrevious = useCallback(() => {
+    const nextIndex = Math.max(0, stageIndex - 1);
+    goStage(TASK_STAGES[nextIndex].key);
+  }, [goStage, stageIndex]);
 
-    if (topic === 'cascade') {
-      return (
-        <ProcessRail>
-          <FlowColumns>
-            <FlowColumn align="start">
-              <FlowNode tone="red">
-                <div className="mb-2 text-xs font-semibold text-red-700">输入窗口</div>
-                <div className="max-w-[10rem] text-[11px] leading-5 text-slate-600">
-                  <p>滑动窗口从图像中提取候选区域，送入级联分类器。</p>
-                </div>
-              </FlowNode>
-            </FlowColumn>
-            <FlowColumn align="center">
-              <FlowNode tone="amber">
-                <div className="mb-2 text-xs font-semibold text-amber-800">多级过滤</div>
-                <figure className="mt-2">
-                  <img
-                    src={`${IMG}/f978beeb7fa614e18b610012281caf842d85b6829aa8c14e8a3518b07a71cf40.jpg`}
-                    alt="级联分类器流程"
-                    className="w-64 rounded-xl object-cover"
-                  />
-                  <figcaption className="mt-1 text-[10px] text-slate-500">
-                    前级快速过滤大量负样本，后级逐步精细
-                  </figcaption>
-                </figure>
-              </FlowNode>
-            </FlowColumn>
-            <FlowColumn align="end">
-              <FlowNode tone="emerald">
-                <div className="mb-2 text-xs font-semibold text-emerald-700">检测结果</div>
-                <div className="max-w-[10rem] text-[11px] leading-5 text-slate-600">
-                  <p>只有通过全部强分类器的窗口才判为目标区域。</p>
-                  <p className="mt-2 font-mono text-[10px] text-emerald-600">
-                    准确率高
-                  </p>
-                </div>
-              </FlowNode>
-            </FlowColumn>
-          </FlowColumns>
-        </ProcessRail>
-      );
-    }
+  const goNext = useCallback(() => {
+    const nextIndex = Math.min(TASK_STAGES.length - 1, stageIndex + 1);
+    goStage(TASK_STAGES[nextIndex].key);
+  }, [goStage, stageIndex]);
 
-    return (
-      <ProcessRail>
-        <FlowColumns>
-          <FlowColumn align="start">
-            <FlowNode tone="red">
-              <div className="mb-2 text-xs font-semibold text-red-700">输入图像</div>
-              <div className="max-w-[10rem] text-[11px] leading-5 text-slate-600">
-                <p>输入任意尺寸的待检测图像。</p>
-              </div>
-            </FlowNode>
-          </FlowColumn>
-          <FlowColumn align="center">
-            <FlowNode tone="amber">
-              <div className="mb-2 text-xs font-semibold text-amber-800">滑动窗口</div>
-              <div className="max-w-[12rem] space-y-2 text-[11px] leading-5 text-slate-600">
-                <p>用固定尺寸的窗口在图像上逐行扫描。</p>
-                <p>步长（stride）决定窗口移动间隔。</p>
-                <p>多尺度：缩放图像金字塔实现多尺寸检测。</p>
-              </div>
-            </FlowNode>
-          </FlowColumn>
-          <FlowColumn align="end">
-            <FlowNode tone="emerald">
-              <div className="mb-2 text-xs font-semibold text-emerald-700">分类 + 输出</div>
-              <div className="max-w-[10rem] text-[11px] leading-5 text-slate-600">
-                <p>每个窗口提取特征后送入分类器。</p>
-                <p>分类为正的窗口合并后输出检测框。</p>
-              </div>
-            </FlowNode>
-          </FlowColumn>
-        </FlowColumns>
-      </ProcessRail>
-    );
-  }, [topic]);
+  const restartScan = useCallback(() => {
+    setScanIndex(0);
+    setAutoScan(false);
+  }, []);
 
-  const analysisPreview = useMemo(() => {
-    if (topic === 'overview') {
-      return (
-        <TeachingCard>
-          <div className="space-y-3 text-xs leading-6 text-slate-600">
-            <p>
-              基于特征和分类器的同类多目标检测是深度学习时代之前最主流的目标检测方案。
-              其核心思想是：利用目标的视觉特征（如梯度方向、纹理、亮度对比）在大量样本上训练分类器，
-              然后用训练好的分类器在输入图像上逐窗口扫描，识别目标。
-            </p>
-            <p>
-              该流程包含四个关键环节：<span className="font-semibold text-red-600">样本采集</span>
-              &rarr; <span className="font-semibold text-amber-700">特征提取</span>
-              &rarr; <span className="font-semibold text-amber-700">分类器训练</span>
-              &rarr; <span className="font-semibold text-emerald-600">滑动窗口检测</span>。
-              可用特征包括 HOG、LBP、Haar 等；常用分类器包括 SVM、级联分类器、决策树、神经网络等。
-            </p>
-          </div>
-        </TeachingCard>
-      );
-    }
+  const selectWindowAtImagePoint = useCallback((x: number, y: number) => {
+    const validWidth = scoreImage[0]?.length ?? 0;
+    const validHeight = scoreImage.length;
+    if (validWidth === 0 || validHeight === 0) return;
 
-    if (topic === 'features') {
-      return (
-        <TeachingCard>
-          <div className="space-y-3 text-xs leading-6 text-slate-600">
-            <p>
-              特征是描述目标外观的数值表达。一个好的特征应能区分目标与背景，同时对光照、尺度、旋转等变化具有鲁棒性。
-            </p>
-            <ul className="list-inside list-disc space-y-1 pl-2">
-              <li><span className="font-semibold text-amber-700">HOG</span>：适合刚性物体（行人），基于梯度方向统计</li>
-              <li><span className="font-semibold text-amber-700">LBP</span>：适合纹理丰富的区域，基于邻域二值编码</li>
-              <li><span className="font-semibold text-amber-700">Haar</span>：适合人脸检测，基于亮度对比的矩形特征</li>
-            </ul>
-          </div>
-        </TeachingCard>
-      );
-    }
+    const halfWindow = Math.floor(MAIN_CONFIG.windowSize / 2);
+    const nextX = clamp(x - halfWindow, 0, validWidth - 1);
+    const nextY = clamp(y - halfWindow, 0, validHeight - 1);
+    setScanIndex(nextY * validWidth + nextX);
+    setAutoScan(false);
+  }, [scoreImage]);
 
-    if (topic === 'svm') {
-      return (
-        <TeachingCard>
-          <div className="space-y-3 text-xs leading-6 text-slate-600">
-            <p>
-              支持向量机（SVM）由 Cortes 和 Vapnik 于 1995 年提出，在解决小样本、非线性等分类问题中表现出特有优势。
-              SVM 的核心思想是在特征空间中寻找一个使分类间隔最大化的超平面。
-            </p>
-            <p>
-              对于线性不可分的数据，SVM 通过核函数将低维数据映射到高维空间，使其在高维空间中线性可分。
-              常用的核函数包括多项式核（POLY）、径向基核（RBF）等。
-            </p>
-          </div>
-        </TeachingCard>
-      );
-    }
+  const handleInputRegionSelect = useCallback((x: number, y: number) => {
+    if (!canSelectWindow) return;
+    selectWindowAtImagePoint(x, y);
+  }, [canSelectWindow, selectWindowAtImagePoint]);
 
-    if (topic === 'cascade') {
-      return (
-        <TeachingCard>
-          <div className="space-y-3 text-xs leading-6 text-slate-600">
-            <p>
-              级联分类器（Cascade Classifier）由 Viola 和 Jones 提出，最初用于实时人脸检测。
-              它将多个强分类器串联成级联结构，前级分类器结构简单（弱分类器数量少），后级逐步精细化。
-            </p>
-            <p>
-              在检测时，输入窗口依次通过每个强分类器。
-              前级快速过滤掉大量负样本，只有全部通过所有强分类器的窗口才被判定为目标。
-            </p>
-          </div>
-        </TeachingCard>
-      );
-    }
+  const handleOutputPixelSelect = useCallback((x: number, y: number) => {
+    if (!canUseResponseMap) return;
 
-    return (
-      <TeachingCard>
-        <div className="space-y-3 text-xs leading-6 text-slate-600">
-          <p>
-            滑动窗口检测是经典目标检测中产生候选区域的标准方法。
-            其基本操作是：在输入图像上放置一个固定尺寸的窗口，按设定的步长从左到右、从上到下逐位置滑动，
-            对每个窗口位置提取特征并送入分类器判断。
-          </p>
-          <p>
-            为检测不同大小的目标，通常构建图像金字塔&mdash;&mdash;将输入图像按比例缩放，
-            在每个尺度的图像上执行滑动窗口检测，最后合并所有尺度上的检测结果。
-          </p>
-        </div>
-      </TeachingCard>
-    );
-  }, [topic]);
+    const validWidth = scoreImage[0]?.length ?? 0;
+    const validHeight = scoreImage.length;
+    if (validWidth === 0 || validHeight === 0) return;
 
-  const stepDetails = useMemo(() => {
-    if (topic === 'features') {
-      return (
-        <div className="space-y-6">
-          <div>
-            <h2 className="mb-3 text-sm font-semibold text-slate-800">（1）HOG 特征</h2>
-            <p className="mb-3 text-xs leading-6 text-slate-600">
-              HOG（方向梯度直方图）通过统计图像局部区域的梯度方向分布来描述目标外观。
-              其基本计算单元为 8&times;8 像素的 cell，4 个 cell 组成一个 block，
-              整个检测窗口（如 64&times;128）由若干 block 通过滑动覆盖。
-            </p>
-            <div className="mb-4 space-y-3">
-              <FormulaCard
-                label="梯度幅值 M(i,j)"
-                mathML={HOG_MAGNITUDE}
-                note="分别计算水平和垂直方向的一阶差分，再取欧几里得范数。"
-              />
-              <FormulaCard
-                label="梯度方向 &theta;(i,j)"
-                mathML={HOG_THETA}
-                note="梯度方向范围为 0&deg;～360&deg;（或有符号 0&deg;～180&deg;），nBins=9 时每 20&deg; 一个区间。"
-              />
-            </div>
-            <figure className="mb-4">
-              <img
-                src={`${IMG}/32517170209fcbd2136ab4b9160fb61d5a7f078cd82673815993a5d28398bac8.jpg`}
-                alt="HOG 方向直方图"
-                className="w-full max-w-md rounded-xl object-cover"
-              />
-              <figcaption className="mt-1 text-xs text-slate-500">
-                每个 cell 内的梯度方向直方图，18 个柱每个 20&deg;
-              </figcaption>
-            </figure>
-            <p className="text-xs leading-6 text-slate-600">
-              所有 cell 的直方图级联成 block 特征向量，所有 block 的特征向量再级联为完整的 HOG 特征向量。
-              例如 64&times;128 窗口、8&times;8 cell、2&times;2 block、9 bins 时，特征维度为 7&times;15&times;4&times;9 = 3780。
-            </p>
-          </div>
+    const nextX = clamp(x, 0, validWidth - 1);
+    const nextY = clamp(y, 0, validHeight - 1);
+    setScanIndex(nextY * validWidth + nextX);
+    setAutoScan(false);
+  }, [canUseResponseMap, scoreImage]);
 
-          <div className="border-t border-slate-200 pt-5">
-            <h2 className="mb-3 text-sm font-semibold text-slate-800">（2）LBP 特征</h2>
-            <p className="mb-3 text-xs leading-6 text-slate-600">
-              LBP（局部二值模式）是一种描述图像局部纹理特征的算子。
-              它将 3&times;3 邻域中中心像素与周围 8 个像素进行比较，生成一个 8 位二进制编码作为该像素的 LBP 值。
-            </p>
-            <div className="mb-4 space-y-3">
-              <FormulaCard
-                label="LBP 编码"
-                mathML={LBP_FORMULA}
-                note="p_c 为中心像素值，p_n 为邻域像素值。"
-              />
-              <FormulaCard
-                label="比较函数 s(x)"
-                mathML={LBP_SIGN}
-                note="周围像素大于等于中心像素则记 1，否则记 0。"
-              />
-            </div>
-            <p className="text-xs leading-6 text-slate-600">
-              对每个 cell 统计 LBP 值的直方图，再级联所有 cell 的直方图构成整幅图像的 LBP 纹理特征向量。
-              归一化处理可增强对光照变化的鲁棒性。
-            </p>
-          </div>
+  const handleDirectionMove = useGridNavigation({
+    current: currentScanStep ? { x: currentScanStep.x, y: currentScanStep.y } : null,
+    bounds: { width: scoreImage[0]?.length ?? 0, height: scoreImage.length },
+    onMove: point => {
+      const validWidth = scoreImage[0]?.length ?? 0;
+      setScanIndex(point.y * validWidth + point.x);
+      setAutoScan(false);
+    },
+    disabled: !currentScanStep || !canSelectWindow,
+  });
 
-          <div className="border-t border-slate-200 pt-5">
-            <h2 className="mb-3 text-sm font-semibold text-slate-800">（3）Haar 特征</h2>
-            <p className="mb-3 text-xs leading-6 text-slate-600">
-              Haar-like 特征通过计算图像中矩形区域间的亮度对比来描述局部特征。
-              每种特征由黑色和白色矩形区域组成，特征值为白色区域像素和减去黑色区域像素和。
-              常用 Haar 特征包括边缘特征、线特征、点特征和对角线特征。
-            </p>
-            <div className="mb-4 space-y-3">
-              <FormulaCard
-                label="Haar 特征值"
-                mathML={HAAR_FORMULA}
-                note="白色区域与黑色区域的像素值之和的差值即为该 Haar 特征的特征值。"
-              />
-              <FormulaCard
-                label="积分图加速"
-                mathML={INTEGRAL_FORMULA}
-                note="积分图可在常数时间内快速计算任意矩形区域的像素和。"
-              />
-            </div>
-            <figure className="mb-4">
-              <img
-                src={`${IMG}/0aad807ba78ab4647a68c5822dee639c68c05d14405601ed2f33a8797fb2a65a.jpg`}
-                alt="Haar 边缘特征"
-                className="w-full max-w-sm rounded-xl object-cover"
-              />
-              <figcaption className="mt-1 text-xs text-slate-500">
-                边缘特征（Edge feature）：沿 x 方向和 y 方向的亮度突变
-              </figcaption>
-            </figure>
-          </div>
-        </div>
-      );
-    }
+  const visualOverlayPaths = useMemo<AnchoredOverlayPath[]>(() => {
+    if (!currentScanStep || !canUseResponseMap) return [];
 
-    if (topic === 'svm') {
-      return (
-        <div className="space-y-6">
-          <div>
-            <h2 className="mb-3 text-sm font-semibold text-slate-800">SVM 基本原理</h2>
-            <p className="mb-3 text-xs leading-6 text-slate-600">
-              SVM 是在两类线性可分情况下，从获得最优分类面问题中提出的。
-              最优分类面就是要求分类面不但能将两类正确分开，而且应使分类间隔最大。
-            </p>
-            <figure className="mb-4">
-              <div className="flex flex-wrap gap-4">
-                <div className="flex-1">
-                  <img
-                    src={`${IMG}/809fdad6a0d9ce3a3e36b20de077bf432736b114b621b9e2ed49c41339820300.jpg`}
-                    alt="一个候选分类面"
-                    className="w-full max-w-xs rounded-xl object-cover"
-                  />
-                  <figcaption className="mt-1 text-center text-xs text-slate-500">一个可能的分类面</figcaption>
-                </div>
-                <div className="flex-1">
-                  <img
-                    src={`${IMG}/45137fcc3ca1afae903e0251a3916e70f72130a8fabb9ff0886d9da94613bbd6.jpg`}
-                    alt="另一个候选分类面"
-                    className="w-full max-w-xs rounded-xl object-cover"
-                  />
-                  <figcaption className="mt-1 text-center text-xs text-slate-500">另一个可能的分类面</figcaption>
-                </div>
-                <div className="flex-1">
-                  <img
-                    src={`${IMG}/000f4de0ef1a199b4bd4d3ab2d47172f0a7665d46eaea3a44708283a9ac061f6.jpg`}
-                    alt="最优分类面选择"
-                    className="w-full max-w-xs rounded-xl object-cover"
-                  />
-                  <figcaption className="mt-1 text-center text-xs text-slate-500">
-                    哪个更好？B<sub>1</sub> 还是 B<sub>2</sub>？
-                  </figcaption>
-                </div>
-              </div>
-            </figure>
-
-            <div className="mb-4 space-y-3">
-              <FormulaCard
-                label="分类超平面"
-                mathML={SVM_HYPERPLANE}
-                note="w 为法向量，b 为偏置。该平面将特征空间分为两个半空间。"
-              />
-              <FormulaCard
-                label="决策函数"
-                mathML={SVM_DECISION}
-                note="sign 为正则判定为 +1 类（目标），为负则判定为 -1 类（背景）。"
-              />
-              <FormulaCard
-                label="分类间隔最大化"
-                mathML={SVM_MARGIN}
-                note="margin 越大，分类面对新样本的泛化能力越强。"
-              />
-            </div>
-
-            <figure className="mb-4">
-              <div className="flex flex-wrap gap-4">
-                <div className="flex-1">
-                  <img
-                    src={`${IMG}/a8dcd1161728cd8396d534207745b560e60c51088741e9abf86a542b5c91a77d.jpg`}
-                    alt="margin 越大越好"
-                    className="w-full max-w-xs rounded-xl object-cover"
-                  />
-                  <figcaption className="mt-1 text-center text-xs text-slate-500">
-                    Margin 越大，抗干扰能力越强
-                  </figcaption>
-                </div>
-                <div className="flex-1">
-                  <img
-                    src={`${IMG}/48c311edb9c3966852c6688d54d154017a66728b2e08874a7558b2bd5b58c5a8.jpg`}
-                    alt="margin 越大越好说明"
-                    className="w-full max-w-xs rounded-xl object-cover"
-                  />
-                  <figcaption className="mt-1 text-center text-xs text-slate-500">
-                    Margin 越大，分类面可移动范围更大
-                  </figcaption>
-                </div>
-              </div>
-            </figure>
-          </div>
-
-          <div className="border-t border-slate-200 pt-5">
-            <h2 className="mb-3 text-sm font-semibold text-slate-800">核映射处理线性不可分</h2>
-            <p className="mb-3 text-xs leading-6 text-slate-600">
-              对于线性不可分的数据，SVM 通过核函数将数据从低维空间映射到高维空间，
-              使得原本在低维空间线性不可分的数据在高维空间中变得线性可分。
-            </p>
-            <div className="mb-4 flex flex-wrap gap-4">
-              <figure className="flex-1">
-                <img
-                  src={`${IMG}/47e5899680dea200dbde6274214cef7b2427854f35bbe4f88d89811b4fee95e7.jpg`}
-                  alt="二维线性不可分"
-                  className="w-full max-w-xs rounded-xl object-cover"
-                />
-                <figcaption className="mt-1 text-center text-xs text-slate-500">二维空间线性不可分</figcaption>
-              </figure>
-              <figure className="flex-1">
-                <img
-                  src={`${IMG}/02707f0848d078272b8cbe07b5d70d86e4ba81854dd1b39dfda93c4a1bdc885b.jpg`}
-                  alt="三维线性可分"
-                  className="w-full max-w-xs rounded-xl object-cover"
-                />
-                <figcaption className="mt-1 text-center text-xs text-slate-500">三维空间线性可分</figcaption>
-              </figure>
-            </div>
-            <div className="mb-4">
-              <FormulaCard
-                label="核函数"
-                mathML={SVM_KERNEL}
-                note="&phi; 为映射函数，将低维数据映射到高维特征空间。核函数避免了显式计算高维空间的内积。"
-              />
-            </div>
-            <p className="text-xs leading-6 text-slate-600">
-              常用的核函数包括：线性核（Linear）、多项式核（POLY）、径向基核（RBF / 高斯核）、Sigmoid 核。
-              其中 RBF 核是最常用的通用核函数，适用于大多数非线性分类问题。
-            </p>
-          </div>
-
-          <div className="border-t border-slate-200 pt-5">
-            <h2 className="mb-3 text-sm font-semibold text-slate-800">链式代入示例</h2>
-            <p className="mb-3 text-xs leading-6 text-slate-600">
-              给定权重向量 w = [1, -1]、偏置 b = 0，对样本点 x = [2, 1]
-              （属于红色圆圈类）进行判定：
-            </p>
-            <FormulaCard
-              label="代入决策函数"
-              mathML={SVM_CHAIN_SUB}
-              note="结果为 +1，判定为红色圆圈类（正类）。如果结果为 -1 则判为绿色方块类（负类）。"
-            />
-          </div>
-
-          <div className="border-t border-slate-200 pt-5">
-            <h2 className="mb-3 text-sm font-semibold text-slate-800">OpenCV SVM 参数设置</h2>
-            <TeachingCard>
-              <ul className="list-inside list-disc space-y-2 text-xs leading-6 text-slate-700">
-                <li>
-                  <span className="font-semibold">svm-&gt;setType(SVM::C_SVC)</span>：
-                  可以处理非线性分割问题，通过惩罚参数 C 控制容错度。
-                </li>
-                <li>
-                  <span className="font-semibold">svm-&gt;setKernel(SVM::POLY)</span>：
-                  使用多项式核函数。也可以设置为 SVM::RBF 使用径向基核。
-                </li>
-                <li>
-                  <span className="font-semibold">svm-&gt;setTermCriteria(...)</span>：
-                  设置算法终止条件，如最大迭代次数 3000，精度阈值 1e-6。
-                </li>
-                <li>
-                  <span className="font-semibold">svm-&gt;train(trainDataMat, ROW_SAMPLE, labelsMat)</span>：
-                  用样本特征矩阵和标签矩阵进行训练。
-                </li>
-                <li>
-                  <span className="font-semibold">svm-&gt;predict(testSample)</span>：
-                  对新输入样本进行分类预测，返回预测类别标签。
-                </li>
-              </ul>
-            </TeachingCard>
-          </div>
-        </div>
-      );
-    }
-
-    if (topic === 'cascade') {
-      return (
-        <div className="space-y-6">
-          <div>
-            <h2 className="mb-3 text-sm font-semibold text-slate-800">级联分类器原理</h2>
-            <p className="mb-3 text-xs leading-6 text-slate-600">
-              级联分类器（Cascade Classifier）的核心思想是通过串联多个由弱分类器提升而成的强分类器，
-              实现逐步精细的检测过滤。
-            </p>
-            <TeachingCard>
-              <div className="space-y-2 text-xs leading-6 text-slate-700">
-                <p><span className="font-semibold">关键特点：</span></p>
-                <ol className="list-inside list-decimal space-y-2">
-                  <li><span className="font-semibold">前级简单</span>：前面的强分类器弱分类器数量少，快速过滤大量负窗口。</li>
-                  <li><span className="font-semibold">后级复杂</span>：后面的强分类器包含更多弱分类器，只在可能为目标的位置精细判断。</li>
-                  <li><span className="font-semibold">串联通过</span>：输入窗口必须按顺序通过每一级分类器，任一级拒绝则立即丢弃。</li>
-                  <li><span className="font-semibold">最终判决</span>：只有全部通过所有级的窗口才被判定为目标区域。</li>
-                </ol>
-              </div>
-            </TeachingCard>
-            <figure className="mb-4 mt-4">
-              <img
-                src={`${IMG}/f978beeb7fa614e18b610012281caf842d85b6829aa8c14e8a3518b07a71cf40.jpg`}
-                alt="级联分类器流程"
-                className="w-full max-w-2xl rounded-xl object-cover"
-              />
-              <figcaption className="mt-1 text-xs text-slate-500">
-                级联分类器流程：输入窗口依次通过各级强分类器，全部通过则判为目标
-              </figcaption>
-            </figure>
-          </div>
-        </div>
-      );
-    }
-
-    if (topic === 'sliding') {
-      return (
-        <div className="space-y-6">
-          <div>
-            <h2 className="mb-3 text-sm font-semibold text-slate-800">滑动窗口检测</h2>
-            <p className="mb-3 text-xs leading-6 text-slate-600">
-              滑动窗口是经典目标检测中产生候选区域的基本方法。其操作过程如下：
-            </p>
-            <TeachingCard>
-              <div className="space-y-2 text-xs leading-6 text-slate-700">
-                <p><span className="font-semibold">操作步骤：</span></p>
-                <ol className="list-inside list-decimal space-y-2">
-                  <li>设定窗口尺寸，在输入图像上从左上角开始放置。</li>
-                  <li>按水平步长向右移动，到达右边界后按垂直步长向下换行。</li>
-                  <li>对每个窗口位置提取特征向量（HOG / LBP / Haar）。</li>
-                  <li>将特征向量送入分类器，得到该窗口的分类结果。</li>
-                  <li>构建图像金字塔，在每个尺度重复上述过程，实现多尺度检测。</li>
-                  <li>合并所有正窗口，用非极大值抑制（NMS）去除重复框。</li>
-                </ol>
-              </div>
-            </TeachingCard>
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="space-y-6">
-        <div>
-          <h2 className="mb-3 text-sm font-semibold text-slate-800">基于特征和分类器的目标检测流程</h2>
-          <p className="mb-3 text-xs leading-6 text-slate-600">
-            基于特征和分类器的同类多目标检测通过以下四个步骤实现目标的自动识别与定位。
-          </p>
-
-          <div className="mb-4 border-l-4 border-red-300 pl-4">
-            <h3 className="mb-2 text-xs font-semibold text-red-700">1. 样本采集</h3>
-            <p className="text-xs leading-6 text-slate-600">
-              收集包含待检测目标的正样本和不包含目标的负样本，统一缩放到固定尺寸。
-              正样本数量通常需要数千至数万张，涵盖目标的各种姿态、光照和背景条件。
-            </p>
-          </div>
-
-          <div className="mb-4 border-l-4 border-amber-300 pl-4">
-            <h3 className="mb-2 text-xs font-semibold text-amber-700">2. 特征提取</h3>
-            <p className="text-xs leading-6 text-slate-600">
-              对每个样本计算特征向量。HOG 特征基于梯度方向统计，LBP 基于邻域纹理编码，
-              Haar 基于亮度对比。特征向量是连接原始图像和分类器的桥梁。
-            </p>
-          </div>
-
-          <div className="mb-4 border-l-4 border-amber-300 pl-4">
-            <h3 className="mb-2 text-xs font-semibold text-amber-700">3. 分类器训练</h3>
-            <p className="text-xs leading-6 text-slate-600">
-              使用正负样本的特征向量训练分类器。SVM 寻找最大间隔分类超平面，
-              级联分类器串联多个强分类器逐步过滤。
-            </p>
-          </div>
-
-          <div className="mb-4 border-l-4 border-emerald-300 pl-4">
-            <h3 className="mb-2 text-xs font-semibold text-emerald-700">4. 滑动窗口检测</h3>
-            <p className="text-xs leading-6 text-slate-600">
-              在输入图像上逐位置移动窗口，提取特征送入分类器。判定为正的窗口对应目标区域。
-              通过图像金字塔实现多尺度检测，最后用 NMS 合并重叠结果。
-            </p>
-          </div>
-
-          <TeachingCard>
-            <div className="space-y-2 text-xs leading-6 text-slate-700">
-              <p><span className="font-semibold">特征与分类器典型组合：</span></p>
-              <ul className="list-inside list-disc space-y-1">
-                <li><span className="font-semibold text-amber-700">HOG + SVM</span>：行人检测（Dalal &amp; Triggs, 2005）</li>
-                <li><span className="font-semibold text-amber-700">Haar + Cascade</span>：人脸检测（Viola &amp; Jones, 2001）</li>
-                <li><span className="font-semibold text-amber-700">LBP + SVM</span>：纹理识别、人脸识别</li>
-              </ul>
-            </div>
-          </TeachingCard>
-        </div>
-      </div>
-    );
-  }, [topic]);
+    return [
+      {
+        id: 'task-window',
+        tone: 'red',
+        from: {
+          kind: 'region',
+          selector: '.conv-anchor-input-main',
+          x: currentScanStep.x,
+          y: currentScanStep.y,
+          size: currentScanStep.windowStep.windowSize,
+          imageWidth: originalImage[0]?.length ?? 0,
+          imageHeight: originalImage.length,
+        },
+        to: { kind: 'element', selector: '.classifier-task-window' },
+      },
+      {
+        id: 'task-output',
+        tone: 'emerald',
+        from: {
+          kind: 'pixel',
+          selector: '.conv-anchor-output-main',
+          x: currentScanStep.x,
+          y: currentScanStep.y,
+          imageWidth: scoreImage[0]?.length ?? 0,
+          imageHeight: scoreImage.length,
+        },
+        to: { kind: 'element', selector: '.classifier-task-output' },
+      },
+    ];
+  }, [canUseResponseMap, currentScanStep, originalImage, scoreImage]);
 
   const parameters = (
     <div className="space-y-4">
-      <SelectParam
-        label="教学主题"
-        value={topic}
-        onChange={(value: string) => setTopic(value as TopicKey)}
-        options={TOPIC_OPTIONS}
-      />
-      <div className="rounded-2xl border border-blue-200 bg-blue-50 px-3 py-3 text-xs leading-5 text-blue-700">
-        <p className="font-semibold">导航提示</p>
-        <p className="mt-2">
-          通过切换教学主题，可以分别了解检测流程全貌、特征提取原理、
-          SVM 分类器数学基础、级联分类器过滤策略和滑动窗口检测的实现方式。
+      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-3">
+        <div className="text-xs font-semibold text-emerald-800">课堂任务</div>
+        <p className="mt-2 text-xs leading-5 text-emerald-800">
+          用传统机器学习检测器找出图像中的单个目标区域。
         </p>
       </div>
+
+      <StageStepper activeStage={taskStage} onStageChange={goStage} />
+
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={goPrevious}
+          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          上一步
+        </button>
+        <button
+          type="button"
+          onClick={goNext}
+          className="rounded-xl border border-emerald-200 bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
+        >
+          下一步
+        </button>
+      </div>
+
+      {taskStage === 'scan' && (
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setAutoScan(prev => !prev)}
+            className={`rounded-xl border px-3 py-2 text-xs font-semibold ${
+              autoScan
+                ? 'border-red-200 bg-red-50 text-red-700'
+                : 'border-amber-200 bg-amber-50 text-amber-800'
+            }`}
+          >
+            {autoScan ? '暂停扫描' : '自动扫描'}
+          </button>
+          <button
+            type="button"
+            onClick={restartScan}
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            回到起点
+          </button>
+        </div>
+      )}
+
+      {canShowScanState && (
+        <div className="rounded-2xl border border-blue-200 bg-blue-50 px-3 py-3 text-xs leading-5 text-blue-700">
+          <div className="font-semibold">{taskStage === 'result' ? '整图输出统计' : '扫描状态'}</div>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <MetricCard label="已扫描" value={`${displayedProgress.scannedCount}/${displayedProgress.total}`} />
+            <MetricCard label="候选窗口" value={String(displayedProgress.candidateCount)} tone="amber" />
+            <MetricCard label="拒绝窗口" value={String(displayedProgress.rejectedCount)} tone="red" />
+            <MetricCard label="最终框" value={String(displayedProgress.detections.length)} tone="emerald" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const contentHeader = (
+    <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
+      <div>
+        <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-600">任务目标</div>
+        <h2 className="mt-2 text-xl font-semibold text-slate-900">在图像中找出一个目标区域</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          训练样本让分类器学会区分目标和背景；检测时，滑动窗口逐个检查图像位置，
+          每个窗口先提取 Haar 特征，再经过级联分类器过滤，最终保留候选检测框。
+        </p>
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-center text-xs">
+        <MetricCard label="主线特征" value="Haar" tone="amber" />
+        <MetricCard label="主线分类器" value="Cascade" tone="emerald" />
+        <MetricCard label="目标输出" value="检测框" />
+      </div>
+    </div>
+  );
+
+  const mainVisual = useMemo(() => {
+    if (taskStage === 'feature' || taskStage === 'classifier' || taskStage === 'compare') {
+      return null;
+    }
+
+    if (taskStage === 'training') {
+      return (
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(17rem,0.85fr)] lg:items-center">
+          <div className="flex flex-col items-center gap-3 rounded-2xl border border-slate-200 bg-white/95 px-4 py-4 shadow-sm">
+            <div className="flex w-full items-center justify-between gap-3">
+              <div>
+                <div className="text-xs font-semibold text-slate-800">训练样本在原图中的位置</div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  绿色框提供目标外观，灰色框提供背景外观，二者共同定义分类器要区分的边界。
+                </p>
+              </div>
+              <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-800">
+                固定样本
+              </span>
+            </div>
+            <DetectionBoard
+              image={originalImage}
+              currentStep={null}
+              scannedSteps={[]}
+              candidates={[]}
+              detections={[]}
+              trainingSamples={TRAINING_SAMPLE_WINDOWS}
+              size="large"
+            />
+          </div>
+
+          <div className="grid gap-3">
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-800">
+              <div className="text-sm font-semibold">正样本：目标窗口</div>
+              <div className="mt-3">
+                <ImageCanvas image={positiveTrainingSample} maxDisplaySize={132} showGrid />
+              </div>
+              <p className="mt-3 text-xs leading-5">标签 +1，用来告诉分类器这类外观应保留。</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-700">
+              <div className="text-sm font-semibold">负样本：背景窗口</div>
+              <div className="mt-3">
+                <ImageCanvas image={negativeTrainingSample} maxDisplaySize={132} showGrid />
+              </div>
+              <p className="mt-3 text-xs leading-5">标签 -1，用来告诉分类器这类外观应拒绝。</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (taskStage === 'scan') {
+      return (
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-center">
+          <div className="flex flex-col items-center gap-3 rounded-2xl border border-slate-200 bg-white/95 px-4 py-4 shadow-sm">
+            <div className="flex w-full flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-xs font-semibold text-slate-800">滑动窗口正在扫完整张图</div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  红框是当前窗口；灰框已拒绝，橙框是通过全部级联阶段的候选窗口。
+                </p>
+              </div>
+              <span className="rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-700">
+                可点击定位
+              </span>
+            </div>
+            <DetectionBoard
+              image={originalImage}
+              currentStep={currentScanStep}
+              scannedSteps={progress.scannedSteps}
+              candidates={progress.candidateWindows}
+              detections={[]}
+              size="large"
+              onWindowSelect={selectWindowAtImagePoint}
+            />
+          </div>
+
+          <div className="grid gap-3">
+            <MetricCard label="已扫描窗口" value={`${progress.scannedCount}/${progress.total}`} />
+            <MetricCard label="被拒绝窗口" value={String(progress.rejectedCount)} tone="red" />
+            <MetricCard label="候选窗口" value={String(progress.candidateCount)} tone="amber" />
+            <MetricCard label="当前窗口" value={currentScanStep ? `(${currentScanStep.x}, ${currentScanStep.y})` : '-'} />
+          </div>
+        </div>
+      );
+    }
+
+    const resultDetections = fullProgress.detections;
+
+    return (
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-center">
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-slate-200 bg-white/95 px-4 py-4 shadow-sm">
+          <div className="flex w-full flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-xs font-semibold text-slate-800">
+                {taskStage === 'result' ? '最终检测框回到原图' : '待检测图像'}
+              </div>
+              <p className="mt-1 text-xs leading-5 text-slate-500">
+                {taskStage === 'result'
+                  ? '绿色框是整图扫描后的输出结果，来自多个相邻候选窗口的合并。'
+                  : '目标检测任务从原图开始，后续步骤会解释窗口怎样被判断为目标或背景。'}
+              </p>
+            </div>
+            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+              {taskStage === 'result' ? '输出结果' : '任务输入'}
+            </span>
+          </div>
+          <DetectionBoard
+            image={originalImage}
+            currentStep={null}
+            scannedSteps={taskStage === 'result' ? fullProgress.scannedSteps : []}
+            candidates={taskStage === 'result' ? fullProgress.candidateWindows : []}
+            detections={taskStage === 'result' ? resultDetections : []}
+            size="large"
+          />
+        </div>
+
+        <div className="grid gap-3">
+          {taskStage === 'result' ? (
+            <>
+              <MetricCard label="候选窗口" value={String(fullProgress.candidateCount)} tone="amber" />
+              <MetricCard label="最终框数量" value={String(resultDetections.length)} tone="emerald" />
+              <MetricCard label="主线特征" value="Haar" />
+              <MetricCard label="主线分类器" value="Cascade" tone="emerald" />
+            </>
+          ) : (
+            <>
+              <MetricCard label="任务" value="找目标" tone="emerald" />
+              <MetricCard label="下一步" value="训练样本" tone="amber" />
+              <MetricCard label="检测方式" value="滑动窗口" />
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }, [
+    currentScanStep,
+    fullProgress,
+    negativeTrainingSample,
+    originalImage,
+    positiveTrainingSample,
+    progress,
+    selectWindowAtImagePoint,
+    taskStage,
+  ]);
+
+  const analysisPreview = (
+    <div className="space-y-4">
+      {taskStage === 'compare' ? (
+        <RouteCompare />
+      ) : (
+        <ProcessRail>
+          <FlowColumns>
+            <FlowColumn align="start">
+              <FlowNode tone="red" className="classifier-task-window">
+                <div className="mb-2 text-[11px] font-semibold uppercase text-red-700">
+                  {taskStage === 'training' ? '训练样本' : '当前窗口'}
+                </div>
+                {taskStage === 'training' ? (
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-emerald-800">
+                      <div className="font-semibold">正样本</div>
+                      <div className="mt-2">
+                        <ImageCanvas image={positiveTrainingSample} maxDisplaySize={96} showGrid />
+                      </div>
+                      <div className="mt-2 font-mono text-[10px]">
+                        ({TRAINING_SAMPLE_WINDOWS.positive.x}, {TRAINING_SAMPLE_WINDOWS.positive.y})
+                      </div>
+                      <p className="mt-2 leading-5">包含目标的窗口，用来告诉分类器“这类外观应保留”。</p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-slate-700">
+                      <div className="font-semibold">负样本</div>
+                      <div className="mt-2">
+                        <ImageCanvas image={negativeTrainingSample} maxDisplaySize={96} showGrid />
+                      </div>
+                      <div className="mt-2 font-mono text-[10px]">
+                        ({TRAINING_SAMPLE_WINDOWS.negative.x}, {TRAINING_SAMPLE_WINDOWS.negative.y})
+                      </div>
+                      <p className="mt-2 leading-5">背景窗口，用来告诉分类器“这类外观应拒绝”。</p>
+                    </div>
+                  </div>
+                ) : currentWindowStep ? (
+                  <div>
+                    <ImageCanvas image={currentWindowStep.inputRegion} maxDisplaySize={150} showGrid />
+                    <p className="mt-2 text-xs leading-5 text-red-700">
+                      窗口坐标 ({currentWindowStep.x}, {currentWindowStep.y})，尺寸 {currentWindowStep.windowSize}x{currentWindowStep.windowSize}。
+                    </p>
+                  </div>
+                ) : null}
+              </FlowNode>
+            </FlowColumn>
+
+            <FlowColumn align="center">
+              <FlowNode tone="amber">
+                <div className="mb-2 text-[11px] font-semibold uppercase text-amber-800">Haar 特征</div>
+                {currentWindowStep ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <MetricCard label="黑区和" value={String(currentWindowStep.haarStep?.blackSum ?? 0)} />
+                    <MetricCard label="白区和" value={String(currentWindowStep.haarStep?.whiteSum ?? 0)} />
+                    <MetricCard label="特征值 V" value={String(currentWindowStep.featureSummary.haarFeatureValue)} tone="amber" />
+                    <MetricCard label="归一化 |V|" value={formatFeatureValue(currentWindowStep.featureSummary.haarAbsoluteValue, 3)} />
+                  </div>
+                ) : (
+                  <p className="text-xs leading-5 text-slate-600">
+                    每个窗口先被转换成可计算的特征值，分类器不直接理解“图像”，只读取这些数值。
+                  </p>
+                )}
+              </FlowNode>
+
+              <FlowNode tone="sky">
+                <div className="mb-2 text-[11px] font-semibold uppercase text-sky-700">级联分类器</div>
+                <CascadeStageList step={currentScanStep} />
+              </FlowNode>
+            </FlowColumn>
+
+            <FlowColumn align="end">
+              <FlowNode tone="emerald" className="classifier-task-output">
+                <div className="mb-2 text-[11px] font-semibold uppercase text-emerald-700">整图扫描结果</div>
+                <DetectionBoard
+                  image={originalImage}
+                  currentStep={canShowCurrentWindow ? currentScanStep : null}
+                  scannedSteps={taskStage === 'scan' || taskStage === 'result' ? displayedProgress.scannedSteps : []}
+                  candidates={taskStage === 'scan' || taskStage === 'result' ? displayedProgress.candidateWindows : []}
+                  detections={taskStage === 'result' ? displayedProgress.detections : []}
+                  trainingSamples={taskStage === 'training' ? TRAINING_SAMPLE_WINDOWS : undefined}
+                />
+                <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                  {taskStage === 'training' ? (
+                    <>
+                      <MetricCard label="绿" value="正样本" tone="emerald" />
+                      <MetricCard label="灰" value="负样本" />
+                      <MetricCard label="窗口" value="6x6" tone="amber" />
+                    </>
+                  ) : (
+                    <>
+                      <MetricCard label="灰" value="已拒绝" />
+                      <MetricCard label="橙" value="候选" tone="amber" />
+                      <MetricCard label="绿" value="最终框" tone="emerald" />
+                    </>
+                  )}
+                </div>
+              </FlowNode>
+            </FlowColumn>
+          </FlowColumns>
+        </ProcessRail>
+      )}
+    </div>
+  );
+
+  const stepDetails = (
+    <div className="space-y-5">
+      {taskStage === 'intro' && (
+        <TeachingCard>
+          <h2 className="mb-3 text-sm font-semibold text-slate-800">任务拆解</h2>
+          <div className="grid gap-3 md:grid-cols-5">
+            {['收集样本', '提取特征', '训练分类器', '扫描图像', '合并输出'].map((label, index) => (
+              <div key={label} className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-center text-xs text-slate-700">
+                <div className="mx-auto mb-2 flex h-7 w-7 items-center justify-center rounded-full bg-slate-800 font-semibold text-white">
+                  {index + 1}
+                </div>
+                {label}
+              </div>
+            ))}
+          </div>
+          <p className="mt-4 text-xs leading-6 text-slate-600">
+            HOG、Haar、LBP 是把窗口变成特征向量的方法；SVM、Cascade 是读取特征并判断目标/背景的分类器；
+            滑动窗口负责把这个判断过程应用到整张图。
+          </p>
+        </TeachingCard>
+      )}
+
+      {taskStage === 'training' && (
+        <TeachingCard>
+          <h2 className="mb-3 text-sm font-semibold text-slate-800">分类器从样本中来</h2>
+          <p className="text-xs leading-6 text-slate-600">
+            训练阶段先准备正样本和负样本。每个样本窗口都要转换成同一种特征表达，
+            然后用标签训练分类器。检测阶段不再重新学习，只把新窗口送入已经训练好的分类器。
+          </p>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <MetricCard label="正样本标签" value="+1 目标" tone="emerald" />
+            <MetricCard label="负样本标签" value="-1 背景" />
+            <MetricCard label="训练产物" value="分类器参数" tone="amber" />
+          </div>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <TeachingCard>
+              <div className="mb-2 text-xs font-semibold text-emerald-700">正样本窗口</div>
+              <ImageCanvas image={positiveTrainingSample} maxDisplaySize={130} showGrid />
+              <p className="mt-2 text-xs leading-5 text-slate-600">
+                该窗口覆盖目标中心区域，标签为 +1。
+              </p>
+            </TeachingCard>
+            <TeachingCard>
+              <div className="mb-2 text-xs font-semibold text-slate-700">负样本窗口</div>
+              <ImageCanvas image={negativeTrainingSample} maxDisplaySize={130} showGrid />
+              <p className="mt-2 text-xs leading-5 text-slate-600">
+                该窗口只包含背景纹理，标签为 -1。
+              </p>
+            </TeachingCard>
+          </div>
+        </TeachingCard>
+      )}
+
+      {taskStage === 'feature' && currentScanStep && (
+        <div className="space-y-4">
+          <FormulaCard
+            label="当前 Haar 特征值"
+            mathML={buildHaarFeatureFormula(currentScanStep)}
+            note="黑区与白区来自当前窗口内的 Haar 模板划分。特征值越能区分目标结构，越适合作为分类器输入。"
+          />
+          <TeachingCard>
+            <h3 className="mb-3 text-sm font-semibold text-slate-800">当前窗口灰度矩阵</h3>
+            <WindowMatrix image={currentScanStep.windowStep.inputRegion} />
+          </TeachingCard>
+        </div>
+      )}
+
+      {taskStage === 'classifier' && (
+        <div className="space-y-4">
+          <FormulaCard
+            label="当前 Cascade 阶段判定"
+            mathML={buildCascadeFormula(currentScanStep)}
+            note="任一级拒绝后，后续级不再计算；只有全部通过的窗口才进入候选集合。"
+          />
+          <TeachingCard>
+            <h3 className="mb-3 text-sm font-semibold text-slate-800">逐级过滤状态</h3>
+            <CascadeStageList step={currentScanStep} />
+          </TeachingCard>
+        </div>
+      )}
+
+      {taskStage === 'scan' && (
+        <div className="space-y-4">
+          <FormulaCard
+            label="扫描进度"
+            mathML={buildScanProgressFormula(progress)}
+            note="滑动窗口按行扫描整张图，每个位置都执行同一个 Haar + Cascade 判定过程。"
+          />
+          <TeachingCard>
+            <h3 className="mb-3 text-sm font-semibold text-slate-800">扫描统计</h3>
+            <div className="grid gap-3 md:grid-cols-4">
+              <MetricCard label="已扫描窗口" value={`${progress.scannedCount}/${progress.total}`} />
+              <MetricCard label="被拒绝窗口" value={String(progress.rejectedCount)} tone="red" />
+              <MetricCard label="候选窗口" value={String(progress.candidateCount)} tone="amber" />
+              <MetricCard label="当前窗口" value={currentScanStep ? `(${currentScanStep.x},${currentScanStep.y})` : '-'} />
+            </div>
+          </TeachingCard>
+        </div>
+      )}
+
+      {taskStage === 'result' && (
+        <div className="space-y-4">
+          <FormulaCard
+            label="候选框合并"
+            mathML={buildScanProgressFormula(fullProgress)}
+            note="多个相邻候选窗口通常对应同一个目标，需要合并成少量最终检测框。"
+          />
+          <TeachingCard>
+            <h3 className="mb-3 text-sm font-semibold text-slate-800">最终检测框</h3>
+            {fullProgress.detections.length > 0 ? (
+              <div className="grid gap-2">
+                {fullProgress.detections.map((box, index) => (
+                  <div key={`box-${index}`} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                    <span className="font-semibold">检测框 {index + 1}</span>
+                    <span className="font-mono">
+                      x={box.x}, y={box.y}, w={box.width}, h={box.height}, score={formatFeatureValue(box.score, 3)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs leading-6 text-slate-600">当前教学阈值下没有形成稳定最终框，可回到扫描步骤观察候选窗口怎样累积。</p>
+            )}
+          </TeachingCard>
+        </div>
+      )}
+
+      {taskStage === 'compare' && (
+        <TeachingCard>
+          <h2 className="mb-3 text-sm font-semibold text-slate-800">三个页面之间的关系</h2>
+          <p className="text-xs leading-6 text-slate-600">
+            HOG 特征页和 Haar / LBP 特征向量页负责解释“窗口怎样变成数值”；
+            分类器与检测流程页负责解释“这些数值怎样被分类器用于整图目标检测”。
+          </p>
+          <div className="mt-4">
+            <RouteCompare />
+          </div>
+        </TeachingCard>
+      )}
     </div>
   );
 
   return (
     <ConceptLayout
       title="分类器与检测流程"
-      subtitle="Classifier & Detection Pipeline - 基于特征和分类器的目标检测"
-      originalImage={null}
-      resultImage={null}
-      mainVisual={mainVisual}
-      operationLabel=""
-      parameterIntro="切换主题查看检测流程各环节的详细讲解。"
+      subtitle="Classifier & Detection Pipeline - 从窗口判定到整图检测"
+      contentHeader={contentHeader}
+      operationLabel="Haar + Cascade"
+      parameterIntro="按任务步骤推进，观察传统目标检测器如何从训练样本、窗口特征和级联分类器得到最终检测框。"
+      originalImage={originalImage}
+      resultImage={scoreImage}
       parameters={parameters}
+      mainVisual={mainVisual}
       analysisPreview={analysisPreview}
       stepDetails={stepDetails}
+      visualOverlay={visualOverlayPaths.length > 0 ? <AnchoredOverlay paths={visualOverlayPaths} /> : null}
       codeTab={
         <CodeViewer
           languages={[
             { name: 'C++ (OpenCV)', code: OPENCV_SVM_CODE },
+            { name: 'TypeScript 教学流程', code: TEACHING_DETECTION_CODE },
           ]}
         />
       }
+      currentStep={
+        currentScanStep && canShowCurrentWindow
+          ? {
+            x: currentScanStep.x,
+            y: currentScanStep.y,
+            kernelSize: currentScanStep.windowStep.windowSize,
+            regionX: currentScanStep.x,
+            regionY: currentScanStep.y,
+            regionWidth: currentScanStep.windowStep.windowSize,
+            regionHeight: currentScanStep.windowStep.windowSize,
+          }
+          : null
+      }
+      currentStepLabel="当前检测窗口"
+      stepInfo={canShowCurrentWindow && progress.total > 0 ? { current: currentStepIndex, total: progress.total } : null}
+      imageLabels={{ input: '待检测图像', output: '分类响应图' }}
+      imageHints={canUseResponseMap
+        ? {
+          input: '点击图像可选择一个候选窗口',
+          output: '点击响应图可定位窗口左上角',
+        }
+        : undefined}
+      showOriginalGrid
+      originalRegionMarker="frame"
+      showInputSelection={canShowCurrentWindow}
+      showNavigationControls={canUseResponseMap}
       singlePageScroll
+      navigationHintText={canUseResponseMap ? '方向键移动窗口 / 点击原图或响应图定位' : '方向键移动窗口 / 点击大图定位'}
+      onDirectionMove={canSelectWindow ? handleDirectionMove : undefined}
+      onInputRegionSelect={canSelectWindow && canUseResponseMap ? handleInputRegionSelect : undefined}
+      onOutputPixelSelect={canUseResponseMap ? handleOutputPixelSelect : undefined}
     />
   );
 }
