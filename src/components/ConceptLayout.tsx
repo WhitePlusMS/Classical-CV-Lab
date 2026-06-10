@@ -6,6 +6,7 @@ import ImageCanvas from './ImageCanvas';
 import { GrayscaleImage } from '@/lib/algorithms/types';
 
 interface ConceptLayoutProps {
+  maxDisplaySize?: number;
   title: string;
   subtitle?: string;
   contentHeader?: React.ReactNode;
@@ -37,6 +38,8 @@ interface ConceptLayoutProps {
     regionY?: number;
     regionWidth?: number;
     regionHeight?: number;
+    outputX?: number;
+    outputY?: number;
   } | null;
   currentStepLabel?: string;
   stepInfo?: { current: number; total: number } | null;
@@ -79,6 +82,7 @@ export default function ConceptLayout({
   onInputRegionSelect,
   onOutputPixelSelect,
   navigationHintText,
+  maxDisplaySize,
   singlePageScroll = false,
   visualOverlay,
   analysisPreview,
@@ -127,7 +131,7 @@ export default function ConceptLayout({
     }
     return '方向键移动';
   }, [navigationHintText, onInputRegionSelect, onOutputPixelSelect]);
-  const mainImageSize = singlePageScroll ? 280 : 320;
+  const mainImageSize = maxDisplaySize ?? (singlePageScroll ? 280 : 320);
 
   const navigationControlPanel = stepInfo && showNavigationControls ? (
     <details className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/80">
@@ -438,7 +442,7 @@ export default function ConceptLayout({
                       interactive={Boolean(onOutputPixelSelect)}
                       onRegionSelect={onOutputPixelSelect}
                       containerClassName="teaching-pulse-output conv-anchor-output-main"
-                      highlightPixel={currentStep ? { x: currentStep.x, y: currentStep.y } : null}
+                      highlightPixel={currentStep ? { x: currentStep.outputX ?? currentStep.x, y: currentStep.outputY ?? currentStep.y } : null}
                     />
                     {imageHints?.output && (
                       <div className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-600">
