@@ -132,19 +132,29 @@ function buildBinSubstitutionMathML(step: HogCellStep): string {
   `);
 }
 
-function buildSvmInputFormulaMathML(featureDim: number, totalBlocks: number): string {
+function buildDescriptorExampleFormulaMathML(
+  featureDim: number,
+  totalBlocks: number,
+  cellsPerBlock: number,
+  nbins: number,
+  blockVectorLength: number
+): string {
   return buildInlineMathML(`
     <mrow>
-      <mi>x</mi>
-      <mo>=</mo>
-      <mi>concat</mi><mo>(</mo><msub><mi>v</mi><mn>1</mn></msub><mo>,</mo><msub><mi>v</mi><mn>2</mn></msub><mo>,</mo><mo>...</mo><mo>,</mo><msub><mi>v</mi><mn>${totalBlocks}</mn></msub><mo>)</mo>
-      <mo>&#x2208;</mo><msup><mi>R</mi><mn>${featureDim}</mn></msup>
+      <msub><mi>v</mi><mtext>block</mtext></msub>
+      <mo>=</mo><mi>normalize</mi><mo>(</mo><mo>[</mo><msub><mi>h</mi><mn>1</mn></msub><mo>,</mo><mo>...</mo><mo>,</mo><msub><mi>h</mi><mn>${cellsPerBlock * cellsPerBlock}</mn></msub><mo>]</mo><mo>)</mo>
+      <mo>&#x2208;</mo><msup><mi>R</mi><mn>${blockVectorLength}</mn></msup>
       <mspace width="1em"/>
-      <mi>score</mi><mo>=</mo><mi>w</mi><mo>&#x22C5;</mo><mi>x</mi><mo>+</mo><mi>b</mi>
+      <mi>dim</mi><mo>(</mo><msub><mi>v</mi><mtext>block</mtext></msub><mo>)</mo>
+      <mo>=</mo><mn>${cellsPerBlock}</mn><mo>&#x00D7;</mo><mn>${cellsPerBlock}</mn><mo>&#x00D7;</mo><mn>${nbins}</mn>
+      <mo>=</mo><mn>${blockVectorLength}</mn>
       <mspace width="1em"/>
-      <mi>score</mi><mo>&gt;</mo><mn>0</mn><mo>&#x21D2;</mo><mtext>pedestrian</mtext>
-      <mo>,</mo>
-      <mi>score</mi><mo>&#x2264;</mo><mn>0</mn><mo>&#x21D2;</mo><mtext>background</mtext>
+      <msub><mi>x</mi><mtext>window</mtext></msub>
+      <mo>=</mo><mi>concat</mi><mo>(</mo><msub><mi>v</mi><mn>1</mn></msub><mo>,</mo><mo>...</mo><mo>,</mo><msub><mi>v</mi><mn>${totalBlocks}</mn></msub><mo>)</mo>
+      <mspace width="1em"/>
+      <mi>dim</mi><mo>(</mo><msub><mi>x</mi><mtext>window</mtext></msub><mo>)</mo>
+      <mo>=</mo><mn>${totalBlocks}</mn><mo>&#x00D7;</mo><mn>${cellsPerBlock}</mn><mo>&#x00D7;</mo><mn>${cellsPerBlock}</mn><mo>&#x00D7;</mo><mn>${nbins}</mn>
+      <mo>=</mo><mn>${featureDim}</mn>
     </mrow>
   `);
 }
@@ -376,6 +386,23 @@ export default function HogFeaturePage() {
   const stepDetails = currentHogStep ? (
     <div className="space-y-6">
       <TeachingCard>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-sm font-semibold text-slate-800">HOG 要解决什么问题</h2>
+            <p className="mt-2 text-xs leading-6 text-slate-600">
+              目标检测不能只记住原始像素值。光照、颜色和纹理一变，同一个物体的像素会明显变化；
+              但物体的轮廓、边缘走向和局部形状通常更稳定。
+              HOG 把一个图像窗口转换成“边缘方向分布向量”，让后续分类器读取这条向量来判断窗口里是否有目标。
+            </p>
+          </div>
+          <div className="max-w-sm rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-800">
+            具体一点：先框出一个候选窗口，例如人、车或标志所在的小区域；HOG 把这个窗口变成一串边缘方向数字；
+            分类器只回答“这个窗口像不像要找的目标”。把窗口从左到右、从上到下扫完整张图，就能找出目标可能出现的位置。
+          </div>
+        </div>
+      </TeachingCard>
+
+      <TeachingCard>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold text-slate-800">当前 cell 的真实 HOG 计算</h2>
@@ -454,43 +481,48 @@ export default function HogFeaturePage() {
       </section>
 
       <section className="border-t border-slate-200 pt-4">
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">HOG 特征向量如何交给分类器</h2>
+        <h2 className="mb-3 text-sm font-semibold text-slate-800">这个特征向量能做什么</h2>
         <TeachingCard>
           <div className="space-y-3 text-xs leading-6 text-slate-600">
             <p>
-              当前 cell 直方图只描述一个局部区域；多个 cell 组成 block，归一化后得到 block 向量。
-              对一个检测窗口而言，所有 block 向量按扫描顺序串联，才形成完整的 HOG 特征向量。
-              这个向量就是 SVM 分类器的输入 <span className="font-mono text-slate-800">x</span>。
+              从当前 Lena 选区看，红框 cell 负责统计一个小区域的边缘方向；灰框 block 负责把相邻 cell 合成更稳定的小向量；
+              整个检测窗口再把所有 block 向量接成一条长描述子。分类器读取的是这条描述子，而不是直接读取原始像素。
             </p>
             <div className="grid gap-3 md:grid-cols-3">
               <div className="border-l-2 border-amber-300 pl-3">
-                <div className="font-semibold text-amber-700">窗口 → HOG 向量</div>
+                <div className="font-semibold text-amber-700">当前 cell：局部方向统计</div>
                 <p>
-                  当前窗口有 {totalBlocks} 个 block，每个 block 包含 {cellsPerBlock}×{cellsPerBlock} 个 cell，
-                  每个 cell 有 {nbins} 个方向柱，最终得到 {featureDim.toLocaleString()} 维向量。
+                  cell ({currentHogStep.cellX}, {currentHogStep.cellY}) 内的每个像素先计算梯度，
+                  再投票到 {nbins} 个方向柱中，形成当前这张方向直方图。
                 </p>
               </div>
               <div className="border-l-2 border-sky-300 pl-3">
-                <div className="font-semibold text-sky-700">HOG 向量 → SVM 判别</div>
+                <div className="font-semibold text-sky-700">当前 block：稳定的小向量</div>
                 <p>
-                  SVM 不直接看原图像素，而是读取 HOG 向量，计算
-                  <span className="font-mono text-slate-800"> score = w·x + b </span>
-                  来判断该窗口更像目标还是背景。
+                  灰框 block 覆盖 {cellsPerBlock}×{cellsPerBlock} 个 cell，把这些直方图串联后归一化，
+                  得到长度为 {currentHogStep.normalizedBlock.length} 的 block 向量。
                 </p>
               </div>
               <div className="border-l-2 border-emerald-300 pl-3">
-                <div className="font-semibold text-emerald-700">多个窗口 → 候选框</div>
+                <div className="font-semibold text-emerald-700">检测窗口：一条长描述子</div>
                 <p>
-                  检测时会在图像上滑动很多窗口，每个窗口得到一个 score。只有高分窗口才进入后续合并与筛选。
+                  当前窗口共有 {totalBlocks} 个 block，全部按扫描顺序拼接后，
+                  得到 {featureDim.toLocaleString()} 维窗口描述子，作为分类器输入。
                 </p>
               </div>
             </div>
           </div>
           <FormulaCard
             className="mt-4"
-            label="分类器输入与判别形式"
-            mathML={buildSvmInputFormulaMathML(featureDim, totalBlocks)}
-            note="该页只演示 HOG 特征如何构造；SVM 权重、滑动窗口扫描和 NMS 属于分类器检测流水线页。"
+            label="从当前 block 到窗口描述子"
+            mathML={buildDescriptorExampleFormulaMathML(
+              featureDim,
+              totalBlocks,
+              cellsPerBlock,
+              nbins,
+              currentHogStep.normalizedBlock.length
+            )}
+            note="分类器检测流水线会继续展开滑动窗口、分类器判别和候选框筛选。"
           />
         </TeachingCard>
       </section>

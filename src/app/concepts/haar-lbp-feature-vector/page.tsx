@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AnchoredOverlay,
   type AnchoredOverlayPath,
@@ -32,9 +32,15 @@ import {
   type ConvolutionTeachingImageType,
   convolutionTeachingImages,
 } from '@/lib/utils/convolutionTeachingImages';
+import {
+  centerCropGrayscaleImage,
+  loadImageAsGrayscale,
+  resizeGrayscaleImage,
+} from '@/lib/utils/imageProcessing';
 import { useGridNavigation } from '@/hooks/useGridNavigation';
 
 type StudyMode = 'haar-template' | 'haar-integral' | 'lbp-vector';
+type LBPImageType = 'texture' | 'lenaOriginal';
 
 const HAAR_WINDOW_SIZE = 6;
 const LBP_WINDOW_SIZE = 16;
@@ -59,6 +65,12 @@ const HAAR_IMAGE_OPTIONS: { value: ConvolutionTeachingImageType; label: string }
   { value: 'horizontalEdge12', label: '水平边缘' },
   { value: 'spot12', label: '亮斑十字' },
   { value: 'frame12', label: '方框轮廓' },
+  { value: 'lenaOriginal', label: 'Lena 灰度图' },
+];
+
+const LBP_IMAGE_OPTIONS: { value: LBPImageType; label: string }[] = [
+  { value: 'texture', label: '纹理测试图' },
+  { value: 'lenaOriginal', label: 'Lena 灰度图' },
 ];
 
 const HAAR_TEMPLATE_LABELS: Record<HaarTemplateType, string> = {
@@ -360,11 +372,35 @@ export default function HaarLbpFeatureVectorPage() {
   const [mode, setMode] = useState<StudyMode>('haar-template');
   const [haarTemplateType, setHaarTemplateType] = useState<HaarTemplateType>('edge');
   const [haarImageType, setHaarImageType] = useState<ConvolutionTeachingImageType>('edge12');
+  const [lbpImageType, setLbpImageType] = useState<LBPImageType>('texture');
+  const [lenaImage, setLenaImage] = useState<GrayscaleImage | null>(null);
   const [currentPosition, setCurrentPosition] = useState({ x: 0, y: 0 });
 
+  useEffect(() => {
+    let cancelled = false;
+
+    loadImageAsGrayscale('/assets/lena-original.jpg')
+      .then(image => {
+        if (!cancelled) {
+          setLenaImage(resizeGrayscaleImage(centerCropGrayscaleImage(image), 64));
+        }
+      })
+      .catch(error => {
+        console.error('加载 Lena 灰度图失败:', error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const textureImage = useMemo(() => generateTextureTestImage(), []);
-  const haarImage = convolutionTeachingImages[haarImageType].image ?? convolutionTeachingImages.edge12.image ?? [];
-  const originalImage = mode === 'lbp-vector' ? textureImage : haarImage;
+  const haarFallbackImage = convolutionTeachingImages.edge12.image ?? [];
+  const haarImage = haarImageType === 'lenaOriginal'
+    ? lenaImage ?? haarFallbackImage
+    : convolutionTeachingImages[haarImageType].image ?? haarFallbackImage;
+  const lbpInputImage = lbpImageType === 'lenaOriginal' ? lenaImage ?? textureImage : textureImage;
+  const originalImage = mode === 'lbp-vector' ? lbpInputImage : haarImage;
   const windowSize = mode === 'lbp-vector' ? LBP_WINDOW_SIZE : HAAR_WINDOW_SIZE;
   const inputWidth = originalImage[0]?.length ?? 0;
   const inputHeight = originalImage.length;
@@ -382,8 +418,8 @@ export default function HaarLbpFeatureVectorPage() {
 
   const lbpStep = useMemo(() => {
     if (mode !== 'lbp-vector') return null;
-    return getLBPVectorStep(textureImage, safePosition.x, safePosition.y, LBP_WINDOW_SIZE, LBP_CELL_SIZE);
-  }, [mode, safePosition.x, safePosition.y, textureImage]);
+    return getLBPVectorStep(lbpInputImage, safePosition.x, safePosition.y, LBP_WINDOW_SIZE, LBP_CELL_SIZE);
+  }, [lbpInputImage, mode, safePosition.x, safePosition.y]);
 
   const resultImage = useMemo<GrayscaleImage>(() => {
     if (mode === 'lbp-vector') return lbpStep?.lbpImage ?? [];
@@ -440,6 +476,11 @@ export default function HaarLbpFeatureVectorPage() {
 
   const handleHaarImageChange = useCallback((value: string) => {
     setHaarImageType(value as ConvolutionTeachingImageType);
+    resetPosition();
+  }, [resetPosition]);
+
+  const handleLbpImageChange = useCallback((value: string) => {
+    setLbpImageType(value as LBPImageType);
     resetPosition();
   }, [resetPosition]);
 
@@ -801,12 +842,20 @@ export default function HaarLbpFeatureVectorPage() {
             options={HAAR_TEMPLATE_OPTIONS}
           />
           <SelectParam
-            label="Haar 教学图"
+            label="输入图像"
             value={haarImageType}
             onChange={handleHaarImageChange}
             options={HAAR_IMAGE_OPTIONS}
           />
         </>
+      )}
+      {mode === 'lbp-vector' && (
+        <SelectParam
+          label="输入图像"
+          value={lbpImageType}
+          onChange={handleLbpImageChange}
+          options={LBP_IMAGE_OPTIONS}
+        />
       )}
 
       <div className="rounded-2xl border border-blue-200 bg-blue-50 px-3 py-3">
@@ -829,8 +878,8 @@ export default function HaarLbpFeatureVectorPage() {
 
   const codeTabContent = mode === 'lbp-vector' ? LBP_CODE_TS : HAAR_CODE_TS;
   const imageLabels = mode === 'lbp-vector'
-    ? { input: '纹理测试图', output: 'LBP 编码图' }
-    : { input: 'Haar 教学图', output: 'Haar 响应图' };
+    ? { input: lbpImageType === 'lenaOriginal' ? 'Lena 灰度图' : '纹理测试图', output: 'LBP 编码图' }
+    : { input: haarImageType === 'lenaOriginal' ? 'Lena 灰度图' : 'Haar 教学图', output: 'Haar 响应图' };
   const imageHints = mode === 'lbp-vector'
     ? {
         input: '红框为 16x16 检测窗口，点击可移动窗口',

@@ -314,7 +314,7 @@ export default function BackgroundModelingSubtractionPage() {
         </figure>
         <TeachingCard>
           <p className="text-xs leading-6 text-slate-700">
-            <span className="font-semibold text-emerald-700">优点：</span>在室内或不是很复杂的室外环境中，能达到很好的检测效果，处理速度快，分割对象比较完整。{'<br />'}
+            <span className="font-semibold text-emerald-700">优点：</span>在室内或不是很复杂的室外环境中，能达到很好的检测效果，处理速度快，分割对象比较完整。<br />
             <span className="font-semibold text-red-600">缺点：</span>对于复杂变化的背景（如树枝摇晃），噪声增多，背景模型不稳定，容易误判。
           </p>
         </TeachingCard>

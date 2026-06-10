@@ -632,7 +632,7 @@ export default function LBPGaborTexturePage() {
             <p className="text-xs leading-6 text-slate-700">
               <span className="font-semibold text-emerald-700">灰度不变性：</span>
               LBP 基于局部灰度比较，光照同增同减时不改变二进制模式，
-              因此对单调光照变化相对稳定。{'<br />'}
+              因此对单调光照变化相对稳定。<br />
               <span className="font-semibold text-red-600">局限性：</span>
               基本 LBP 二进制模式较多（共 256 种），且不具有旋转不变性。
               旋转不变 LBP 可以有效减少模式数量，但可能丢失方向信息。
