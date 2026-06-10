@@ -430,6 +430,7 @@ const chapterOneCards = {
       'bg-indigo-50',
       'text-indigo-600',
     ),
+    href: '/concepts/acquisition-system',
     description: '概览光源、摄像机、镜头和采集平台的基础链路。',
   },
 } as const;

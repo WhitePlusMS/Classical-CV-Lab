@@ -39,7 +39,7 @@ const cameraParams = [
 ] as const;
 
 const lensParams = [
-  { param: '焦距', desc: '光学后主点到焦点距离，决定成像大小与视场角' },
+  { param: '焦距', desc: '光学后主点到焦点距离，决定成像大小与视场角', formula: true as const },
   { param: '光圈/相对孔径', desc: '入瞳直径÷焦距；光圈为倒数，影响像面亮度' },
   { param: '视场角', desc: '成像范围张角 FOV，α=2arctan(h/2f)' },
   { param: '工作距离', desc: '镜头到目标之间允许的范围，有限距离清晰成像' },
@@ -193,11 +193,11 @@ export default function AcquisitionSystemPage() {
                 </div>
                 <div className="grid gap-3 sm:grid-cols-3">
                   {lightingTypes.map(type => (
-                    <div key={type.title} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div key={type.title} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                       <div className="text-sm font-bold text-slate-900">{type.title}</div>
                       <div className="mt-1 text-xs leading-5 text-slate-500">{type.desc}</div>
-                      <div className="mt-2 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-500">
-                        {type.useCase}
+                      <div className="mt-2 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-indigo-600">
+                        适用：{type.useCase}
                       </div>
                     </div>
                   ))}
