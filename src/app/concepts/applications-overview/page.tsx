@@ -125,42 +125,63 @@ const visualCases = [
 const militaryRemoteCases = [
   {
     title: '红外弱小目标',
-    points: ['低对比度目标', '复杂背景抑制', '噪声与虚警控制'],
+    detail: '低对比度目标、复杂背景抑制、噪声与虚警控制',
   },
   {
     title: '景像匹配',
-    points: ['预存数字景像图', '飞行过程区域相关', '偏离航线判定'],
+    detail: '预存数字景像图、飞行过程区域相关、偏离航线判定',
   },
   {
     title: '遥感图像处理',
-    points: ['辐射校正', '几何纠正', '投影变换', '特征提取'],
+    detail: '辐射校正、几何纠正、投影变换、特征提取',
   },
   {
     title: '图像配准与融合',
-    points: ['多时相对齐', '多源信息融合', '专题图像生成'],
+    detail: '多时相对齐、多源信息融合、专题图像生成',
   },
 ] as const;
 
 const industryTrafficItems = [
   {
-    title: '工业机器视觉',
-    rows: [
-      ['图像识别', '区分目标类别和对象模式'],
-      ['图像检测', '发现器件瑕疵和异常区域'],
-      ['视觉定位', '确认零件位置和姿态'],
-      ['物体测量', '非接触式尺寸与距离估计'],
-      ['物体分拣', '按视觉结果完成分类流转'],
+    title: '工业检测',
+    imageUrl: '/assets/applications-overview/industrial-aoi-pcb.jpg',
+    imageAlt: '自动光学检测设备正在检测 PCB 电路板',
+    imageLabel: '自动光学检测',
+    items: [
+      { title: '图像识别', detail: '区分目标类别和对象模式' },
+      { title: '图像检测', detail: '发现器件瑕疵和异常区域' },
+      { title: '视觉定位', detail: '确认零件位置和姿态' },
+      { title: '物体测量', detail: '非接触式尺寸与距离估计' },
+      { title: '物体分拣', detail: '按视觉结果完成分类流转' },
     ],
   },
   {
-    title: '交通视觉分析',
-    rows: [
-      ['车辆感知', '路口、路段、停车场目标检测'],
-      ['身份识别', '车牌、人脸、车辆特征比对'],
-      ['事件分析', '事故、违章、异常行为检测'],
-      ['辅助驾驶', '车辆、行人、障碍物、道路标识识别'],
-      ['人体测温', '热红外灰度与温度映射'],
+    title: '交通监控',
+    imageUrl: '/assets/applications-overview/traffic-speed-camera.jpg',
+    imageAlt: '道路旁的数字交通监控测速设备',
+    imageLabel: '交通监控设备',
+    items: [
+      { title: '车辆感知', detail: '路口、路段、停车场目标检测' },
+      { title: '身份识别', detail: '车牌、人脸、车辆特征比对' },
+      { title: '事件分析', detail: '事故、违章、异常行为检测' },
+      { title: '辅助驾驶', detail: '车辆、行人、障碍物、道路标识识别' },
+      { title: '人体测温', detail: '热红外灰度与温度映射' },
     ],
+  },
+] as const;
+
+const medicalThermalCases = [
+  {
+    title: '医学影像',
+    detail: 'X 光结构观察、内窥镜局部成像、组织边界增强',
+  },
+  {
+    title: '热红外成像',
+    detail: '红外测温、热区定位、非可见光成像',
+  },
+  {
+    title: '辅助分析',
+    detail: '噪声抑制、细节增强、异常区域提示',
   },
 ] as const;
 
@@ -198,6 +219,36 @@ function ArrowIcon() {
     <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
+  );
+}
+
+type DetailItem = {
+  title: string;
+  detail: string;
+};
+
+type DetailItemGridProps = {
+  items: readonly DetailItem[];
+  accentClass: string;
+  columnsClass?: string;
+  className?: string;
+};
+
+function DetailItemGrid({ items, accentClass, columnsClass = 'sm:grid-cols-2', className = 'mt-5' }: DetailItemGridProps) {
+  return (
+    <div className={`${className} grid gap-3 ${columnsClass}`}>
+      {items.map(item => (
+        <div key={item.title} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="flex items-start gap-3">
+            <span className={`mt-2 h-1.5 w-1.5 shrink-0 rounded-full ${accentClass}`} />
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">{item.title}</h3>
+              <p className="mt-1 text-xs leading-5 text-slate-500">{item.detail}</p>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -353,60 +404,96 @@ export default function ApplicationsOverviewPage() {
           </div>
         </section>
 
-        <section className="mt-8 grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+        <section className="mt-8 grid gap-6 lg:grid-cols-2">
           <div className="rounded-2xl border border-slate-200/80 bg-white p-7 shadow-sm">
             <p className="text-xs font-semibold tracking-wide text-rose-600">军事与遥感</p>
             <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">红外、景像匹配、遥感处理</h2>
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              {militaryRemoteCases.map(item => (
-                <div key={item.title} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <h3 className="text-sm font-bold text-slate-900">{item.title}</h3>
-                  <ul className="mt-3 space-y-2 text-xs leading-5 text-slate-500">
-                    {item.points.map(point => (
-                      <li key={point} className="flex gap-2">
-                        <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-400" />
-                        <span>{point}</span>
-                      </li>
-                    ))}
-                  </ul>
+            <div className="mt-5 overflow-hidden rounded-2xl border border-rose-100 bg-rose-50/50">
+              <div className="relative aspect-[16/9] overflow-hidden bg-slate-100">
+                <img
+                  src="/assets/applications-overview/remote-aster-etna.jpg"
+                  alt="ASTER 遥感传感器生成的埃特纳火山假彩色三维影像"
+                  className="h-full w-full object-cover"
+                />
+                <div className="absolute left-4 top-4 rounded-full border border-white/70 bg-white/90 px-3 py-1 text-xs font-semibold text-rose-700 shadow-sm">
+                  遥感卫星影像
                 </div>
-              ))}
+              </div>
+              <div className="p-4 text-xs leading-5 text-rose-700/80">
+                多光谱与热红外遥感可把地形、植被、水体和热异常转成可分析图像，用于校正、配准、融合和远距离目标检测。
+              </div>
             </div>
+            <DetailItemGrid items={militaryRemoteCases} accentClass="bg-rose-400" />
           </div>
 
-          <div className="rounded-2xl border border-slate-200/80 bg-white p-7 shadow-sm">
-            <p className="text-xs font-semibold tracking-wide text-emerald-600">工业与交通</p>
-            <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">检测、定位、测量、行为分析</h2>
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
-              {industryTrafficItems.map(group => (
-                <div key={group.title} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <h3 className="text-sm font-bold text-slate-900">{group.title}</h3>
-                  <div className="mt-3 divide-y divide-slate-200">
-                    {group.rows.map(([name, detail]) => (
-                      <div key={name} className="grid grid-cols-[5rem_1fr] gap-3 py-2 text-xs leading-5">
-                        <div className="font-semibold text-slate-700">{name}</div>
-                        <div className="text-slate-500">{detail}</div>
-                      </div>
-                    ))}
+          {industryTrafficItems.map((group, index) => (
+            <div key={group.title} className="rounded-2xl border border-slate-200/80 bg-white p-7 shadow-sm">
+              <p className={`text-xs font-semibold tracking-wide ${index === 0 ? 'text-emerald-600' : 'text-sky-600'}`}>
+                {group.title}
+              </p>
+              <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
+                {index === 0 ? '识别、检测、定位、测量、分拣' : '车辆感知、身份识别、事件分析'}
+              </h2>
+              <div className={`mt-5 overflow-hidden rounded-2xl border ${index === 0 ? 'border-emerald-100 bg-emerald-50/50' : 'border-sky-100 bg-sky-50/50'}`}>
+                <div className="relative aspect-[16/9] overflow-hidden bg-slate-100">
+                  <img
+                    src={group.imageUrl}
+                    alt={group.imageAlt}
+                    className="h-full w-full object-cover"
+                  />
+                  <div className={`absolute left-4 top-4 rounded-full border border-white/70 bg-white/90 px-3 py-1 text-xs font-semibold shadow-sm ${index === 0 ? 'text-emerald-700' : 'text-sky-700'}`}>
+                    {group.imageLabel}
                   </div>
                 </div>
-              ))}
+              </div>
+              <DetailItemGrid items={group.items} accentClass={index === 0 ? 'bg-emerald-400' : 'bg-sky-400'} />
             </div>
+          ))}
+
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-7 shadow-sm">
+            <p className="text-xs font-semibold tracking-wide text-amber-600">医学/热成像</p>
+            <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">医学影像、红外测温、非可见光成像</h2>
+            <div className="mt-5 overflow-hidden rounded-2xl border border-amber-100 bg-amber-50/50">
+              <div className="relative aspect-[16/9] overflow-hidden bg-slate-100">
+                <img
+                  src="/assets/applications-overview/medical-thermal-body.jpg"
+                  alt="人体背部热成像图和温度标注"
+                  className="h-full w-full object-cover"
+                />
+                <div className="absolute left-4 top-4 rounded-full border border-white/70 bg-white/90 px-3 py-1 text-xs font-semibold text-amber-700 shadow-sm">
+                  人体热成像
+                </div>
+              </div>
+            </div>
+            <DetailItemGrid items={medicalThermalCases} accentClass="bg-amber-400" columnsClass="sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3" />
           </div>
         </section>
 
         <section className="mt-8 rounded-2xl border border-slate-200/80 bg-white p-7 shadow-sm">
           <p className="text-xs font-semibold tracking-wide text-indigo-600">无人平台感知系统</p>
           <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">多传感器输入到运动决策</h2>
-          <div className="mt-6 grid gap-5 lg:grid-cols-[1fr_auto_1.1fr] lg:items-center">
-            <div className="grid gap-3 sm:grid-cols-2">
-              {platformSensors.map(sensor => (
-                <div key={sensor.title} className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4">
-                  <div className="text-sm font-bold text-indigo-800">{sensor.title}</div>
-                  <div className="mt-1 text-xs leading-5 text-indigo-700/80">{sensor.detail}</div>
+          <div className="mt-5 overflow-hidden rounded-2xl border border-indigo-100 bg-indigo-50/50">
+            <div className="grid gap-0 lg:grid-cols-[0.9fr_1.1fr] lg:items-stretch">
+              <div className="relative min-h-[240px] overflow-hidden bg-slate-100">
+                <img
+                  src="/assets/applications-overview/autonomous-cruise-lidar.optimized.jpg"
+                  alt="搭载车顶激光雷达和多传感器的 Cruise 自动驾驶车辆"
+                  className="h-full w-full object-cover"
+                />
+                <div className="absolute left-4 top-4 rounded-full border border-white/70 bg-white/90 px-3 py-1 text-xs font-semibold text-indigo-700 shadow-sm">
+                  车载传感器平台
                 </div>
-              ))}
+              </div>
+              <div className="flex flex-col justify-center p-5">
+                <div className="text-sm font-bold text-slate-900">从车辆外部传感器到环境理解</div>
+                <p className="mt-2 text-sm leading-6 text-indigo-800/75">
+                  摄像头、激光雷达、惯性测量和定位设备共同采集道路信息，系统再把这些输入转为可用于定位、检测与决策的环境状态。
+                </p>
+              </div>
             </div>
+          </div>
+          <div className="mt-6 grid gap-5 lg:grid-cols-[1fr_auto_1.1fr] lg:items-center">
+            <DetailItemGrid items={platformSensors} accentClass="bg-indigo-400" className="" />
 
             <div className="hidden text-slate-300 lg:block">
               <ArrowIcon />
