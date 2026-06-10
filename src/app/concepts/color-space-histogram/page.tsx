@@ -241,7 +241,7 @@ function HistogramBars({
   const maxValue = Math.max(0.001, ...histogram.bins);
 
   return (
-    <div className="h-28 rounded-xl border border-sky-200 bg-sky-50/60 px-2 py-2">
+    <div className="h-56 rounded-xl border border-sky-200 bg-sky-50/60 px-2 py-3">
       <div className="flex h-full items-end gap-1">
         {histogram.bins.map((value, index) => (
           <div key={`${histogram.channel}-${index}`} className="flex flex-1 flex-col items-center justify-end gap-1">
@@ -249,7 +249,7 @@ function HistogramBars({
               className={`w-full rounded-t-sm ${
                 index === highlightedBin ? 'bg-amber-500' : 'bg-sky-500'
               }`}
-              style={{ height: `${Math.max(4, (value / maxValue) * 76)}px` }}
+              style={{ height: `${Math.max(6, (value / maxValue) * 172)}px` }}
               title={`bin ${index}: ${histogram.counts[index]} pixels`}
             />
             {index % 3 === 0 ? (
@@ -257,6 +257,352 @@ function HistogramBars({
             ) : (
               <span className="h-[10px]" />
             )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function projectRgbPoint([r, g, b]: RgbPixel): { x: number; y: number } {
+  return {
+    x: 66 + r * 128 + g * 44 - b * 44,
+    y: 164 - g * 76 - b * 42,
+  };
+}
+
+function RgbCubeDiagram({ step }: { step: ColorSpaceStep }) {
+  const vertices: Array<{ id: string; rgb: RgbPixel; label: string }> = [
+    { id: 'black', rgb: [0, 0, 0], label: '黑' },
+    { id: 'red', rgb: [1, 0, 0], label: 'R' },
+    { id: 'green', rgb: [0, 1, 0], label: 'G' },
+    { id: 'blue', rgb: [0, 0, 1], label: 'B' },
+    { id: 'cyan', rgb: [0, 1, 1], label: 'C' },
+    { id: 'magenta', rgb: [1, 0, 1], label: 'M' },
+    { id: 'yellow', rgb: [1, 1, 0], label: 'Y' },
+    { id: 'white', rgb: [1, 1, 1], label: '白' },
+  ];
+  const vertexMap = Object.fromEntries(vertices.map(vertex => [vertex.id, projectRgbPoint(vertex.rgb)]));
+  const edges = [
+    ['black', 'red'], ['black', 'green'], ['black', 'blue'],
+    ['red', 'yellow'], ['red', 'magenta'],
+    ['green', 'yellow'], ['green', 'cyan'],
+    ['blue', 'magenta'], ['blue', 'cyan'],
+    ['yellow', 'white'], ['magenta', 'white'], ['cyan', 'white'],
+  ];
+  const current = projectRgbPoint(step.rgb);
+  const rProjection = projectRgbPoint([step.rgb[0], 0, 0]);
+  const gProjection = projectRgbPoint([0, step.rgb[1], 0]);
+  const bProjection = projectRgbPoint([0, 0, step.rgb[2]]);
+  const faces = [
+    { id: 'rg', vertices: ['black', 'red', 'yellow', 'green'], fill: 'rgba(250, 204, 21, 0.16)' },
+    { id: 'rb', vertices: ['black', 'red', 'magenta', 'blue'], fill: 'rgba(168, 85, 247, 0.14)' },
+    { id: 'gb', vertices: ['black', 'green', 'cyan', 'blue'], fill: 'rgba(20, 184, 166, 0.14)' },
+    { id: 'top', vertices: ['cyan', 'white', 'yellow', 'green'], fill: 'rgba(255, 255, 255, 0.32)' },
+    { id: 'right', vertices: ['red', 'yellow', 'white', 'magenta'], fill: 'rgba(239, 68, 68, 0.08)' },
+    { id: 'back', vertices: ['blue', 'magenta', 'white', 'cyan'], fill: 'rgba(59, 130, 246, 0.1)' },
+  ];
+  const rgbChannels = [
+    { label: 'R', value: step.rgb[0], raw: step.rgb255[0], color: 'bg-red-500', border: 'border-red-200', text: 'text-red-700' },
+    { label: 'G', value: step.rgb[1], raw: step.rgb255[1], color: 'bg-emerald-500', border: 'border-emerald-200', text: 'text-emerald-700' },
+    { label: 'B', value: step.rgb[2], raw: step.rgb255[2], color: 'bg-blue-500', border: 'border-blue-200', text: 'text-blue-700' },
+  ];
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-[0_18px_42px_rgba(15,23,42,0.07)]">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-slate-800">RGB 颜色立方体</div>
+          <p className="mt-1 text-xs leading-5 text-slate-500">三条彩色轴表示 R/G/B 强度，发光点是当前像素在立方体中的位置。</p>
+        </div>
+        <PixelColorSwatch color={{ r: step.rgb[0], g: step.rgb[1], b: step.rgb[2] }} className="h-10 w-10" />
+      </div>
+
+      <svg viewBox="0 0 280 220" className="mt-3 h-60 w-full rounded-xl bg-[radial-gradient(circle_at_50%_35%,#ffffff_0%,#f8fafc_46%,#eef2f7_100%)]">
+        <defs>
+          <marker id="rgb-axis-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 0 L 8 4 L 0 8 Z" fill="rgb(100 116 139)" />
+          </marker>
+          <filter id="rgb-point-glow" x="-80%" y="-80%" width="260%" height="260%">
+            <feGaussianBlur stdDeviation="4" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        <ellipse cx="132" cy="181" rx="104" ry="18" fill="rgb(15 23 42)" opacity="0.08" />
+
+        {faces.map(face => (
+          <polygon
+            key={face.id}
+            points={face.vertices.map(id => {
+              const point = vertexMap[id];
+              return `${point.x},${point.y}`;
+            }).join(' ')}
+            fill={face.fill}
+            stroke="rgba(148, 163, 184, 0.45)"
+            strokeWidth="1"
+          />
+        ))}
+
+        {edges.map(([from, to]) => {
+          const start = vertexMap[from];
+          const end = vertexMap[to];
+          return (
+            <line
+              key={`${from}-${to}`}
+              x1={start.x}
+              y1={start.y}
+              x2={end.x}
+              y2={end.y}
+              stroke="rgb(148 163 184)"
+              strokeWidth="1.5"
+            />
+          );
+        })}
+
+        {[0.25, 0.5, 0.75].map(level => {
+          const rLineStart = projectRgbPoint([level, 0, 0]);
+          const rLineEnd = projectRgbPoint([level, 1, 1]);
+          const gLineStart = projectRgbPoint([0, level, 0]);
+          const gLineEnd = projectRgbPoint([1, level, 1]);
+          const bLineStart = projectRgbPoint([0, 0, level]);
+          const bLineEnd = projectRgbPoint([1, 1, level]);
+          return (
+            <g key={level} opacity="0.32">
+              <line x1={rLineStart.x} y1={rLineStart.y} x2={rLineEnd.x} y2={rLineEnd.y} stroke="rgb(239 68 68)" strokeDasharray="3 5" />
+              <line x1={gLineStart.x} y1={gLineStart.y} x2={gLineEnd.x} y2={gLineEnd.y} stroke="rgb(34 197 94)" strokeDasharray="3 5" />
+              <line x1={bLineStart.x} y1={bLineStart.y} x2={bLineEnd.x} y2={bLineEnd.y} stroke="rgb(37 99 235)" strokeDasharray="3 5" />
+            </g>
+          );
+        })}
+
+        <line
+          x1={vertexMap.black.x}
+          y1={vertexMap.black.y}
+          x2={vertexMap.red.x}
+          y2={vertexMap.red.y}
+          stroke="rgb(239 68 68)"
+          strokeWidth="2.4"
+          markerEnd="url(#rgb-axis-arrow)"
+        />
+        <line
+          x1={vertexMap.black.x}
+          y1={vertexMap.black.y}
+          x2={vertexMap.green.x}
+          y2={vertexMap.green.y}
+          stroke="rgb(34 197 94)"
+          strokeWidth="2.4"
+          markerEnd="url(#rgb-axis-arrow)"
+        />
+        <line
+          x1={vertexMap.black.x}
+          y1={vertexMap.black.y}
+          x2={vertexMap.blue.x}
+          y2={vertexMap.blue.y}
+          stroke="rgb(37 99 235)"
+          strokeWidth="2.4"
+          markerEnd="url(#rgb-axis-arrow)"
+        />
+
+        <line x1={current.x} y1={current.y} x2={rProjection.x} y2={rProjection.y} stroke="rgb(239 68 68)" strokeDasharray="4 4" strokeWidth="1.6" opacity="0.8" />
+        <line x1={current.x} y1={current.y} x2={gProjection.x} y2={gProjection.y} stroke="rgb(34 197 94)" strokeDasharray="4 4" strokeWidth="1.6" opacity="0.8" />
+        <line x1={current.x} y1={current.y} x2={bProjection.x} y2={bProjection.y} stroke="rgb(37 99 235)" strokeDasharray="4 4" strokeWidth="1.6" opacity="0.8" />
+
+        {vertices.map(vertex => {
+          const point = vertexMap[vertex.id];
+          const [r, g, b] = vertex.rgb;
+          return (
+            <g key={vertex.id}>
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r="7"
+                fill={`rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`}
+                stroke="white"
+                strokeWidth="2"
+              />
+              <text x={point.x + 9} y={point.y + 4} className="fill-slate-500 text-[10px] font-semibold">
+                {vertex.label}
+              </text>
+            </g>
+          );
+        })}
+
+        <line x1={vertexMap.black.x} y1={vertexMap.black.y} x2={current.x} y2={current.y} stroke="rgb(245 158 11)" strokeDasharray="4 4" strokeWidth="2" />
+        <circle cx={current.x} cy={current.y} r="14" fill="rgb(245 158 11)" fillOpacity="0.22" filter="url(#rgb-point-glow)" />
+        <circle cx={current.x} cy={current.y} r="6" fill="rgb(245 158 11)" stroke="white" strokeWidth="2.4" />
+        <text x={current.x + 10} y={current.y - 8} className="fill-amber-700 text-[10px] font-semibold">
+          当前像素
+        </text>
+      </svg>
+
+      <div className="mt-4 grid gap-2 text-xs">
+        {rgbChannels.map(channel => (
+          <div key={channel.label} className={`rounded-xl border ${channel.border} bg-white px-3 py-2`}>
+            <div className="mb-1 flex items-center justify-between">
+              <span className={`font-semibold ${channel.text}`}>{channel.label}</span>
+              <span className="font-mono text-slate-500">{channel.raw} / 255</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+              <div className={`h-full rounded-full ${channel.color}`} style={{ width: `${channel.value * 100}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function hueWheelPath(startAngle: number, endAngle: number): string {
+  const center = 92;
+  const radius = 72;
+  const start = {
+    x: center + radius * Math.cos(startAngle),
+    y: center + radius * Math.sin(startAngle),
+  };
+  const end = {
+    x: center + radius * Math.cos(endAngle),
+    y: center + radius * Math.sin(endAngle),
+  };
+  return `M ${center} ${center} L ${start.x} ${start.y} A ${radius} ${radius} 0 0 1 ${end.x} ${end.y} Z`;
+}
+
+function HsvConeDiagram({ step }: { step: ColorSpaceStep }) {
+  const sectors = Array.from({ length: 48 }, (_, index) => {
+    const start = (index / 48) * Math.PI * 2 - Math.PI / 2;
+    const end = ((index + 1) / 48) * Math.PI * 2 - Math.PI / 2;
+    return { start, end, hue: index * 7.5 };
+  });
+  const hueAngle = (step.hsv.h / 360) * Math.PI * 2 - Math.PI / 2;
+  const hueOuterPoint = {
+    x: 92 + Math.cos(hueAngle) * 78,
+    y: 92 + Math.sin(hueAngle) * 78,
+  };
+  const huePoint = {
+    x: 92 + Math.cos(hueAngle) * Math.max(18, step.hsv.s * 68),
+    y: 92 + Math.sin(hueAngle) * Math.max(18, step.hsv.s * 68),
+  };
+  const svPlane = { x: 194, y: 44, width: 118, height: 120 };
+  const svPoint = {
+    x: svPlane.x + step.hsv.s * svPlane.width,
+    y: svPlane.y + (1 - step.hsv.v) * svPlane.height,
+  };
+  const hueGradientId = `hsv-sv-hue-${Math.round(step.hsv.h)}`;
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-[0_18px_42px_rgba(15,23,42,0.07)]">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-slate-800">HSV 色相环与 S/V 平面</div>
+          <p className="mt-1 text-xs leading-5 text-slate-500">左侧选色相 H，右侧固定 H 后查看饱和度 S 与明度 V。</p>
+        </div>
+        <div className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-mono text-xs text-amber-800">
+          H {step.hsv.h.toFixed(1)}°
+        </div>
+      </div>
+
+      <svg viewBox="0 0 350 230" className="mt-3 h-60 w-full rounded-xl bg-[radial-gradient(circle_at_40%_34%,#ffffff_0%,#f8fafc_48%,#eef2f7_100%)]">
+        <defs>
+          <linearGradient id={hueGradientId} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="white" />
+            <stop offset="100%" stopColor={`hsl(${step.hsv.h}, 100%, 50%)`} />
+          </linearGradient>
+          <linearGradient id="hsv-value-overlay" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="black" stopOpacity="0" />
+            <stop offset="100%" stopColor="black" stopOpacity="1" />
+          </linearGradient>
+          <filter id="hsv-point-glow" x="-80%" y="-80%" width="260%" height="260%">
+            <feGaussianBlur stdDeviation="4" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        <ellipse cx="92" cy="94" rx="84" ry="84" fill="white" opacity="0.7" />
+        {sectors.map(sector => (
+          <path
+            key={sector.hue}
+            d={hueWheelPath(sector.start, sector.end)}
+            fill={`hsl(${sector.hue}, 88%, 54%)`}
+            stroke="white"
+            strokeWidth="0.25"
+          />
+        ))}
+        <circle cx="92" cy="92" r="52" fill="white" fillOpacity="0.54" />
+        <circle cx="92" cy="92" r="24" fill="white" fillOpacity="0.82" />
+        <line x1="92" y1="92" x2={hueOuterPoint.x} y2={hueOuterPoint.y} stroke="rgb(15 23 42)" strokeWidth="2" />
+        <line x1="92" y1="92" x2={huePoint.x} y2={huePoint.y} stroke="white" strokeWidth="4" strokeOpacity="0.8" />
+        <circle cx={huePoint.x} cy={huePoint.y} r="8" fill="rgb(15 23 42)" stroke="white" strokeWidth="2.4" filter="url(#hsv-point-glow)" />
+        <text x="77" y="96" className="fill-slate-500 text-[10px] font-semibold">S=0</text>
+        <text x="122" y="31" className="fill-slate-600 text-[10px] font-semibold">H 指针</text>
+
+        <g opacity="0.18">
+          <path d="M 253 28 L 318 176 L 188 176 Z" fill={`hsl(${step.hsv.h}, 88%, 56%)`} />
+          <ellipse cx="253" cy="176" rx="65" ry="14" fill={`hsl(${step.hsv.h}, 88%, 56%)`} />
+          <path d="M 253 28 L 253 176" stroke="rgb(15 23 42)" strokeWidth="1" strokeDasharray="5 5" />
+        </g>
+
+        <rect
+          x={svPlane.x}
+          y={svPlane.y}
+          width={svPlane.width}
+          height={svPlane.height}
+          rx="6"
+          fill={`url(#${hueGradientId})`}
+        />
+        <rect
+          x={svPlane.x}
+          y={svPlane.y}
+          width={svPlane.width}
+          height={svPlane.height}
+          rx="6"
+          fill="url(#hsv-value-overlay)"
+        />
+        <rect
+          x={svPlane.x}
+          y={svPlane.y}
+          width={svPlane.width}
+          height={svPlane.height}
+          rx="6"
+          fill="none"
+          stroke="rgb(100 116 139)"
+          strokeWidth="1.5"
+        />
+        {[0.25, 0.5, 0.75].map(level => (
+          <g key={level} opacity="0.42">
+            <line x1={svPlane.x + level * svPlane.width} y1={svPlane.y} x2={svPlane.x + level * svPlane.width} y2={svPlane.y + svPlane.height} stroke="white" />
+            <line x1={svPlane.x} y1={svPlane.y + level * svPlane.height} x2={svPlane.x + svPlane.width} y2={svPlane.y + level * svPlane.height} stroke="white" />
+          </g>
+        ))}
+        <line x1={svPlane.x} y1={svPoint.y} x2={svPoint.x} y2={svPoint.y} stroke="white" strokeOpacity="0.92" strokeDasharray="4 4" strokeWidth="1.5" />
+        <line x1={svPoint.x} y1={svPlane.y + svPlane.height} x2={svPoint.x} y2={svPoint.y} stroke="white" strokeOpacity="0.92" strokeDasharray="4 4" strokeWidth="1.5" />
+        <circle cx={svPoint.x} cy={svPoint.y} r="14" fill="rgb(16 185 129)" fillOpacity="0.24" filter="url(#hsv-point-glow)" />
+        <circle cx={svPoint.x} cy={svPoint.y} r="7" fill="rgb(16 185 129)" stroke="white" strokeWidth="2.4" />
+        <text x={svPlane.x - 2} y={svPlane.y - 9} className="fill-slate-600 text-[10px] font-semibold">V=1</text>
+        <text x={svPlane.x - 2} y={svPlane.y + svPlane.height + 17} className="fill-slate-500 text-[10px] font-semibold">V=0</text>
+        <text x={svPlane.x - 2} y={svPlane.y + svPlane.height + 34} className="fill-slate-500 text-[10px] font-semibold">S=0</text>
+        <text x={svPlane.x + svPlane.width - 23} y={svPlane.y + svPlane.height + 34} className="fill-slate-500 text-[10px] font-semibold">S=1</text>
+      </svg>
+
+      <div className="mt-4 grid gap-2 text-xs">
+        {[
+          { label: 'H', value: step.hsv.h / 360, text: `${step.hsv.h.toFixed(1)}°`, color: 'bg-amber-500', border: 'border-amber-200', tone: 'text-amber-800' },
+          { label: 'S', value: step.hsv.s, text: formatPercent(step.hsv.s), color: 'bg-sky-500', border: 'border-sky-200', tone: 'text-sky-800' },
+          { label: 'V', value: step.hsv.v, text: formatPercent(step.hsv.v), color: 'bg-emerald-500', border: 'border-emerald-200', tone: 'text-emerald-800' },
+        ].map(item => (
+          <div key={item.label} className={`rounded-xl border ${item.border} bg-white px-3 py-2`}>
+            <div className="mb-1 flex items-center justify-between">
+              <span className={`font-semibold ${item.tone}`}>{item.label}</span>
+              <span className="font-mono text-slate-500">{item.text}</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+              <div className={`h-full rounded-full ${item.color}`} style={{ width: `${item.value * 100}%` }} />
+            </div>
           </div>
         ))}
       </div>
@@ -515,18 +861,8 @@ export default function ColorSpaceHistogramPage() {
             H 分量和颜色直方图可以作为简单、直观的目标检测特征。
           </p>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <figure>
-              <div className="flex h-44 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-950">
-                <img src="/assets/color-space-histogram/rgb-cube.jpg" alt="RGB 颜色立方体" className="h-full w-full object-contain" />
-              </div>
-              <figcaption className="mt-2 text-center text-xs font-medium text-slate-500">RGB 颜色立方体</figcaption>
-            </figure>
-            <figure>
-              <div className="flex h-44 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-950">
-                <img src="/assets/color-space-histogram/hsv-cone.jpg" alt="HSV 圆锥空间模型" className="h-full w-full object-contain" />
-              </div>
-              <figcaption className="mt-2 text-center text-xs font-medium text-slate-500">HSV 圆锥空间模型</figcaption>
-            </figure>
+            <RgbCubeDiagram step={currentStep} />
+            <HsvConeDiagram step={currentStep} />
           </div>
         </TeachingCard>
       </div>
