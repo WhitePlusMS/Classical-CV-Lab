@@ -17,9 +17,27 @@ const lightingRoles = [
 ] as const;
 
 const lightingTypes = [
-  { title: '条形光源', desc: '条状均匀照明', useCase: '大面积/长条形目标' },
-  { title: '环形光源', desc: '环形漫射光，消除阴影', useCase: '微小元件定位、字符识别' },
-  { title: '同轴光源', desc: '垂直同轴照明，消除镜面反射', useCase: '反光表面、平整物体检测' },
+  {
+    title: '条形光源',
+    desc: '条状均匀照明',
+    useCase: '大面积/长条形目标',
+    imageUrl: '/assets/acquisition-system/bar-light.jpg',
+    imageAlt: '条状 LED 光源实物',
+  },
+  {
+    title: '环形光源',
+    desc: '环形漫射光，消除阴影',
+    useCase: '微小元件定位、字符识别',
+    imageUrl: '/assets/acquisition-system/ring-light.jpg',
+    imageAlt: '相机周围安装的 LED 环形光源',
+  },
+  {
+    title: '同轴光源',
+    desc: '垂直同轴照明，消除镜面反射',
+    useCase: '反光表面、平整物体检测',
+    imageUrl: '/assets/acquisition-system/coaxial-beam-splitter.jpg',
+    imageAlt: '同轴照明光路中使用的分光棱镜实物',
+  },
 ] as const;
 
 const sensorComparison = [
@@ -134,11 +152,27 @@ export default function AcquisitionSystemPage() {
         <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
           {/* 采集处理硬件链路 */}
           <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 via-white to-indigo-50/70 px-7 py-7">
-            <p className="text-xs font-semibold tracking-wide text-indigo-600">硬件链路</p>
-            <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">采集处理硬件链路</h2>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">
-              从光源照明到最终处理设备的完整硬件链路，每个环节都直接影响成像质量与系统性能。
-            </p>
+            <div className="grid gap-6 lg:grid-cols-[1fr_0.95fr] lg:items-center">
+              <div>
+                <p className="text-xs font-semibold tracking-wide text-indigo-600">硬件链路</p>
+                <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">采集处理硬件链路</h2>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">
+                  从光源照明到最终处理设备的完整硬件链路，每个环节都直接影响成像质量与系统性能。
+                </p>
+              </div>
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div className="relative aspect-[16/9] bg-slate-100">
+                  <img
+                    src="/assets/acquisition-system/system-vision-scene.jpg"
+                    alt="农业分拣视觉设备现场，包含采集、照明和输送结构"
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+                <div className="px-4 py-3 text-xs leading-5 text-slate-500">
+                  视觉采集系统通常由照明、目标、镜头、相机、采集设备和处理平台共同组成。
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Step 2: 系统组成总览 */}
@@ -193,11 +227,20 @@ export default function AcquisitionSystemPage() {
                 </div>
                 <div className="grid gap-3 sm:grid-cols-3">
                   {lightingTypes.map(type => (
-                    <div key={type.title} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                      <div className="text-sm font-bold text-slate-900">{type.title}</div>
-                      <div className="mt-1 text-xs leading-5 text-slate-500">{type.desc}</div>
-                      <div className="mt-2 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-indigo-600">
+                    <div key={type.title} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                      <div className="aspect-[4/3] bg-slate-100">
+                        <img
+                          src={type.imageUrl}
+                          alt={type.imageAlt}
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                      <div className="p-4">
+                        <div className="text-sm font-bold text-slate-900">{type.title}</div>
+                        <div className="mt-1 text-xs leading-5 text-slate-500">{type.desc}</div>
+                        <div className="mt-2 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-indigo-600">
                         适用：{type.useCase}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -212,6 +255,24 @@ export default function AcquisitionSystemPage() {
               <p className="mt-2 text-sm leading-6 text-slate-500">
                 摄像机是系统的核心采集部件，负责将光学信号转换为电信号。CCD 和 CMOS 是两种主流传感器技术。
               </p>
+
+              <div className="mt-5 grid gap-5 rounded-2xl border border-slate-200 bg-slate-50 p-5 lg:grid-cols-[0.85fr_1fr] lg:items-center">
+                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                  <div className="aspect-[16/10] bg-white">
+                    <img
+                      src="/assets/acquisition-system/industrial-cameras.jpg"
+                      alt="工业机器视觉相机机身与传感器窗口"
+                      className="h-full w-full object-contain"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">工业相机实物形态</h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    工业相机通常采用紧凑方形机身，前端通过 C/CS/F 等接口连接镜头，内部传感器完成光电转换，后端通过 USB、GigE、CameraLink 等接口输出图像数据。
+                  </p>
+                </div>
+              </div>
 
               {/* CCD vs CMOS 对比表 */}
               <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
@@ -266,6 +327,24 @@ export default function AcquisitionSystemPage() {
               <p className="mt-2 text-sm leading-6 text-slate-500">
                 镜头决定成像的几何关系与光学质量，是连接目标与传感器的桥梁。
               </p>
+
+              <div className="mt-5 grid gap-5 rounded-2xl border border-slate-200 bg-slate-50 p-5 lg:grid-cols-[0.85fr_1fr] lg:items-center">
+                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                  <div className="aspect-[16/10] bg-white">
+                    <img
+                      src="/assets/acquisition-system/c-mount-lens.jpg"
+                      alt="C-mount 工业镜头实物"
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">镜头把目标投影到传感器</h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    焦距、光圈、接口、视场角和工作距离共同决定目标在传感器上的成像大小、亮度和清晰度。
+                  </p>
+                </div>
+              </div>
 
               {/* Core parameters table */}
               <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
@@ -330,6 +409,24 @@ export default function AcquisitionSystemPage() {
               <p className="mt-2 text-sm leading-6 text-slate-500">
                 采集处理平台包括接口标准和计算平台选型，决定了系统的数据传输能力和计算性能。
               </p>
+
+              <div className="mt-5 grid gap-5 rounded-2xl border border-slate-200 bg-slate-50 p-5 lg:grid-cols-[0.85fr_1fr] lg:items-center">
+                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                  <div className="aspect-[16/9] bg-white">
+                    <img
+                      src="/assets/acquisition-system/jetson-board.jpg"
+                      alt="NVIDIA Jetson 嵌入式视觉计算平台"
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">嵌入式视觉计算平台</h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    处理平台接收相机或采集卡传入的图像数据，完成预处理、特征提取、目标识别和控制输出。
+                  </p>
+                </div>
+              </div>
 
               {/* Interface standards table */}
               <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
