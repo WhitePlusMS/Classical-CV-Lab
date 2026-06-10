@@ -247,13 +247,18 @@ function MatrixPreview({
 function KernelPreview({ kernel }: { kernel: number[][] }) {
   const size = kernel.length;
   const center = Math.floor(size / 2);
-  const cellClass = size >= 31 ? 'h-5 min-w-5 text-[6px]' : size >= 21 ? 'h-6 min-w-6 text-[7px]' : 'h-7 min-w-7 text-[8px]';
+  const cellClass = size >= 31 ? 'text-[6px]' : size >= 21 ? 'text-[7px]' : 'text-[8px]';
+  const cellSize = size >= 31 ? 12 : size >= 21 ? 14 : 16;
+  const gridWidth = size * cellSize + (size - 1) * 2 + 16;
 
   return (
     <div className="space-y-3">
       <div
-        className="grid gap-0.5 rounded-xl border border-slate-200 bg-slate-900/5 p-2"
-        style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}
+        className="mx-auto grid gap-0.5 rounded-xl border border-slate-200 bg-slate-900/5 p-2"
+        style={{
+          gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))`,
+          width: `min(100%, ${gridWidth}px)`,
+        }}
       >
         {kernel.flatMap((row, rowIndex) =>
           row.map((value, colIndex) => {
@@ -267,7 +272,7 @@ function KernelPreview({ kernel }: { kernel: number[][] }) {
             return (
               <div
                 key={`kernel-${rowIndex}-${colIndex}`}
-                className={`${cellClass} flex items-center justify-center rounded border font-mono font-semibold shadow-sm`}
+                className={`${cellClass} aspect-square w-full min-w-0 flex items-center justify-center rounded border font-mono font-semibold shadow-sm`}
                 style={{
                   backgroundColor: `rgba(${color}, ${alpha})`,
                   borderColor: isCenter
