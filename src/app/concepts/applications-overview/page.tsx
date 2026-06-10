@@ -1,0 +1,454 @@
+import Link from 'next/link';
+
+const taskTypes = [
+  { title: '识别', detail: '对象类别' },
+  { title: '检测', detail: '目标区域' },
+  { title: '定位', detail: '空间位置' },
+  { title: '测量', detail: '尺寸距离' },
+  { title: '分拣', detail: '自动分类' },
+  { title: '跟踪', detail: '运动轨迹' },
+] as const;
+
+const applicationFlow = [
+  { title: '真实世界图像', detail: '相机、遥感、医学或监控系统采集视觉输入' },
+  { title: '图像处理', detail: '增强、校正、分割、特征提取和模式分析' },
+  { title: '可用信息', detail: '目标、位置、尺寸、类别、轨迹和状态变化' },
+  { title: '行业决策', detail: '检测报警、质量控制、导航规划和辅助诊断' },
+] as const;
+
+const applicationDomains = [
+  {
+    title: '工业检测',
+    tone: 'border-emerald-200 bg-emerald-50/70 text-emerald-700',
+    marker: 'bg-emerald-500',
+    input: '生产线相机图像',
+    tasks: ['零件检测', '尺寸测量', '瑕疵检测', '自动分拣'],
+    challenge: '反光、遮挡、微小缺陷、节拍速度',
+    output: '质量判断、缺陷位置、尺寸数据',
+  },
+  {
+    title: '交通监控',
+    tone: 'border-sky-200 bg-sky-50/75 text-sky-700',
+    marker: 'bg-sky-500',
+    input: '路口、路段、停车场视频',
+    tasks: ['车辆检测', '身份识别', '行为分析', '违章抓拍'],
+    challenge: '视角变化、夜间光照、遮挡、拥堵场景',
+    output: '车辆身份、异常事件、通行状态',
+  },
+  {
+    title: '遥感军事',
+    tone: 'border-rose-200 bg-rose-50/70 text-rose-700',
+    marker: 'bg-rose-500',
+    input: '遥感、红外、远距离观测图像',
+    tasks: ['弱小目标', '景像匹配', '图像配准', '图像融合'],
+    challenge: '目标小、背景复杂、尺度差异、成像噪声',
+    output: '目标位置、地貌变化、融合图像',
+  },
+  {
+    title: '无人平台',
+    tone: 'border-indigo-200 bg-indigo-50/70 text-indigo-700',
+    marker: 'bg-indigo-500',
+    input: '车载摄像头、双目视觉、激光雷达',
+    tasks: ['车道线', '车辆行人', '交通标志', '障碍物感知'],
+    challenge: '实时性、动态目标、三维距离、多传感器融合',
+    output: '环境理解、路径判断、运动决策',
+  },
+  {
+    title: '医学/热成像',
+    tone: 'border-amber-200 bg-amber-50/75 text-amber-700',
+    marker: 'bg-amber-500',
+    input: '医学影像、热红外、专用成像设备',
+    tasks: ['X 光成像', '内窥镜', '红外测温', '非可见光成像'],
+    challenge: '成像噪声、组织边界、温度标定、细节增强',
+    output: '结构观察、温度估计、辅助分析',
+  },
+] as const;
+
+const visualCases = [
+  {
+    title: '工业外观检测',
+    domain: '工业检测',
+    imageUrl: '/assets/applications-overview/industrial-vision.jpg',
+    source: 'Wikimedia / Machine vision',
+    sourceHref: 'https://en.wikipedia.org/wiki/Machine_vision',
+    alt: '工业机器视觉检测系统现场照片',
+    objectPosition: 'center',
+    task: '从产品图像中发现缺陷、偏差和异常区域',
+    result: '输出合格判定、缺陷位置和尺寸测量结果',
+  },
+  {
+    title: '道路目标检测',
+    domain: '交通监控',
+    imageUrl: '/assets/applications-overview/traffic-road-camera.jpg',
+    source: 'Wikimedia / Traffic camera',
+    sourceHref: 'https://en.wikipedia.org/wiki/Traffic_camera',
+    alt: '道路交通摄像头安装在路口上方',
+    objectPosition: 'center 28%',
+    task: '从交通视频中定位车辆、行人和道路事件',
+    result: '输出车辆数量、位置、身份线索和异常事件',
+  },
+  {
+    title: '自动驾驶感知',
+    domain: '无人平台',
+    imageUrl: '/assets/applications-overview/autonomous-waymo.jpg',
+    source: 'Supercar Blondie / Waymo',
+    sourceHref: 'https://supercarblondie.com/waymo-one-ride-hail-service-ai/',
+    alt: '搭载多类传感器的 Waymo 自动驾驶车辆',
+    objectPosition: 'center',
+    task: '融合摄像头、激光雷达和定位信息形成环境状态',
+    result: '输出车道、车辆、行人、障碍物和可行驶区域',
+  },
+  {
+    title: '热成像测温',
+    domain: '医学/热成像',
+    imageUrl: '/assets/applications-overview/thermal-fire.jpg',
+    source: 'PerfectPrime / Thermal camera',
+    sourceHref: 'https://perfectprime.com/blogs/blog/how-a-thermal-camera-can-save-lives',
+    alt: '手持热成像相机显示火场温度画面',
+    objectPosition: 'center',
+    task: '采集热红外波段并把热辐射转换为图像灰度',
+    result: '输出温度分布、异常热区和非可见光观察结果',
+  },
+  {
+    title: '遥感图像处理',
+    domain: '遥感军事',
+    imageUrl: '/assets/applications-overview/remote-landsat.jpg',
+    source: 'NASA SVS / Landsat 9',
+    sourceHref: 'https://svs.gsfc.nasa.gov/13889/',
+    alt: '洛杉矶沿海区域的 Landsat 遥感卫星影像',
+    objectPosition: 'center',
+    task: '对卫星与航空图像进行校正、配准与专题处理',
+    result: '输出地物变化、图像融合和目标区域结果',
+  },
+] as const;
+
+const militaryRemoteCases = [
+  {
+    title: '红外弱小目标',
+    points: ['低对比度目标', '复杂背景抑制', '噪声与虚警控制'],
+  },
+  {
+    title: '景像匹配',
+    points: ['预存数字景像图', '飞行过程区域相关', '偏离航线判定'],
+  },
+  {
+    title: '遥感图像处理',
+    points: ['辐射校正', '几何纠正', '投影变换', '特征提取'],
+  },
+  {
+    title: '图像配准与融合',
+    points: ['多时相对齐', '多源信息融合', '专题图像生成'],
+  },
+] as const;
+
+const industryTrafficItems = [
+  {
+    title: '工业机器视觉',
+    rows: [
+      ['图像识别', '区分目标类别和对象模式'],
+      ['图像检测', '发现器件瑕疵和异常区域'],
+      ['视觉定位', '确认零件位置和姿态'],
+      ['物体测量', '非接触式尺寸与距离估计'],
+      ['物体分拣', '按视觉结果完成分类流转'],
+    ],
+  },
+  {
+    title: '交通视觉分析',
+    rows: [
+      ['车辆感知', '路口、路段、停车场目标检测'],
+      ['身份识别', '车牌、人脸、车辆特征比对'],
+      ['事件分析', '事故、违章、异常行为检测'],
+      ['辅助驾驶', '车辆、行人、障碍物、道路标识识别'],
+      ['人体测温', '热红外灰度与温度映射'],
+    ],
+  },
+] as const;
+
+const platformSensors = [
+  { title: '摄像头', detail: '车道线、红绿灯、交通标志、行人、车辆' },
+  { title: '激光雷达', detail: '目标距离、空间轮廓、障碍物位置' },
+  { title: '双目视觉', detail: '视差、深度、三维几何信息' },
+  { title: 'IMU', detail: '姿态变化、加速度、角速度' },
+  { title: 'GPS/里程计', detail: '平台定位、路径累计、运动约束' },
+] as const;
+
+const perceptionPipeline = ['感知', '定位', '检测', '预测', '决策', '规划'] as const;
+
+const keyTechGroups = [
+  {
+    title: '成像基础',
+    items: ['摄像机非均匀性', '摄像机畸变校正', '摄像机标定'],
+  },
+  {
+    title: '图像处理',
+    items: ['灰度化', '直方图', '滤波', '锐化', '边缘检测', '形态学'],
+  },
+  {
+    title: '目标检测',
+    items: ['颜色', '纹理', '边缘轮廓', '模板', '点匹配', '分类器'],
+  },
+  {
+    title: '目标跟踪',
+    items: ['特征搜索', '卡尔曼滤波 KF', '粒子滤波 PF'],
+  },
+] as const;
+
+function ArrowIcon() {
+  return (
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export default function ApplicationsOverviewPage() {
+  return (
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900">
+      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
+        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
+          <div className="flex items-center gap-3">
+            <Link href="/" className="flex items-center gap-1.5 text-sm text-slate-500 transition hover:text-slate-800">
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M19 12H5M12 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              返回
+            </Link>
+            <div className="h-4 w-px bg-slate-200" />
+            <div>
+              <h1 className="text-base font-semibold text-slate-900">应用与发展现状</h1>
+              <p className="text-xs text-slate-400">Applications & Trends</p>
+            </div>
+          </div>
+          <span className="rounded-full border border-cyan-100 bg-cyan-50 px-3 py-1 text-xs font-medium text-cyan-700">
+            第一章 / 图像采集与处理
+          </span>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-6xl px-6 py-10">
+        <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+          <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 via-white to-cyan-50/70 px-7 py-7">
+            <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr] lg:items-end">
+              <div>
+                <p className="text-xs font-semibold tracking-wide text-cyan-700">应用领域</p>
+                <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">图像处理应用有哪些？</h2>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">
+                  真实场景中的视觉输入经过处理后，形成目标、位置、尺寸、类别和运动线索。
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {taskTypes.map(task => (
+                  <div key={task.title} className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+                    <div className="text-sm font-bold text-slate-900">{task.title}</div>
+                    <div className="mt-0.5 text-xs text-slate-500">{task.detail}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="p-7">
+            <div className="grid gap-4 md:grid-cols-4">
+              {applicationFlow.map((step, index) => (
+                <div key={step.title} className="relative rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
+                  <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-lg bg-white text-sm font-bold text-slate-700 shadow-sm">
+                    {index + 1}
+                  </div>
+                  <div className="text-sm font-semibold text-slate-900">{step.title}</div>
+                  <div className="mt-1 text-xs leading-5 text-slate-500">{step.detail}</div>
+                  {index < applicationFlow.length - 1 ? (
+                    <div className="absolute -right-3 top-1/2 hidden text-slate-300 md:block">
+                      <ArrowIcon />
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-10">
+              <div className="mb-5">
+                <p className="text-xs font-semibold tracking-wide text-slate-500">具体任务</p>
+                <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">图像输入、处理目标、输出结果</h2>
+              </div>
+              <div className="grid gap-6 lg:grid-cols-2">
+                {visualCases.map(item => (
+                  <article key={item.title} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <div className="relative aspect-[16/9] overflow-hidden bg-slate-100">
+                      <img
+                        src={item.imageUrl}
+                        alt={item.alt}
+                        className="h-full w-full object-cover"
+                        style={{ objectPosition: item.objectPosition }}
+                        loading="lazy"
+                      />
+                      <div className="absolute left-4 top-4 rounded-full border border-white/70 bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
+                        {item.domain}
+                      </div>
+                    </div>
+                    <div className="p-5">
+                      <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                        <h3 className="text-lg font-bold text-slate-900">{item.title}</h3>
+                        <a
+                          href={item.sourceHref}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs font-medium text-slate-400 transition hover:text-slate-600"
+                        >
+                          {item.source}
+                        </a>
+                      </div>
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                          <div className="text-xs font-semibold text-slate-500">处理目标</div>
+                          <div className="mt-1 text-sm leading-6 text-slate-700">{item.task}</div>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                          <div className="text-xs font-semibold text-slate-500">输出结果</div>
+                          <div className="mt-1 text-sm leading-6 text-slate-700">{item.result}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-10">
+              <div className="mb-5">
+                <p className="text-xs font-semibold tracking-wide text-slate-500">领域矩阵</p>
+                <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">输入、难点、输出</h2>
+              </div>
+              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                {applicationDomains.map(domain => (
+                  <article key={domain.title} className={`rounded-2xl border p-5 ${domain.tone}`}>
+                    <div className="mb-3 flex items-center gap-2">
+                      <span className={`h-2.5 w-2.5 rounded-full ${domain.marker}`} />
+                      <h3 className="text-sm font-bold">{domain.title}</h3>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {domain.tasks.map(task => (
+                        <span key={task} className="rounded-md bg-white/75 px-2 py-1 text-[11px] font-medium">
+                          {task}
+                        </span>
+                      ))}
+                    </div>
+                    <dl className="mt-4 space-y-2 text-xs leading-5">
+                      <div>
+                        <dt className="font-semibold opacity-70">输入</dt>
+                        <dd>{domain.input}</dd>
+                      </div>
+                      <div>
+                        <dt className="font-semibold opacity-70">难点</dt>
+                        <dd>{domain.challenge}</dd>
+                      </div>
+                      <div>
+                        <dt className="font-semibold opacity-70">输出</dt>
+                        <dd>{domain.output}</dd>
+                      </div>
+                    </dl>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-8 grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-7 shadow-sm">
+            <p className="text-xs font-semibold tracking-wide text-rose-600">军事与遥感</p>
+            <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">红外、景像匹配、遥感处理</h2>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              {militaryRemoteCases.map(item => (
+                <div key={item.title} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <h3 className="text-sm font-bold text-slate-900">{item.title}</h3>
+                  <ul className="mt-3 space-y-2 text-xs leading-5 text-slate-500">
+                    {item.points.map(point => (
+                      <li key={point} className="flex gap-2">
+                        <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-400" />
+                        <span>{point}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-7 shadow-sm">
+            <p className="text-xs font-semibold tracking-wide text-emerald-600">工业与交通</p>
+            <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">检测、定位、测量、行为分析</h2>
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              {industryTrafficItems.map(group => (
+                <div key={group.title} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <h3 className="text-sm font-bold text-slate-900">{group.title}</h3>
+                  <div className="mt-3 divide-y divide-slate-200">
+                    {group.rows.map(([name, detail]) => (
+                      <div key={name} className="grid grid-cols-[5rem_1fr] gap-3 py-2 text-xs leading-5">
+                        <div className="font-semibold text-slate-700">{name}</div>
+                        <div className="text-slate-500">{detail}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-8 rounded-2xl border border-slate-200/80 bg-white p-7 shadow-sm">
+          <p className="text-xs font-semibold tracking-wide text-indigo-600">无人平台感知系统</p>
+          <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">多传感器输入到运动决策</h2>
+          <div className="mt-6 grid gap-5 lg:grid-cols-[1fr_auto_1.1fr] lg:items-center">
+            <div className="grid gap-3 sm:grid-cols-2">
+              {platformSensors.map(sensor => (
+                <div key={sensor.title} className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4">
+                  <div className="text-sm font-bold text-indigo-800">{sensor.title}</div>
+                  <div className="mt-1 text-xs leading-5 text-indigo-700/80">{sensor.detail}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden text-slate-300 lg:block">
+              <ArrowIcon />
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <div className="grid gap-3 sm:grid-cols-3">
+                {perceptionPipeline.map((node, index) => (
+                  <div key={node} className="relative rounded-xl border border-slate-200 bg-white px-4 py-4 text-center shadow-sm">
+                    <div className="mx-auto mb-2 flex h-7 w-7 items-center justify-center rounded-lg bg-slate-900 text-xs font-bold text-white">
+                      {index + 1}
+                    </div>
+                    <div className="text-sm font-bold text-slate-900">{node}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 text-xs leading-5 text-slate-500">
+                车道线、红绿灯、交通标志、行人、车辆、障碍物和平台姿态共同组成环境状态。
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-8 rounded-2xl border border-slate-200/80 bg-white p-7 shadow-sm">
+          <p className="text-xs font-semibold tracking-wide text-blue-600">关键技术地图</p>
+          <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">从图像采集到目标检测</h2>
+          <div className="mt-6 grid gap-4 md:grid-cols-4">
+            {keyTechGroups.map(group => (
+              <div key={group.title} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <h3 className="text-sm font-bold text-slate-900">{group.title}</h3>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {group.items.map(item => (
+                    <span key={item} className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600">
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}

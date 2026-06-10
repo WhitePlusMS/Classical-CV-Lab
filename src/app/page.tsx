@@ -6,7 +6,6 @@ type ConceptCard = {
   title: string;
   titleEn: string;
   description?: string;
-  actionLabel?: string;
   icon: ReactNode;
   color: string;
   bgLight: string;
@@ -419,8 +418,8 @@ const chapterOneCards = {
       'bg-sky-50',
       'text-sky-600',
     ),
+    href: '/concepts/applications-overview',
     description: '梳理图像处理的典型应用场景、行业案例和课程入口。',
-    actionLabel: '已在首页展开',
   },
   acquisitionSystem: {
     ...placeholder(
@@ -549,141 +548,6 @@ const learningChapters: LearningChapter[] = [
   },
 ];
 
-const applicationFlow = ['真实世界图像', '图像处理', '可用信息', '行业决策'] as const;
-
-const applicationDomains = [
-  {
-    title: '工业检测',
-    tone: 'border-emerald-200 bg-emerald-50/70 text-emerald-700',
-    marker: 'bg-emerald-500',
-    tasks: ['零件检测', '尺寸测量', '瑕疵检测', '自动分拣'],
-    output: '把产品图像转成质量判断和位置尺寸数据。',
-  },
-  {
-    title: '交通监控',
-    tone: 'border-sky-200 bg-sky-50/75 text-sky-700',
-    marker: 'bg-sky-500',
-    tasks: ['车辆检测', '车牌识别', '行人检测', '视频分析'],
-    output: '从道路视频中提取车辆、身份和异常行为。',
-  },
-  {
-    title: '遥感军事',
-    tone: 'border-rose-200 bg-rose-50/70 text-rose-700',
-    marker: 'bg-rose-500',
-    tasks: ['遥感校正', '图像配准', '图像融合', '目标检测'],
-    output: '让远距离图像具备定位、比对和识别价值。',
-  },
-  {
-    title: '无人平台',
-    tone: 'border-indigo-200 bg-indigo-50/70 text-indigo-700',
-    marker: 'bg-indigo-500',
-    tasks: ['车道线', '车辆行人', '交通标志', '障碍物感知'],
-    output: '把视觉输入接入环境理解和运动决策。',
-  },
-  {
-    title: '医学/热成像',
-    tone: 'border-amber-200 bg-amber-50/75 text-amber-700',
-    marker: 'bg-amber-500',
-    tasks: ['X 光成像', '内窥镜', '红外测温', '非可见光成像'],
-    output: '把不可直接观察的信息转成可分析图像。',
-  },
-] as const;
-
-const courseConnections = [
-  { chapter: '第二章', title: '图像采集系统', detail: '光源、摄像机、镜头、采集平台' },
-  { chapter: '第三章', title: '图像处理基础', detail: '预处理、标定、几何校正' },
-  { chapter: '第四章', title: '目标检测方法', detail: '背景方法、特征点、纹理颜色、分类器' },
-  { chapter: '后续扩展', title: '目标跟踪与融合感知', detail: '连续帧、滤波器、多传感器线索' },
-] as const;
-
-function ApplicationsOverviewPanel() {
-  return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
-      <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 via-white to-cyan-50/70 px-6 py-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-xs font-semibold tracking-wide text-cyan-700">应用与发展现状</p>
-            <h5 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">从图像到智能感知</h5>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-              图像处理不是简单地展示图片，而是把真实世界的视觉输入转成可检测、可测量、可识别、可决策的信息。
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {['识别', '检测', '定位', '测量', '分割', '跟踪'].map(task => (
-              <span
-                key={task}
-                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 shadow-sm"
-              >
-                {task}
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="p-6">
-        <div className="grid gap-4 md:grid-cols-4">
-          {applicationFlow.map((step, index) => (
-            <div key={step} className="relative rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
-              <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-lg bg-white text-sm font-bold text-slate-700 shadow-sm">
-                {index + 1}
-              </div>
-              <div className="text-sm font-semibold text-slate-900">{step}</div>
-              <div className="mt-1 text-xs leading-5 text-slate-500">
-                {index === 0 ? '相机、遥感、医学或监控图像' : null}
-                {index === 1 ? '增强、校正、分割、特征提取' : null}
-                {index === 2 ? '目标、位置、尺寸、类别、轨迹' : null}
-                {index === 3 ? '检测报警、质量控制、导航决策' : null}
-              </div>
-              {index < applicationFlow.length - 1 ? (
-                <div className="absolute -right-3 top-1/2 hidden h-px w-6 bg-slate-300 md:block" />
-              ) : null}
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-6 grid gap-4 lg:grid-cols-5">
-          {applicationDomains.map(domain => (
-            <div key={domain.title} className={`rounded-xl border p-4 ${domain.tone}`}>
-              <div className="mb-3 flex items-center gap-2">
-                <span className={`h-2.5 w-2.5 rounded-full ${domain.marker}`} />
-                <h6 className="text-sm font-bold">{domain.title}</h6>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {domain.tasks.map(task => (
-                  <span key={task} className="rounded-md bg-white/75 px-2 py-1 text-[11px] font-medium">
-                    {task}
-                  </span>
-                ))}
-              </div>
-              <p className="mt-3 text-xs leading-5 opacity-85">{domain.output}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-5">
-          <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-xs font-semibold tracking-wide text-slate-500">课程连接</p>
-              <h6 className="text-lg font-bold text-slate-900">第一章把应用问题连接到后续技术</h6>
-            </div>
-            <p className="text-xs text-slate-500">应用场景先行，算法章节随后解释如何实现。</p>
-          </div>
-          <div className="grid gap-3 md:grid-cols-4">
-            {courseConnections.map(item => (
-              <div key={`${item.chapter}-${item.title}`} className="rounded-lg border border-slate-200 bg-white p-3">
-                <div className="text-[11px] font-semibold text-blue-600">{item.chapter}</div>
-                <div className="mt-1 text-sm font-bold text-slate-900">{item.title}</div>
-                <div className="mt-1 text-xs leading-5 text-slate-500">{item.detail}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function ConceptCardView({ concept, index }: { concept: ConceptCard; index: number }) {
   const inner = (
     <>
@@ -714,7 +578,7 @@ function ConceptCardView({ concept, index }: { concept: ConceptCard; index: numb
         )}
 
         <div className={`mt-5 flex items-center gap-2 text-sm font-medium ${concept.href ? 'text-blue-600' : 'text-slate-400'}`}>
-          <span>{concept.href ? '开始学习' : concept.actionLabel ?? '入口占位'}</span>
+          <span>{concept.href ? '开始学习' : '入口占位'}</span>
           {concept.href ? (
             <svg
               className="w-4 h-4 group-hover:translate-x-1 transition-transform"
@@ -816,7 +680,6 @@ export default function Home() {
                   </div>
                 ))}
 
-                {chapter.chapter === '第一章' ? <ApplicationsOverviewPanel /> : null}
               </div>
             </section>
           ))}
