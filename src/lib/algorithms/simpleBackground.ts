@@ -1,5 +1,6 @@
 import { GrayscaleImage } from './types';
 import { clamp, create2DArray, normalizeImage } from '../utils/imageProcessing';
+import { createHumanMotionSequence } from '../utils/motionTeachingSequence';
 
 export type ThresholdSceneType = 'bimodal' | 'spotlight' | 'noisyObject';
 export type ThresholdOutputMode = 'binary' | 'binaryInv' | 'trunc' | 'tozero' | 'tozeroInv';
@@ -32,14 +33,48 @@ export interface FrameDifferenceResult {
   cleaned: GrayscaleImage;
 }
 
+export interface FrameDifferenceTeachingResult extends FrameDifferenceResult {
+  frames: GrayscaleImage[];
+  width: number;
+  height: number;
+  frameIndex: number;
+  previousIndex: number;
+  nextIndex: number;
+  previous: GrayscaleImage;
+  current: GrayscaleImage;
+  next: GrayscaleImage;
+  motionPixelCount: number;
+  cleanedPixelCount: number;
+  pixelTimeline: FrameDifferencePixelTimelinePoint[];
+}
+
+export interface FrameDifferencePixelTimelinePoint {
+  frameIndex: number;
+  current: number;
+  previous: number;
+  next: number;
+  previousDifference: number;
+  nextDifference: number;
+  previousMask: number;
+  nextMask: number;
+  finalMask: number;
+}
+
 export interface BackgroundModelResult {
   current: GrayscaleImage;
+  previousFrame: GrayscaleImage;
   background: GrayscaleImage;
   difference: GrayscaleImage;
   mask: GrayscaleImage;
   mean: GrayscaleImage;
   deviation: GrayscaleImage;
   mixtureComponents: GaussianComponent[];
+  frames: GrayscaleImage[];
+  frameIndex: number;
+  backgroundHistory: GrayscaleImage[];
+  maskHistory: GrayscaleImage[];
+  foregroundCounts: number[];
+  pixelTimeline: BackgroundPixelTimelinePoint[];
 }
 
 export interface GaussianComponent {
@@ -47,6 +82,14 @@ export interface GaussianComponent {
   mean: number;
   sigma: number;
   background: boolean;
+}
+
+export interface BackgroundPixelTimelinePoint {
+  frameIndex: number;
+  current: number;
+  background: number;
+  difference: number;
+  mask: number;
 }
 
 function deterministicNoise(x: number, y: number, seed: number): number {
@@ -206,24 +249,18 @@ export function createOtsuVarianceProfile(image: GrayscaleImage): OtsuThresholdP
 }
 
 export function createMotionSequence(speed: number, noiseStrength: number): MotionSequence {
-  const width = 48;
-  const height = 32;
-  const baseY = 13;
-  const previousX = 15;
-  const currentX = clamp(previousX + speed, 6, 34);
-  const nextX = clamp(currentX + speed, 6, 40);
-
-  const createFrame = (objectX: number, seed: number) => {
-    const background = createBaseBackground(width, height, seed);
-    const body = drawRectangle(background, objectX, baseY, 8, 10, 0.82);
-    const head = drawRectangle(body, objectX + 2, baseY - 4, 4, 4, 0.88);
-    return addNoise(head, noiseStrength / 255, seed);
-  };
+  const sequence = createHumanMotionSequence({
+    width: 96,
+    height: 64,
+    frameCount: 3,
+    speed: Math.max(0.45, speed / 6),
+    noiseStrength: noiseStrength / 255,
+  });
 
   return {
-    previous: createFrame(previousX, 0),
-    current: createFrame(currentX, 1),
-    next: createFrame(nextX, 2),
+    previous: sequence.frames[0],
+    current: sequence.frames[1],
+    next: sequence.frames[2],
   };
 }
 
@@ -251,60 +288,289 @@ export function computeFrameDifference(
   };
 }
 
+export function createFrameDifferenceTeachingSequence(
+  mode: FrameDifferenceMode,
+  threshold: number,
+  frameIndex: number,
+  speed: number,
+  noiseStrength: number,
+  pixel: { x: number; y: number } = { x: 48, y: 42 }
+): FrameDifferenceTeachingResult {
+  const sequence = createHumanMotionSequence({
+    width: 96,
+    height: 64,
+    frameCount: 24,
+    speed: Math.max(0.45, speed / 6),
+    noiseStrength: noiseStrength / 255,
+    lightVariation: 0.03,
+    dynamicBackgroundStrength: 0.022,
+  });
+  const lastInteriorFrame = Math.max(1, sequence.frames.length - 2);
+  const safeFrameIndex = Math.max(1, Math.min(frameIndex, lastInteriorFrame));
+  const previousIndex = safeFrameIndex - 1;
+  const nextIndex = safeFrameIndex + 1;
+  const motionSequence: MotionSequence = {
+    previous: sequence.frames[previousIndex],
+    current: sequence.frames[safeFrameIndex],
+    next: sequence.frames[nextIndex],
+  };
+  const result = computeFrameDifference(motionSequence, threshold, mode);
+
+  return {
+    ...result,
+    frames: sequence.frames,
+    width: sequence.width,
+    height: sequence.height,
+    frameIndex: safeFrameIndex,
+    previousIndex,
+    nextIndex,
+    previous: motionSequence.previous,
+    current: motionSequence.current,
+    next: motionSequence.next,
+    motionPixelCount: countForegroundPixels(result.binary),
+    cleanedPixelCount: countForegroundPixels(result.cleaned),
+    pixelTimeline: createFrameDifferencePixelTimeline(
+      sequence.frames,
+      mode,
+      threshold,
+      pixel.x,
+      pixel.y
+    ),
+  };
+}
+
 export function createBackgroundModel(
   method: BackgroundModelType,
   threshold: number,
   learningRate: number
 ): BackgroundModelResult {
-  const width = 48;
-  const height = 32;
-  const cleanFrames = Array.from({ length: 8 }, (_, time) => createBaseBackground(width, height, time));
-  const current = drawRectangle(createBaseBackground(width, height, 9), 28, 10, 10, 12, 0.84);
-  const mean = meanImage(cleanFrames);
-  const deviation = stdImage(cleanFrames, mean);
+  return createBackgroundTeachingSequence(method, threshold, learningRate, 12);
+}
+
+export function createBackgroundTeachingSequence(
+  method: BackgroundModelType,
+  threshold: number,
+  learningRate: number,
+  frameIndex: number,
+  pixel: { x: number; y: number } = { x: 48, y: 32 }
+): BackgroundModelResult {
+  const sequence = createHumanMotionSequence({
+    width: 96,
+    height: 64,
+    frameCount: 24,
+    speed: 1,
+    noiseStrength: 0.012,
+    lightVariation: 0.03,
+    dynamicBackgroundStrength: method === 'mixtureGaussian' ? 0.045 : 0.022,
+  });
+  const safeFrameIndex = Math.max(0, Math.min(frameIndex, sequence.frames.length - 1));
   const normalizedThreshold = clamp(threshold / 255, 0, 1);
   const alpha = clamp(learningRate / 100, 0.01, 0.8);
-
-  let background: GrayscaleImage;
-  let mixtureComponents: GaussianComponent[] = [];
-
-  switch (method) {
-    case 'mean':
-      background = mean;
-      break;
-    case 'adaptive':
-      background = cleanFrames.slice(1).reduce(
-        (previous, frame) => blendImages(frame, previous, alpha),
-        cleanFrames[0]
-      );
-      break;
-    case 'singleGaussian':
-      background = mean;
-      break;
-    case 'mixtureGaussian':
-      background = createMixtureBackground(width, height);
-      mixtureComponents = [
-        { weight: 0.54, mean: 0.24, sigma: 0.05, background: true },
-        { weight: 0.32, mean: 0.36, sigma: 0.08, background: true },
-        { weight: 0.14, mean: 0.82, sigma: 0.06, background: false },
-      ];
-      break;
-  }
-
+  const trainingFrames = sequence.frames.slice(0, 8);
+  const mean = meanImage(trainingFrames);
+  const deviation = stdImage(trainingFrames, mean);
+  const backgroundHistory = createBackgroundHistory(method, sequence.frames, sequence.backgroundFrames, mean, alpha);
+  const deviationHistory = createDeviationHistory(method, sequence.frames, mean, deviation, alpha);
+  const maskHistory = sequence.frames.map((frame, index) => {
+    if (method === 'singleGaussian') {
+      return gaussianForegroundMask(frame, backgroundHistory[index], deviationHistory[index], 2.5);
+    }
+    return binarize(absoluteDifference(frame, backgroundHistory[index]), normalizedThreshold);
+  });
+  const foregroundCounts = maskHistory.map(countForegroundPixels);
+  const current = sequence.frames[safeFrameIndex];
+  const background = backgroundHistory[safeFrameIndex];
   const difference = absoluteDifference(current, background);
-  const mask = method === 'singleGaussian'
-    ? gaussianForegroundMask(current, mean, deviation, 2.5)
-    : binarize(difference, normalizedThreshold);
+  const mask = maskHistory[safeFrameIndex];
+  const mixtureComponents = createTeachingMixtureComponents(current, background, sequence.objectMasks[safeFrameIndex]);
 
   return {
     current,
+    previousFrame: sequence.frames[Math.max(0, safeFrameIndex - 1)],
     background,
     difference,
     mask,
     mean,
-    deviation,
+    deviation: deviationHistory[safeFrameIndex],
     mixtureComponents,
+    frames: sequence.frames,
+    frameIndex: safeFrameIndex,
+    backgroundHistory,
+    maskHistory,
+    foregroundCounts,
+    pixelTimeline: createPixelTimeline(
+      sequence.frames,
+      backgroundHistory,
+      maskHistory,
+      pixel.x,
+      pixel.y
+    ),
   };
+}
+
+function cloneImage(image: GrayscaleImage): GrayscaleImage {
+  return image.map(row => [...row]);
+}
+
+function createBackgroundHistory(
+  method: BackgroundModelType,
+  frames: GrayscaleImage[],
+  backgroundFrames: GrayscaleImage[],
+  mean: GrayscaleImage,
+  alpha: number
+): GrayscaleImage[] {
+  if (method === 'mean') {
+    return frames.map(() => cloneImage(mean));
+  }
+
+  if (method === 'singleGaussian') {
+    const history: GrayscaleImage[] = [];
+    let runningMean = cloneImage(backgroundFrames[0]);
+    for (const frame of frames) {
+      history.push(cloneImage(runningMean));
+      runningMean = blendImages(frame, runningMean, alpha);
+    }
+    return history;
+  }
+
+  const effectiveAlpha = method === 'mixtureGaussian' ? alpha * 0.55 : alpha;
+  const history: GrayscaleImage[] = [];
+  let background = cloneImage(backgroundFrames[0]);
+
+  for (const frame of frames) {
+    history.push(cloneImage(background));
+    background = blendImages(frame, background, effectiveAlpha);
+  }
+
+  return history;
+}
+
+function createDeviationHistory(
+  method: BackgroundModelType,
+  frames: GrayscaleImage[],
+  mean: GrayscaleImage,
+  deviation: GrayscaleImage,
+  alpha: number
+): GrayscaleImage[] {
+  if (method !== 'singleGaussian') {
+    return frames.map(() => cloneImage(deviation));
+  }
+
+  const history: GrayscaleImage[] = [];
+  let runningMean = cloneImage(mean);
+  let runningVariance = deviation.map(row =>
+    row.map(value => Math.max(0.03, value) ** 2)
+  );
+
+  for (const frame of frames) {
+    history.push(runningVariance.map(row => row.map(value => Math.sqrt(Math.max(0.0009, value)))));
+    const nextMean = blendImages(frame, runningMean, alpha);
+    runningVariance = runningVariance.map((row, y) =>
+      row.map((value, x) => {
+        const diff = frame[y][x] - runningMean[y][x];
+        return clamp((1 - alpha) * value + alpha * diff * diff, 0.0009, 0.25);
+      })
+    );
+    runningMean = nextMean;
+  }
+
+  return history;
+}
+
+function countForegroundPixels(mask: GrayscaleImage): number {
+  return mask.reduce(
+    (total, row) => total + row.reduce((rowTotal, pixel) => rowTotal + (pixel > 0 ? 1 : 0), 0),
+    0
+  );
+}
+
+function createPixelTimeline(
+  frames: GrayscaleImage[],
+  backgroundHistory: GrayscaleImage[],
+  maskHistory: GrayscaleImage[],
+  x: number,
+  y: number
+): BackgroundPixelTimelinePoint[] {
+  return frames.map((frame, frameIndex) => {
+    const safeY = Math.max(0, Math.min(y, frame.length - 1));
+    const safeX = Math.max(0, Math.min(x, (frame[0]?.length ?? 1) - 1));
+    const current = frame[safeY]?.[safeX] ?? 0;
+    const background = backgroundHistory[frameIndex]?.[safeY]?.[safeX] ?? 0;
+    const mask = maskHistory[frameIndex]?.[safeY]?.[safeX] ?? 0;
+
+    return {
+      frameIndex,
+      current,
+      background,
+      difference: Math.abs(current - background),
+      mask,
+    };
+  });
+}
+
+function createFrameDifferencePixelTimeline(
+  frames: GrayscaleImage[],
+  mode: FrameDifferenceMode,
+  threshold: number,
+  x: number,
+  y: number
+): FrameDifferencePixelTimelinePoint[] {
+  const normalizedThreshold = clamp(threshold / 255, 0, 1);
+
+  return frames.map((frame, frameIndex) => {
+    const safeY = Math.max(0, Math.min(y, frame.length - 1));
+    const safeX = Math.max(0, Math.min(x, (frame[0]?.length ?? 1) - 1));
+    const previousFrame = frames[Math.max(0, frameIndex - 1)];
+    const nextFrame = frames[Math.min(frames.length - 1, frameIndex + 1)];
+    const current = frame[safeY]?.[safeX] ?? 0;
+    const previous = previousFrame?.[safeY]?.[safeX] ?? current;
+    const next = nextFrame?.[safeY]?.[safeX] ?? current;
+    const previousDifference = Math.abs(current - previous);
+    const nextDifference = Math.abs(next - current);
+    const previousMask = previousDifference > normalizedThreshold ? 1 : 0;
+    const nextMask = nextDifference > normalizedThreshold ? 1 : 0;
+
+    return {
+      frameIndex,
+      current,
+      previous,
+      next,
+      previousDifference,
+      nextDifference,
+      previousMask,
+      nextMask,
+      finalMask: mode === 'twoFrame'
+        ? previousMask
+        : previousMask > 0 && nextMask > 0 ? 1 : 0,
+    };
+  });
+}
+
+function createTeachingMixtureComponents(
+  current: GrayscaleImage,
+  background: GrayscaleImage,
+  objectMask: GrayscaleImage
+): GaussianComponent[] {
+  const backgroundMean = meanOfImage(background);
+  let objectSum = 0;
+  let objectCount = 0;
+
+  for (let y = 0; y < current.length; y++) {
+    for (let x = 0; x < (current[0]?.length ?? 0); x++) {
+      if ((objectMask[y]?.[x] ?? 0) > 0) {
+        objectSum += current[y][x];
+        objectCount++;
+      }
+    }
+  }
+
+  const objectMean = objectCount > 0 ? objectSum / objectCount : 0.82;
+
+  return [
+    { weight: 0.58, mean: backgroundMean, sigma: 0.05, background: true },
+    { weight: 0.28, mean: clamp(backgroundMean + 0.12, 0, 1), sigma: 0.08, background: true },
+    { weight: 0.14, mean: objectMean, sigma: 0.06, background: false },
+  ];
 }
 
 export function absoluteDifference(a: GrayscaleImage, b: GrayscaleImage): GrayscaleImage {

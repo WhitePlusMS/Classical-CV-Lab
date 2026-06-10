@@ -10,3 +10,6 @@ export * from './sharpening';
 export * from './cameraCalibration';
 export * from './lbpGabor';
 export * from './haarLbpFeatureVector';
+export * from './classifierDetectionPipeline';
+export * from './histogramTemplateMatching';
+export * from './colorSpaceHistogram';
