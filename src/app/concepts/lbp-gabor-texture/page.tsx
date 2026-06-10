@@ -2,6 +2,8 @@
 
 import React, { useCallback, useMemo, useState } from 'react';
 import {
+  AnchoredOverlay,
+  type AnchoredOverlayPath,
   CodeViewer,
   ConceptLayout,
   FlowColumn,
@@ -9,28 +11,33 @@ import {
   FlowNode,
   FormulaCard,
   ImageCanvas,
-  MathText,
   ProcessRail,
   SelectParam,
+  SliderParam,
   TeachingCard,
   buildInlineMathML,
 } from '@/components';
 import {
   GABOR_PRESETS,
+  type GaborParams,
   applyGaborFilter,
   computeLBPImage,
   computeRotationInvariantLBP,
   generateGaborKernel,
   generateTextureTestImage,
+  getGaborFilterStep,
   getLBPWindow,
+  getRotationInvariantLBPStep,
 } from '@/lib/algorithms';
-import { normalizeImage } from '@/lib/utils/imageProcessing';
+import type { GrayscaleImage } from '@/lib/algorithms/types';
 import { useGridNavigation } from '@/hooks/useGridNavigation';
+import { useLenaGrayscaleImage } from '@/hooks/useLenaGrayscaleImage';
 
-// ========================================
-// 模式定义
-// ========================================
 type TextureMode = 'lbp' | 'lbp-rotation' | 'gabor';
+type TextureImageType = 'texture' | 'lenaOriginal';
+
+const LBP_WINDOW_SIZE = 3;
+const CUSTOM_GABOR_PRESET = 'custom';
 
 const MODE_OPTIONS: { value: TextureMode; label: string }[] = [
   { value: 'lbp', label: 'LBP 基础' },
@@ -38,342 +45,489 @@ const MODE_OPTIONS: { value: TextureMode; label: string }[] = [
   { value: 'gabor', label: 'Gabor 滤波' },
 ];
 
-const GABOR_PRESET_OPTIONS = GABOR_PRESETS.map(p => ({ value: p.label, label: p.label }));
+const IMAGE_OPTIONS: { value: TextureImageType; label: string }[] = [
+  { value: 'texture', label: '纹理测试图' },
+  { value: 'lenaOriginal', label: 'Lena 灰度图' },
+];
 
-// ========================================
-// 公式常量
-// ========================================
+const GABOR_PRESET_OPTIONS = [
+  ...GABOR_PRESETS.map(preset => ({ value: preset.label, label: preset.label })),
+  { value: CUSTOM_GABOR_PRESET, label: '自定义参数' },
+];
 
-/* LBP 主公式：LBP(x_c,y_c)=Σ s(I(p)-I(c))·2^p, p=1..8 */
-const LBP_FORMULA = buildInlineMathML(
-  '<mrow><mi>LBP</mi><mo>(</mo><msub><mi>x</mi><mi>c</mi></msub><mo>,</mo><msub><mi>y</mi><mi>c</mi></msub><mo>)</mo><mo>=</mo>' +
-  '<munderover><mo>∑</mo><mrow><mi>p</mi><mo>=</mo><mn>1</mn></mrow><mn>8</mn></munderover>' +
-  '<mi>s</mi><mo>(</mo><mi>I</mi><mo>(</mo><mi>p</mi><mo>)</mo><mo>-</mo><mi>I</mi><mo>(</mo><mi>c</mi><mo>)</mo><mo>)</mo>' +
-  '<mo>&#x22C5;</mo><msup><mn>2</mn><mi>p</mi></msup></mrow>'
-);
+const LBP_NEIGHBOR_POSITIONS = [
+  { row: 0, col: 0, label: '左上' },
+  { row: 0, col: 1, label: '上' },
+  { row: 0, col: 2, label: '右上' },
+  { row: 1, col: 2, label: '右' },
+  { row: 2, col: 2, label: '右下' },
+  { row: 2, col: 1, label: '下' },
+  { row: 2, col: 0, label: '左下' },
+  { row: 1, col: 0, label: '左' },
+];
 
-/* 阶跃函数：s(x)=1 if x≥0; 0 otherwise */
-const STEP_FUNCTION = buildInlineMathML(
-  '<mrow><mi>s</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>=</mo>' +
-  '<mrow><mo>{</mo><mtable><mtr><mtd><mn>1</mn></mtd><mtd><mi>x</mi><mo>≥</mo><mn>0</mn></mtd></mtr>' +
-  '<mtr><mtd><mn>0</mn></mtd><mtd><mtext>other</mtext></mtd></mtr></mtable></mrow></mrow>'
-);
-
-/* Gabor 基础公式：h(x,y)=s(x,y)g(x,y) */
-const GABOR_BASIC = buildInlineMathML(
-  '<mrow><mi>h</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>=</mo><mi>s</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mi>g</mi><mo>(</mo><mi>x</mi><mi>,</mi><mi>y</mi><mo>)</mo></mrow>'
-);
-
-/* Gabor 正弦波和高斯核 */
-const GABOR_S_G = buildInlineMathML(
-  '<mrow><mtable>' +
-  '<mtr><mtd><mi>s</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>=</mo>' +
-  '<msup><mi>e</mi><mrow><mo>-</mo><mi>j</mi><mn>2</mn><mi>π</mi><mo>(</mo><msub><mi>u</mi><mn>0</mn></msub><mi>x</mi><mo>+</mo><msub><mi>v</mi><mn>0</mn></msub><mi>y</mi><mo>)</mo></mrow></msup></mtd></mtr>' +
-  '<mtr><mtd><mi>g</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>=</mo>' +
-  '<mfrac><mn>1</mn><mrow><msqrt><mn>2</mn><mi>π</mi></msqrt><mi>σ</mi></mrow></mfrac>' +
-  '<msup><mi>e</mi><mrow><mo>-</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mo>(</mo><mfrac><msup><mi>x</mi><mn>2</mn></msup><msubsup><mi>σ</mi><mi>x</mi><mn>2</mn></msubsup></mfrac><mo>+</mo><mfrac><msup><mi>y</mi><mn>2</mn></msup><msubsup><mi>σ</mi><mi>y</mi><mn>2</mn></msubsup></mfrac><mo>)</mo></mrow></msup></mtd></mtr>' +
-  '</mtable></mrow>'
-);
-
-/* Gabor 简化公式 */
-const GABOR_SIMPLIFIED = buildInlineMathML(
-  '<mrow><mi>h</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>;</mo><mi>λ</mi><mo>,</mo><mi>θ</mi><mo>,</mo><mi>ψ</mi><mo>,</mo><mi>σ</mi><mo>,</mo><mi>γ</mi><mo>)</mo><mo>=</mo>' +
-  '<msup><mi>e</mi><mrow><mo>-</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mfrac><mrow><msup><mi>x</mi><mrow><mo>′</mo><mn>2</mn></mrow></msup><mo>+</mo><msup><mi>γ</mi><mn>2</mn></msup><msup><mi>y</mi><mrow><mo>′</mo><mn>2</mn></mrow></msup></mrow><msup><mi>σ</mi><mn>2</mn></msup></mfrac></mrow></msup>' +
-  '<msup><mi>e</mi><mrow><mi>i</mi><mo>(</mo><mn>2</mn><mi>π</mi><mfrac><msup><mi>x</mi><mo>′</mo></msup><mi>λ</mi></mfrac><mo>+</mo><mi>ψ</mi><mo>)</mo></mrow></msup></mrow>'
-);
-
-/* Gabor 坐标变换 */
-const GABOR_ROTATION = buildInlineMathML(
-  '<mrow><mtable>' +
-  '<mtr><mtd><msup><mi>x</mi><mo>′</mo></msup><mo>=</mo><mi>x</mi><mi>cos</mi><mi>θ</mi><mo>+</mo><mi>y</mi><mi>sin</mi><mi>θ</mi></mtd></mtr>' +
-  '<mtr><mtd><msup><mi>y</mi><mo>′</mo></msup><mo>=</mo><mo>-</mo><mi>x</mi><mi>sin</mi><mi>θ</mi><mo>+</mo><mi>y</mi><mi>cos</mi><mi>θ</mi></mtd></mtr>' +
-  '</mtable></mrow>'
-);
-
-// ========================================
-// LBP 代码
-// ========================================
-const LBP_CODE_TS = `function computeLBP(image: number[][], x: number, y: number): number {
+const LBP_CODE_TS = `export function getLBPWindow(image: number[][], x: number, y: number) {
   const center = image[y][x];
-  // 3×3 邻域按顺序比较
-  // 顺序：左上、上、右上、右、右下、下、左下、左
-  const neighbors = [
-    [-1,-1],[-1,0],[-1,1],[0,1],
-    [1,1],[1,0],[1,-1],[0,-1],
+  const offsets = [
+    [-1, -1], [0, -1], [1, -1], [1, 0],
+    [1, 1], [0, 1], [-1, 1], [-1, 0],
   ];
-  let lbp = 0;
-  for (let p = 0; p <= 7; p++) {
-    const nx = x + neighbors[p][1];
-    const ny = y + neighbors[p][0];
-    const s = image[ny][nx] >= center ? 1 : 0;
-    lbp += s * Math.pow(2, p);
-  }
-  return lbp; // 0~255
+  const bits = offsets.map(([dx, dy]) =>
+    image[y + dy][x + dx] >= center ? 1 : 0
+  );
+  const decimalValue = bits.reduce(
+    (sum, bit, index) => sum + bit * 2 ** index,
+    0
+  );
+  return { center, bits, decimalValue };
 }
 
-// 旋转不变 LBP: 循环移位取最小值
-function rotationInvariantLBP(lbp: number, bits = 8): number {
-  let minVal = lbp;
-  for (let shift = 1; shift < bits; shift++) {
-    const rotated =
-      ((lbp >> shift) | (lbp << (bits - shift))) & 0xFF;
-    minVal = Math.min(minVal, rotated);
-  }
-  return minVal;
-}`;
-
-const GABOR_CODE_TS = `function generateGaborKernel(params: {
-  wavelength: number;  // λ
-  orientation: number; // θ (度)
-  phase: number;       // ψ (度)
-  sigma: number;       // σ
-  gamma: number;       // γ
-  kernelSize: number;  // 边长（奇数）
-}): number[][] {
-  const theta = (params.orientation * Math.PI) / 180;
-  const psi = (params.phase * Math.PI) / 180;
-  const half = Math.floor(params.kernelSize / 2);
-  const kernel = create2DArray(params.kernelSize, params.kernelSize, 0);
-
-  for (let y = -half; y <= half; y++) {
-    for (let x = -half; x <= half; x++) {
-      const xPrime = x * Math.cos(theta) + y * Math.sin(theta);
-      const yPrime = -x * Math.sin(theta) + y * Math.cos(theta);
-      const g = Math.exp(-0.5 * (xPrime*xPrime +
-        params.gamma*params.gamma*yPrime*yPrime)
-        / (params.sigma*params.sigma));
-      const s = Math.cos(2 * Math.PI * xPrime
-        / params.wavelength + psi);
-      kernel[y + half][x + half] = g * s;
-    }
-  }
-  return normalizeKernel(kernel);
-}`;
-
-// ========================================
-// 工具函数
-// ========================================
-
-/** 灰度值（0~1）转文本 */
-function grayVal(v: number): string {
-  return Math.round(v * 255).toString();
-}
-
-/** 将 Gabor 核（范围 -1~1）映射到 [0, 1] 便于显示 */
-function normalizeKernelImage(kernel: number[][]): number[][] {
-  const h = kernel.length;
-  const w = kernel[0]?.length || 0;
-  const result: number[][] = [];
-  for (let y = 0; y < h; y++) {
-    const row: number[] = [];
-    for (let x = 0; x < w; x++) {
-      row.push((kernel[y][x] + 1) / 2);
-    }
-    result.push(row);
-  }
-  return result;
-}
-
-// ========================================
-// 页面组件
-// ========================================
-export default function LBPGaborTexturePage() {
-  const [mode, setMode] = useState<TextureMode>('lbp');
-  const [currentPosition, setCurrentPosition] = useState({ x: 10, y: 10 });
- const [gaborPreset, setGaborPreset] = useState<string>(GABOR_PRESETS[0].label);
-  // ---- LBP 邻域序号映射 ----
-  const lbpRowMap = useMemo(() => [0, 0, 0, 1, 2, 2, 2, 1], []);
-  const lbpColMap = useMemo(() => [0, 1, 2, 2, 2, 1, 0, 0], []);
-  const lbpRow = (i: number): number => lbpRowMap[i] ?? 0;
-  const lbpCol = (i: number): number => lbpColMap[i] ?? 0;
-
- // ---- 输入数据 ----
-  const testImage = useMemo(() => generateTextureTestImage(), []);
-  const width = testImage[0]?.length || 0;
-  const height = testImage.length;
-
-  // ---- 派生计算结果 ----
-  const lbpResult = useMemo(() => computeLBPImage(testImage), [testImage]);
-  const rotationInvariantResult = useMemo(
-    () => computeRotationInvariantLBP(testImage),
-    [testImage]
-  );
-
-  const currentGaborParams = useMemo(() => {
-    const found = GABOR_PRESETS.find(p => p.label === gaborPreset);
-    return found ?? GABOR_PRESETS[0];
-  }, [gaborPreset]);
-
-  const gaborKernel = useMemo(
-    () => generateGaborKernel(currentGaborParams),
-    [currentGaborParams]
-  );
-  const gaborResult = useMemo(
-    () => applyGaborFilter(testImage, gaborKernel),
-    [testImage, gaborKernel]
-  );
-
-  const resultImage = useMemo(() => {
-    if (mode === 'lbp') return lbpResult;
-    if (mode === 'lbp-rotation') return rotationInvariantResult;
-    return gaborResult;
-  }, [mode, lbpResult, rotationInvariantResult, gaborResult]);
-
-  // ---- 当前窗口数据 ----
-  const cx = currentPosition.x;
-  const cy = currentPosition.y;
-  const canAccessWindow = cx >= 1 && cx < width - 1 && cy >= 1 && cy < height - 1;
-  const currentWindow = useMemo(() => {
-    if (!canAccessWindow) return null;
-    return getLBPWindow(testImage, cx, cy);
-  }, [canAccessWindow, testImage, cx, cy]);
-
-  // ---- 步进信息 ----
-  const currentStepIndex = cy * width + cx;
-  const totalSteps = width * height;
-  const resultLabel =
-    mode === 'lbp' ? 'LBP 码图像' :
-    mode === 'lbp-rotation' ? '旋转不变 LBP' :
-    'Gabor 滤波结果';
-
-  // ---- 事件处理 ----
-  const handleModeChange = useCallback((value: string) => {
-    setMode(value as TextureMode);
-    // Gabor 模式自动选第一个预设
-    if (value === 'gabor') setGaborPreset(GABOR_PRESETS[0].label);
-  }, []);
-
-  const handleDirectionMove = useGridNavigation({
-    current: currentPosition,
-    bounds: { width, height },
-    onMove: setCurrentPosition,
-    disabled: width === 0 || height === 0,
+export function getRotationInvariantLBPStep(bits: number[]) {
+  const rotations = Array.from({ length: 8 }, (_, shift) => {
+    const pattern = [...bits.slice(shift), ...bits.slice(0, shift)];
+    const decimalValue = pattern.reduce(
+      (sum, bit, index) => sum + bit * 2 ** index,
+      0
+    );
+    return { shift, pattern, decimalValue };
   });
+  return rotations.reduce((best, item) =>
+    item.decimalValue < best.decimalValue ? item : best
+  );
+}`;
 
-  const handlePixelSelect = useCallback((x: number, y: number) => {
-    setCurrentPosition({ x, y });
-  }, []);
+const GABOR_CODE_TS = `export function getGaborFilterStep(
+  image: number[][],
+  kernel: number[][],
+  x: number,
+  y: number
+) {
+  const half = Math.floor(kernel.length / 2);
+  let rawSum = 0;
+  let kernelAbsSum = 0;
 
-  // ---- 参数面板 ----
-  const parameters = (
-    <div className="space-y-4">
-      <SelectParam
-        label="处理模式"
-        value={mode}
-        onChange={handleModeChange}
-        options={MODE_OPTIONS}
-      />
-      {mode === 'gabor' && (
-        <SelectParam
-          label="Gabor 预设"
-          value={gaborPreset}
-          onChange={setGaborPreset}
-          options={GABOR_PRESET_OPTIONS}
-        />
+  for (let ky = 0; ky < kernel.length; ky++) {
+    for (let kx = 0; kx < kernel.length; kx++) {
+      const pixel = image[y - half + ky][x - half + kx];
+      const weight = kernel[ky][kx];
+      rawSum += pixel * weight;
+      kernelAbsSum += Math.abs(weight);
+    }
+  }
+
+  const normalizedResponse = kernelAbsSum > 0
+    ? rawSum / kernelAbsSum
+    : 0;
+  const outputValue = Math.max(0, Math.min(1,
+    (normalizedResponse + 1) / 2
+  ));
+  return { rawSum, kernelAbsSum, normalizedResponse, outputValue };
+}`;
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function grayByte(value: number): number {
+  return Math.round(Math.max(0, Math.min(1, value)) * 255);
+}
+
+function formatFloat(value: number, digits = 3): string {
+  return Number.isInteger(value) ? value.toString() : value.toFixed(digits);
+}
+
+function normalizeKernelImage(kernel: number[][]): GrayscaleImage {
+  return kernel.map(row => row.map(value => (value + 1) / 2));
+}
+
+function getWindowSize(mode: TextureMode, gaborParams: GaborParams): number {
+  return mode === 'gabor' ? gaborParams.kernelSize : LBP_WINDOW_SIZE;
+}
+
+function getOutputCenter(position: { x: number; y: number }, windowSize: number) {
+  const half = Math.floor(windowSize / 2);
+  return {
+    x: position.x + half,
+    y: position.y + half,
+  };
+}
+
+function buildLBPFormula(cx: number, cy: number, bits: number[], value: number): string {
+  const terms = bits
+    .map((bit, index) => ({ bit, value: bit * 2 ** index }))
+    .filter(term => term.bit === 1)
+    .map(term => `<mn>${term.value}</mn>`);
+
+  return buildInlineMathML(`
+    <mrow>
+      <mi>LBP</mi><mo>(</mo><mn>${cx}</mn><mo>,</mo><mn>${cy}</mn><mo>)</mo>
+      <mo>=</mo>
+      <munderover><mo>&#8721;</mo><mrow><mi>p</mi><mo>=</mo><mn>1</mn></mrow><mn>8</mn></munderover>
+      <msub><mi>b</mi><mi>p</mi></msub>
+      <msup><mn>2</mn><mrow><mi>p</mi><mo>-</mo><mn>1</mn></mrow></msup>
+      <mo>=</mo>${terms.length > 0 ? terms.join('<mo>+</mo>') : '<mn>0</mn>'}
+      <mo>=</mo><mn>${value}</mn>
+    </mrow>
+  `);
+}
+
+function buildRotationInvariantFormula(values: number[], minValue: number, minShift: number): string {
+  return buildInlineMathML(`
+    <mrow>
+      <msub><mi>LBP</mi><mtext>ri</mtext></msub>
+      <mo>=</mo><mi>min</mi><mo>(</mo><mtext>循环移位值</mtext><mo>)</mo>
+      <mo>=</mo><mi>min</mi><mo>(</mo><mtext>${values.join(', ')}</mtext><mo>)</mo>
+      <mo>=</mo><mn>${minValue}</mn>
+      <mtext>，shift=</mtext><mn>${minShift}</mn>
+    </mrow>
+  `);
+}
+
+function buildGaborKernelFormula(params: GaborParams): string {
+  return buildInlineMathML(`
+    <mrow>
+      <mi>h</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo>
+      <mo>=</mo>
+      <msup><mi>e</mi><mrow><mo>-</mo><mfrac><mrow><msup><mi>x</mi><mo>&#8242;</mo></msup><mn>2</mn><mo>+</mo><msup><mn>${params.gamma}</mn><mn>2</mn></msup><msup><mi>y</mi><mo>&#8242;</mo></msup><mn>2</mn></mrow><mrow><mn>2</mn><mo>&#x22C5;</mo><msup><mn>${params.sigma}</mn><mn>2</mn></msup></mrow></mfrac></mrow></msup>
+      <mo>&#x22C5;</mo>
+      <mi>cos</mi><mo>(</mo><mfrac><mrow><mn>2</mn><mi>&#960;</mi><mi>x</mi><mo>&#8242;</mo></mrow><mn>${params.wavelength}</mn></mfrac><mo>+</mo><mn>${params.phase}</mn><mo>&#176;</mo><mo>)</mo>
+    </mrow>
+  `);
+}
+
+function buildGaborResponseFormula(rawSum: number, kernelAbsSum: number, normalized: number, output: number): string {
+  return buildInlineMathML(`
+    <mrow>
+      <mi>R</mi><mo>=</mo>
+      <mfrac><mrow><mo>&#8721;</mo><mi>I</mi><mo>&#x22C5;</mo><mi>h</mi></mrow><mrow><mo>&#8721;</mo><mo>|</mo><mi>h</mi><mo>|</mo></mrow></mfrac>
+      <mo>=</mo><mfrac><mn>${formatFloat(rawSum)}</mn><mn>${formatFloat(kernelAbsSum)}</mn></mfrac>
+      <mo>=</mo><mn>${formatFloat(normalized)}</mn>
+      <mo>,</mo>
+      <mi>O</mi><mo>=</mo><mfrac><mrow><mi>R</mi><mo>+</mo><mn>1</mn></mrow><mn>2</mn></mfrac>
+      <mo>=</mo><mn>${formatFloat(output)}</mn>
+    </mrow>
+  `);
+}
+
+function MatrixPreview({
+  image,
+  center,
+  className = '',
+}: {
+  image: GrayscaleImage;
+  center?: { row: number; col: number };
+  className?: string;
+}) {
+  return (
+    <div
+      className={`grid gap-1 ${className}`}
+      style={{ gridTemplateColumns: `repeat(${image[0]?.length ?? 0}, minmax(0, 1fr))` }}
+    >
+      {image.flatMap((row, rowIndex) =>
+        row.map((value, colIndex) => {
+          const isCenter = center?.row === rowIndex && center?.col === colIndex;
+          return (
+            <div
+              key={`${rowIndex}-${colIndex}`}
+              className={`flex h-9 min-w-9 items-center justify-center rounded border font-mono text-[10px] ${
+                isCenter
+                  ? 'border-red-400 bg-red-50 font-semibold text-red-700'
+                  : 'border-slate-200 bg-white text-slate-700'
+              }`}
+            >
+              {grayByte(value)}
+            </div>
+          );
+        })
       )}
     </div>
   );
+}
 
-  // ---- 分析预览区 ----
-  const analysisPreview = (() => {
-    if (mode === 'lbp' || mode === 'lbp-rotation') {
-      const binStr = currentWindow
-        ? currentWindow.binaryPattern.map(b => b.toString()).join('')
-        : '--------';
-      const decVal = currentWindow?.decimalValue ?? 0;
-      const modeLabel = mode === 'lbp' ? 'LBP 码 (= Σ b_p·2^p)' : '旋转不变 LBP (取循环移位最小值)';
+function KernelPreview({ kernel }: { kernel: number[][] }) {
+  const size = kernel.length;
+  const center = Math.floor(size / 2);
+  const cellClass = size >= 31 ? 'h-5 min-w-5 text-[6px]' : size >= 21 ? 'h-6 min-w-6 text-[7px]' : 'h-7 min-w-7 text-[8px]';
+
+  return (
+    <div className="space-y-3">
+      <div
+        className="grid gap-0.5 rounded-xl border border-slate-200 bg-slate-900/5 p-2"
+        style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}
+      >
+        {kernel.flatMap((row, rowIndex) =>
+          row.map((value, colIndex) => {
+            const magnitude = Math.min(1, Math.abs(value));
+            const alpha = 0.16 + magnitude * 0.78;
+            const isPositive = value >= 0;
+            const isCenter = rowIndex === center && colIndex === center;
+            const color = isPositive ? '37, 99, 235' : '220, 38, 38';
+            const textColor = magnitude > 0.52 ? '#ffffff' : isPositive ? '#1e3a8a' : '#991b1b';
+
+            return (
+              <div
+                key={`kernel-${rowIndex}-${colIndex}`}
+                className={`${cellClass} flex items-center justify-center rounded border font-mono font-semibold shadow-sm`}
+                style={{
+                  backgroundColor: `rgba(${color}, ${alpha})`,
+                  borderColor: isCenter
+                    ? 'rgb(245 158 11)'
+                    : isPositive
+                      ? 'rgba(29, 78, 216, 0.55)'
+                      : 'rgba(185, 28, 28, 0.55)',
+                  boxShadow: isCenter
+                    ? '0 0 0 2px rgba(245, 158, 11, 0.85), 0 0 0 4px rgba(255, 255, 255, 0.9)'
+                    : undefined,
+                  color: textColor,
+                }}
+                title={formatFloat(value, 4)}
+              >
+                {size >= 21 ? '' : formatFloat(value, 1)}
+              </div>
+            );
+          })
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-600">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-3 w-5 rounded border border-blue-700 bg-blue-600" />
+          正权重
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-3 w-5 rounded border border-red-700 bg-red-600" />
+          负权重
+        </span>
+        <span className="text-slate-500">颜色越深，权重绝对值越大；橙色描边为核中心。</span>
+      </div>
+    </div>
+  );
+}
+
+export default function LBPGaborTexturePage() {
+  const [mode, setMode] = useState<TextureMode>('lbp');
+  const [imageType, setImageType] = useState<TextureImageType>('texture');
+  const [currentPosition, setCurrentPosition] = useState({ x: 9, y: 9 });
+  const [gaborPreset, setGaborPreset] = useState(GABOR_PRESETS[0].label);
+  const [gaborParams, setGaborParams] = useState<GaborParams>(GABOR_PRESETS[0]);
+
+  const lenaImage = useLenaGrayscaleImage(64);
+  const textureImage = useMemo(() => generateTextureTestImage(), []);
+  const originalImage = imageType === 'lenaOriginal' ? lenaImage ?? textureImage : textureImage;
+  const inputWidth = originalImage[0]?.length ?? 0;
+  const inputHeight = originalImage.length;
+  const windowSize = getWindowSize(mode, gaborParams);
+  const halfWindow = Math.floor(windowSize / 2);
+  const validWidth = Math.max(0, inputWidth - windowSize + 1);
+  const validHeight = Math.max(0, inputHeight - windowSize + 1);
+  const safePosition = {
+    x: validWidth > 0 ? clamp(currentPosition.x, 0, validWidth - 1) : 0,
+    y: validHeight > 0 ? clamp(currentPosition.y, 0, validHeight - 1) : 0,
+  };
+  const outputCenter = getOutputCenter(safePosition, windowSize);
+
+  const lbpImage = useMemo(() => computeLBPImage(originalImage), [originalImage]);
+  const rotationInvariantImage = useMemo(() => computeRotationInvariantLBP(originalImage), [originalImage]);
+  const gaborKernel = useMemo(() => generateGaborKernel(gaborParams), [gaborParams]);
+  const gaborKernelDisplay = useMemo(() => normalizeKernelImage(gaborKernel), [gaborKernel]);
+  const gaborImage = useMemo(() => applyGaborFilter(originalImage, gaborKernel), [gaborKernel, originalImage]);
+  const resultImage = mode === 'lbp'
+    ? lbpImage
+    : mode === 'lbp-rotation'
+      ? rotationInvariantImage
+      : gaborImage;
+
+  const lbpStep = useMemo(() => {
+    if (mode === 'gabor' || validWidth === 0 || validHeight === 0) return null;
+    return getLBPWindow(originalImage, outputCenter.x, outputCenter.y);
+  }, [mode, originalImage, outputCenter.x, outputCenter.y, validHeight, validWidth]);
+
+  const rotationStep = useMemo(() => {
+    if (!lbpStep) return null;
+    return getRotationInvariantLBPStep(lbpStep.binaryPattern);
+  }, [lbpStep]);
+
+  const gaborStep = useMemo(() => {
+    if (mode !== 'gabor' || validWidth === 0 || validHeight === 0) return null;
+    return getGaborFilterStep(originalImage, gaborKernel, outputCenter.x, outputCenter.y);
+  }, [gaborKernel, mode, originalImage, outputCenter.x, outputCenter.y, validHeight, validWidth]);
+
+  const currentStepIndex = validWidth > 0 ? safePosition.y * validWidth + safePosition.x : 0;
+  const totalSteps = validWidth * validHeight;
+
+  const resetPosition = useCallback((nextMode: TextureMode = mode, nextParams: GaborParams = gaborParams) => {
+    const nextWindowSize = getWindowSize(nextMode, nextParams);
+    const nextValidWidth = Math.max(0, inputWidth - nextWindowSize + 1);
+    const nextValidHeight = Math.max(0, inputHeight - nextWindowSize + 1);
+    setCurrentPosition({
+      x: nextValidWidth > 0 ? Math.floor((nextValidWidth - 1) / 2) : 0,
+      y: nextValidHeight > 0 ? Math.floor((nextValidHeight - 1) / 2) : 0,
+    });
+  }, [gaborParams, inputHeight, inputWidth, mode]);
+
+  const handleDirectionMove = useGridNavigation({
+    current: safePosition,
+    bounds: { width: validWidth, height: validHeight },
+    onMove: setCurrentPosition,
+    disabled: validWidth === 0 || validHeight === 0,
+  });
+
+  const handleModeChange = useCallback((value: string) => {
+    const nextMode = value as TextureMode;
+    setMode(nextMode);
+    resetPosition(nextMode, gaborParams);
+  }, [gaborParams, resetPosition]);
+
+  const handleImageTypeChange = useCallback((value: string) => {
+    setImageType(value as TextureImageType);
+    resetPosition();
+  }, [resetPosition]);
+
+  const handleGaborPresetChange = useCallback((value: string) => {
+    setGaborPreset(value);
+    const preset = GABOR_PRESETS.find(item => item.label === value);
+    if (preset) {
+      setGaborParams(preset);
+      resetPosition('gabor', preset);
+    }
+  }, [resetPosition]);
+
+  const updateGaborParam = useCallback((key: keyof GaborParams, value: number) => {
+    setGaborPreset(CUSTOM_GABOR_PRESET);
+    setGaborParams(prev => {
+      const next = { ...prev, [key]: value };
+      resetPosition('gabor', next);
+      return next;
+    });
+  }, [resetPosition]);
+
+  const handleInputRegionSelect = useCallback((x: number, y: number) => {
+    if (validWidth === 0 || validHeight === 0) return;
+    setCurrentPosition({
+      x: clamp(x - halfWindow, 0, validWidth - 1),
+      y: clamp(y - halfWindow, 0, validHeight - 1),
+    });
+  }, [halfWindow, validHeight, validWidth]);
+
+  const handleOutputPixelSelect = useCallback((x: number, y: number) => {
+    if (validWidth === 0 || validHeight === 0) return;
+    setCurrentPosition({
+      x: clamp(x - halfWindow, 0, validWidth - 1),
+      y: clamp(y - halfWindow, 0, validHeight - 1),
+    });
+  }, [halfWindow, validHeight, validWidth]);
+
+  const displayCurrentStep = {
+    x: outputCenter.x,
+    y: outputCenter.y,
+    kernelSize: windowSize,
+    regionX: safePosition.x,
+    regionY: safePosition.y,
+    regionWidth: windowSize,
+    regionHeight: windowSize,
+    outputX: outputCenter.x,
+    outputY: outputCenter.y,
+  };
+
+  const visualOverlayPaths = useMemo<AnchoredOverlayPath[]>(() => {
+    if (validWidth === 0 || validHeight === 0) return [];
+
+    return [
+      {
+        id: 'texture-input-window',
+        tone: 'red',
+        from: {
+          kind: 'region',
+          selector: '.conv-anchor-input-main',
+          x: safePosition.x,
+          y: safePosition.y,
+          size: windowSize,
+          imageWidth: inputWidth,
+          imageHeight: inputHeight,
+        },
+        to: { kind: 'element', selector: '.texture-anchor-input-step' },
+      },
+      {
+        id: 'texture-output-pixel',
+        tone: 'emerald',
+        from: {
+          kind: 'pixel',
+          selector: '.conv-anchor-output-main',
+          x: outputCenter.x,
+          y: outputCenter.y,
+          imageWidth: inputWidth,
+          imageHeight: inputHeight,
+        },
+        to: { kind: 'element', selector: '.texture-anchor-output-step' },
+      },
+    ];
+  }, [inputHeight, inputWidth, outputCenter.x, outputCenter.y, safePosition.x, safePosition.y, validHeight, validWidth, windowSize]);
+
+  const analysisPreview = useMemo(() => {
+    if (mode !== 'gabor' && lbpStep) {
+      const displayedValue = mode === 'lbp-rotation' && rotationStep ? rotationStep.minValue : lbpStep.decimalValue;
+      const outputTitle = mode === 'lbp-rotation' ? '写回旋转不变 LBP 图' : '写回 LBP 码图';
 
       return (
         <ProcessRail>
           <FlowColumns>
             <FlowColumn align="start">
-              <FlowNode tone="red" className="max-w-xs">
-                <div className="mb-2 text-xs font-semibold text-red-600">3×3 窗口</div>
-                {currentWindow ? (
-                  <div className="space-y-1 text-xs">
-                    {currentWindow.values.map((row, ri) => (
-                      <div key={ri} className="flex gap-1">
-                        {row.map((v, ci) => {
-                          const isCenter = ri === 1 && ci === 1;
-                          return (
-                            <span
-                              key={ci}
-                              className={`inline-flex h-7 w-7 items-center justify-center rounded text-[10px] font-mono ${
-                                isCenter
-                                  ? 'bg-red-100 font-bold text-red-700 ring-1 ring-red-400'
-                                  : 'bg-slate-100 text-slate-700'
-                              }`}
-                            >
-                              {grayVal(v)}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    ))}
-                    <p className="mt-1 text-slate-500">
-                      中心值 {grayVal(currentWindow.center)}，
-                      相邻 8 个像素逐一比较
-                    </p>
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-400">边界像素无完整 3×3 窗口</p>
-                )}
+              <FlowNode tone="red" className="texture-anchor-input-step">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <span className="text-[11px] font-semibold uppercase text-red-700">当前 3x3 输入窗口</span>
+                  <span className="font-mono text-[11px] text-red-600">
+                    中心 ({outputCenter.x}, {outputCenter.y})
+                  </span>
+                </div>
+                <MatrixPreview image={lbpStep.values} center={{ row: 1, col: 1 }} />
+                <p className="mt-2 text-xs leading-5 text-red-700">
+                  红色格是中心像素 I(c)={grayByte(lbpStep.center)}，周围 8 格逐个与它比较。
+                </p>
               </FlowNode>
             </FlowColumn>
 
             <FlowColumn align="center">
-              <FlowNode tone="amber" className="max-w-xs">
-                <div className="mb-2 text-xs font-semibold text-amber-700">
-                  阶跃比较 → {modeLabel}
+              <FlowNode tone="amber">
+                <div className="mb-2 text-[11px] font-semibold uppercase text-amber-800">
+                  阶跃比较与位权重
                 </div>
-                {currentWindow ? (
-                  <div className="space-y-2 text-xs">
-                    <div className="flex flex-wrap gap-1">
-                      {currentWindow.binaryPattern.map((b, i) => (
-                        <span
-                          key={i}
-                          className={`inline-flex h-6 w-6 items-center justify-center rounded text-[10px] font-mono ${
-                            b === 1
-                              ? 'bg-amber-200 text-amber-800'
-                              : 'bg-slate-200 text-slate-500'
-                          }`}
-                        >
-                          {b}
+                <div className="grid gap-2">
+                  {lbpStep.binaryPattern.map((bit, index) => {
+                    const position = LBP_NEIGHBOR_POSITIONS[index];
+                    const pixelValue = lbpStep.values[position.row][position.col];
+                    return (
+                      <div
+                        key={`flow-lbp-bit-${index}`}
+                        className="flex items-center justify-between gap-3 rounded-lg border border-amber-100 bg-amber-50/60 px-2.5 py-1.5 text-[11px]"
+                      >
+                        <span className="text-amber-800">p{index + 1} {position.label}</span>
+                        <span className="font-mono text-slate-700">
+                          {grayByte(pixelValue)} {grayByte(pixelValue) >= grayByte(lbpStep.center) ? '>=' : '<'} {grayByte(lbpStep.center)}
                         </span>
-                      ))}
-                    </div>
-                    <p className="text-slate-500">
-                      二进制 <code className="text-amber-700">{binStr}</code>
-                    </p>
-                    {mode === 'lbp-rotation' && (
-                      <p className="text-xs text-slate-500">
-                        循环移位后取最小值
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-400">无可用数据</p>
-                )}
+                        <span className="font-mono font-semibold text-amber-800">
+                          b={bit}, 2^{index}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
               </FlowNode>
             </FlowColumn>
 
             <FlowColumn align="end">
-              <FlowNode tone="emerald" className="max-w-xs">
-                <div className="mb-2 text-xs font-semibold text-emerald-700">
-                  十进制 LBP 值
+              <FlowNode tone="emerald" className="texture-anchor-output-step">
+                <div className="mb-2 text-[11px] font-semibold uppercase text-emerald-700">
+                  {outputTitle}
                 </div>
-                {currentWindow ? (
-                  <div className="space-y-1 text-xs">
-                    <p>
-                      LBP = <span className="font-mono font-bold text-emerald-700">{decVal}</span>
-                      &emsp;(0~255)
-                    </p>
-                    <p className="text-slate-500">
-                      该值表示位置 ({cx}, {cy}) 的纹理编码
-                    </p>
+                <div className="rounded-xl border border-emerald-200 bg-white px-3 py-3">
+                  <div className="text-xs text-emerald-700">结果图当前像素</div>
+                  <div className="mt-1 font-mono text-lg font-bold text-emerald-800">
+                    ({outputCenter.x}, {outputCenter.y}) = {displayedValue}
                   </div>
-                ) : (
-                  <p className="text-xs text-slate-400">无可用数据</p>
+                </div>
+                {mode === 'lbp-rotation' && rotationStep && (
+                  <p className="mt-2 text-xs leading-5 text-emerald-700">
+                    8 种循环移位取最小值，当前最小 shift={rotationStep.minShift}。
+                  </p>
                 )}
               </FlowNode>
             </FlowColumn>
@@ -382,393 +536,295 @@ export default function LBPGaborTexturePage() {
       );
     }
 
-    // Gabor 模式
-    const kernelDisplay = useMemo(() => normalizeKernelImage(gaborKernel), [gaborKernel]);
+    if (mode === 'gabor' && gaborStep) {
+      const centerTerm = gaborStep.products.find(term =>
+        term.kernelX === halfWindow && term.kernelY === halfWindow
+      );
 
-    return (
-      <ProcessRail>
-        <FlowColumns>
-          <FlowColumn align="start">
-            <FlowNode tone="red" className="max-w-xs">
-              <div className="mb-2 text-xs font-semibold text-red-600">原图</div>
-              <ImageCanvas
-                image={testImage}
-                maxDisplaySize={120}
-                showGrid={false}
-                highlightPixel={currentPosition}
-              />
-              <p className="mt-2 text-xs text-slate-500">
-                合成纹理图（含条纹、棋盘格和渐变区域）
-              </p>
-            </FlowNode>
-          </FlowColumn>
+      return (
+        <ProcessRail>
+          <FlowColumns>
+            <FlowColumn align="start">
+              <FlowNode tone="red" className="texture-anchor-input-step">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <span className="text-[11px] font-semibold uppercase text-red-700">当前输入窗口</span>
+                  <span className="font-mono text-[11px] text-red-600">{windowSize}x{windowSize}</span>
+                </div>
+                <ImageCanvas
+                  image={gaborStep.inputRegion}
+                  maxDisplaySize={150}
+                  showGrid={windowSize <= 21}
+                  selectedRegionMarker="dot"
+                  selectedRegion={{ x: halfWindow, y: halfWindow, size: 1 }}
+                />
+                <p className="mt-2 text-xs leading-5 text-red-700">
+                  核中心对准原图像素 ({gaborStep.x}, {gaborStep.y})，窗口完整覆盖原图。
+                </p>
+              </FlowNode>
+            </FlowColumn>
 
-          <FlowColumn align="center">
-            <FlowNode tone="sky" className="max-w-xs">
-              <div className="mb-2 text-xs font-semibold text-sky-700">Gabor 核 (显示)</div>
-              <ImageCanvas
-                image={kernelDisplay}
-                maxDisplaySize={100}
-                showGrid={false}
-              />
-              <p className="mt-2 text-xs text-slate-500">
-                {currentGaborParams.label}
-              </p>
-            </FlowNode>
-          </FlowColumn>
+            <FlowColumn align="center">
+              <FlowNode tone="sky">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <span className="text-[11px] font-semibold uppercase text-sky-700">Gabor 核与乘积</span>
+                  <span className="font-mono text-[11px] text-sky-700">θ={gaborParams.orientation}°</span>
+                </div>
+                <ImageCanvas image={gaborKernelDisplay} maxDisplaySize={120} showGrid={windowSize <= 21} />
+                <div className="mt-3 rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-800">
+                  中心项：{centerTerm ? `${formatFloat(centerTerm.pixelValue)} x ${formatFloat(centerTerm.kernelValue)} = ${formatFloat(centerTerm.product)}` : '无'}
+                </div>
+              </FlowNode>
+            </FlowColumn>
 
-          <FlowColumn align="end">
-            <FlowNode tone="emerald" className="max-w-xs">
-              <div className="mb-2 text-xs font-semibold text-emerald-700">滤波结果</div>
-              <ImageCanvas
-                image={gaborResult}
-                maxDisplaySize={120}
-                showGrid={false}
-                highlightPixel={currentPosition}
-              />
-              <p className="mt-2 text-xs text-slate-500">
-                不同方向的 Gabor 核提取对应方向的纹理
-              </p>
-            </FlowNode>
-          </FlowColumn>
-        </FlowColumns>
-      </ProcessRail>
-    );
-  })();
+            <FlowColumn align="end">
+              <FlowNode tone="emerald" className="texture-anchor-output-step">
+                <div className="mb-2 text-[11px] font-semibold uppercase text-emerald-700">写回滤波结果</div>
+                <div className="grid gap-2 text-xs">
+                  <div className="rounded-xl border border-emerald-200 bg-white px-3 py-2">
+                    <div className="text-emerald-700">原始响应</div>
+                    <div className="font-mono text-base font-bold text-emerald-800">{formatFloat(gaborStep.rawSum)}</div>
+                  </div>
+                  <div className="rounded-xl border border-emerald-200 bg-white px-3 py-2">
+                    <div className="text-emerald-700">输出像素</div>
+                    <div className="font-mono text-base font-bold text-emerald-800">
+                      ({gaborStep.x}, {gaborStep.y}) = {formatFloat(gaborStep.outputValue)}
+                    </div>
+                  </div>
+                </div>
+              </FlowNode>
+            </FlowColumn>
+          </FlowColumns>
+        </ProcessRail>
+      );
+    }
 
-  // ---- 详细讲解区 ----
-  const stepDetails = (
-    <div className="space-y-6">
+    return null;
+  }, [gaborKernelDisplay, gaborParams.orientation, gaborStep, halfWindow, lbpStep, mode, outputCenter.x, outputCenter.y, rotationStep, windowSize]);
 
-      {/* ===== LBP 部分 ===== */}
-      <TeachingCard>
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">LBP — 局部二值模式</h2>
-        <p className="text-xs leading-6 text-slate-600">
-          LBP（Local Binary Pattern）是一种描述图像局部纹理特征的算子，具有灰度不变性。
-          其基本原理：在 3×3 窗口内，以中心像素为阈值，与周围 8 个像素逐一比较大小，
-          大于等于中心像素记为 1，否则记为 0，得到一个 8 位二进制数，再转换为十进制 LBP 码。
+  const parameters = (
+    <div className="space-y-4">
+      <SelectParam label="处理模式" value={mode} onChange={handleModeChange} options={MODE_OPTIONS} />
+      <SelectParam label="输入图像" value={imageType} onChange={handleImageTypeChange} options={IMAGE_OPTIONS} />
+
+      <div className="rounded-2xl border border-blue-200 bg-blue-50 px-3 py-3">
+        <div className="text-xs font-semibold text-blue-700">当前窗口</div>
+        <div className="mt-2 rounded-xl bg-white/80 px-3 py-2 font-mono text-sm font-semibold text-blue-800">
+          ({safePosition.x}, {safePosition.y}) / {windowSize}x{windowSize}
+        </div>
+        <p className="mt-2 text-xs leading-5 text-blue-700">
+          当前输出像素是窗口中心 ({outputCenter.x}, {outputCenter.y})。
         </p>
-      </TeachingCard>
-
-      <div className="border-t border-slate-200 pt-5">
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">（1）LBP 公式定义</h2>
-        <div className="mb-4">
-          <FormulaCard label="LBP 主公式" mathML={LBP_FORMULA} note="p 表示 3×3 窗口中除中心外的第 p 个像素" />
-        </div>
-        <figure className="mb-4">
-          <img
-            src="/assets/lbp-gabor-texture/40174f2ac651d62b8180037baa09883dbbbed718f3061894960b9dd0d191a09a.jpg"
-            alt="LBP 3×3 窗口示意图"
-            className="w-full max-w-lg rounded-xl object-cover"
-          />
-          <figcaption className="mt-2 text-xs text-slate-500">
-            LBP 基本算子：3×3 窗口内比较生成 8 位二进制码
-          </figcaption>
-        </figure>
       </div>
 
-      <div className="border-t border-slate-200 pt-5">
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">（2）阶跃函数</h2>
-        <div className="mb-4">
-          <FormulaCard label="阶跃比较函数" mathML={STEP_FUNCTION} note="s(x)=1 当 x≥0，否则 s(x)=0" />
-        </div>
-      </div>
+      {mode === 'gabor' && (
+        <>
+          <SelectParam label="Gabor 预设" value={gaborPreset} onChange={handleGaborPresetChange} options={GABOR_PRESET_OPTIONS} />
+          <SliderParam label="方向 θ" value={gaborParams.orientation} onChange={value => updateGaborParam('orientation', value)} min={0} max={180} step={15} unit="°" />
+          <SliderParam label="波长 λ" value={gaborParams.wavelength} onChange={value => updateGaborParam('wavelength', value)} min={4} max={16} step={1} />
+          <SliderParam label="方差 σ" value={gaborParams.sigma} onChange={value => updateGaborParam('sigma', value)} min={2} max={8} step={1} />
+          <SliderParam label="纵横比 γ" value={gaborParams.gamma} onChange={value => updateGaborParam('gamma', value)} min={0.3} max={1} step={0.1} />
+          <SliderParam label="核大小" value={gaborParams.kernelSize} onChange={value => updateGaborParam('kernelSize', value % 2 === 0 ? value + 1 : value)} min={15} max={31} step={2} />
+        </>
+      )}
+    </div>
+  );
 
-      {currentWindow && (mode === 'lbp' || mode === 'lbp-rotation') && (
-        <div className="border-t border-slate-200 pt-5">
-          <h2 className="mb-3 text-sm font-semibold text-slate-800">
-            （3）当前位置 ({cx}, {cy}) 链式代入
-          </h2>
-          <p className="mb-4 text-xs leading-6 text-slate-600">
-            当前 3×3 窗口各像素灰度值（0~255）如下：
-          </p>
-
-          {/* 3×3 窗口灰度矩阵 */}
-          <div className="mb-4 overflow-x-auto">
-            <table className="mx-auto border-collapse text-xs">
-              <tbody>
-                {currentWindow.values.map((row, ri) => (
-                  <tr key={ri}>
-                    {row.map((v, ci) => {
-                      const isCenter = ri === 1 && ci === 1;
-                      return (
-                        <td
-                          key={ci}
-                          className={`border px-2 py-1 text-center font-mono ${
-                            isCenter
-                              ? 'border-red-400 bg-red-50 font-bold text-red-700'
-                              : 'border-slate-300 text-slate-700'
-                          }`}
-                        >
-                          {grayVal(v)}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <p className="mt-2 text-center text-[10px] text-slate-400">
-              中心值（红底） I(c) = {grayVal(currentWindow.center)}，与周围 8 个像素逐一比较
+  const stepDetails = (
+    <div className="space-y-5">
+      {mode !== 'gabor' && lbpStep && (
+        <>
+          <TeachingCard>
+            <h2 className="mb-3 text-sm font-semibold text-slate-800">LBP 当前窗口计算</h2>
+            <p className="text-xs leading-6 text-slate-600">
+              LBP 用中心像素作为阈值，把 3x3 邻域中的 8 个相邻像素编码为二进制模式。当前页面所有矩阵、位权重和结果值都来自主图红框中的真实像素。
             </p>
-        </div>
+          </TeachingCard>
 
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+            <TeachingCard>
+              <h3 className="mb-3 text-sm font-semibold text-slate-800">当前 3x3 灰度矩阵</h3>
+              <MatrixPreview image={lbpStep.values} center={{ row: 1, col: 1 }} />
+              <p className="mt-3 text-xs leading-5 text-slate-600">
+                中心像素 I(c)={grayByte(lbpStep.center)}。每个邻域值大于等于中心值时记为 1，否则记为 0。
+              </p>
+            </TeachingCard>
 
-         {/* 阶跃比较：逐个像素代入 */}
-          <div className="mb-4 space-y-2 text-xs leading-6">
-            <p className="font-semibold text-slate-700">Step B: 逐个邻域代入 s(I(p)−I(c))</p>
+            <FormulaCard
+              label="当前 LBP 编码代入"
+              mathML={buildLBPFormula(outputCenter.x, outputCenter.y, lbpStep.binaryPattern, lbpStep.decimalValue)}
+              note="权重从 p1 到 p8 依次为 2^0 到 2^7，得到 0~255 的单像素纹理编码。"
+            />
+          </div>
+
+          <TeachingCard>
+            <h3 className="mb-3 text-sm font-semibold text-slate-800">逐邻域比较</h3>
             <div className="overflow-x-auto">
-              <table className="mx-auto border-collapse text-xs">
+              <table className="w-full min-w-[42rem] text-xs">
                 <thead>
-                  <tr className="border-b border-slate-300">
-                    <th className="px-3 py-1.5 text-left font-semibold text-slate-700">邻域 p</th>
-                    <th className="px-3 py-1.5 text-left font-semibold text-slate-700">I(p)</th>
-                    <th className="px-3 py-1.5 text-left font-semibold text-slate-700">I(c)</th>
-                    <th className="px-3 py-1.5 text-left font-semibold text-slate-700">I(p)−I(c)</th>
-                    <th className="px-3 py-1.5 text-left font-semibold text-slate-700">s(·)</th>
+                  <tr className="border-b border-slate-200 text-left text-slate-500">
+                    <th className="px-3 py-2">邻域</th>
+                    <th className="px-3 py-2">位置</th>
+                    <th className="px-3 py-2">I(p)</th>
+                    <th className="px-3 py-2">I(c)</th>
+                    <th className="px-3 py-2">比较</th>
+                    <th className="px-3 py-2">bit</th>
+                    <th className="px-3 py-2">贡献</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {currentWindow.binaryPattern.map((b, i) => {
-                    const row = lbpRow(i);
-                    const col = lbpCol(i);
-                    const pv = currentWindow.values[row][col];
-                    const cv = currentWindow.center;
+                  {lbpStep.binaryPattern.map((bit, index) => {
+                    const position = LBP_NEIGHBOR_POSITIONS[index];
+                    const pixelValue = lbpStep.values[position.row][position.col];
+                    const contribution = bit * 2 ** index;
                     return (
-                      <tr key={i} className="border-b border-slate-100">
-                        <td className="px-3 py-1.5 text-slate-600">
-                          p<sub>{i + 1}</sub>
+                      <tr key={`lbp-table-${index}`} className="border-b border-slate-100">
+                        <td className="px-3 py-2 font-mono text-slate-700">p{index + 1}</td>
+                        <td className="px-3 py-2 text-slate-600">{position.label}</td>
+                        <td className="px-3 py-2 font-mono text-slate-700">{grayByte(pixelValue)}</td>
+                        <td className="px-3 py-2 font-mono text-slate-700">{grayByte(lbpStep.center)}</td>
+                        <td className="px-3 py-2 font-mono text-slate-600">
+                          {grayByte(pixelValue)} - {grayByte(lbpStep.center)} = {grayByte(pixelValue) - grayByte(lbpStep.center)}
                         </td>
-                        <td className="px-3 py-1.5 font-mono text-slate-700">{grayVal(pv)}</td>
-                        <td className="px-3 py-1.5 font-mono text-slate-700">{grayVal(cv)}</td>
-                        <td className="px-3 py-1.5 font-mono text-slate-600">
-                          {grayVal(pv)}−{grayVal(cv)} = {pv - cv >= 0 ? '+' : ''}{Math.round((pv - cv) * 255)}
-                        </td>
-                        <td className="px-3 py-1.5">
-                          <span className={`inline-flex h-6 w-6 items-center justify-center rounded text-[10px] font-mono ${b === 1 ? 'bg-amber-200 text-amber-800' : 'bg-slate-200 text-slate-500'}`}>
-                            {b}
-                          </span>
-                        </td>
+                        <td className="px-3 py-2 font-mono font-semibold text-amber-700">{bit}</td>
+                        <td className="px-3 py-2 font-mono text-emerald-700">{bit} x 2^{index} = {contribution}</td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
             </div>
-          </div>
+          </TeachingCard>
 
-          {/* 二进制模式与位权重 */}
-          <div className="mb-4 space-y-2 text-xs leading-6">
-            <p className="font-semibold text-slate-700">Step C: 二进制模式（8 位）</p>
-            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-              <div className="flex flex-wrap items-center gap-1">
-                <span className="mr-1 text-slate-500">二进制：</span>
-                {currentWindow.binaryPattern.map((b, i) => (
-                  <span
-                    key={i}
-                    className={`inline-flex h-7 w-7 items-center justify-center rounded text-[11px] font-mono ${b === 1 ? 'bg-amber-200 text-amber-800' : 'bg-slate-200 text-slate-500'}`}
-                  >
-                    {b}
-                  </span>
-                ))}
-              </div>
-              <div className="mt-2 flex flex-wrap items-center gap-1">
-                <span className="mr-1 text-slate-500">对应权重：</span>
-                {currentWindow.binaryPattern.map((b, i) => (
-                  <span key={i} className="inline-flex h-7 w-7 items-center justify-center rounded text-[10px] font-mono text-slate-500">
-                    2<sup>{i}</sup>
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* LBP 编码计算 */}
-          <div className="mb-4 space-y-2 text-xs leading-6">
-            <p className="font-semibold text-slate-700">Step D: LBP 码 = Σ s(p)·2^p</p>
-            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-              <p className="text-slate-600">
-                LBP = {currentWindow.binaryPattern.map((b, i) => `${b}·2^${i}`).join(' + ')}
-              </p>
-              <p className="mt-1 text-slate-600">
-                = {currentWindow.binaryPattern.map((b, i) => b === 1 ? `${Math.pow(2, i)}` : '0').filter(s => s !== '0').join(' + ') || '0'}
-                {' '}= <span className="font-bold text-emerald-700">{currentWindow.decimalValue}</span>
-              </p>
-              <p className="mt-2 rounded bg-emerald-50 px-2 py-1 text-emerald-700">
-                LBP({cx}, {cy}) = {currentWindow.decimalValue}
-              </p>
-            </div>
-          </div>
-          {mode === 'lbp-rotation' && (
-            <div className="mb-4 space-y-2 text-xs leading-6">
-              <p className="font-semibold text-slate-700">旋转不变 LBP：</p>
-              <p className="text-slate-600">
-                循环移位取最小值：所有 8 种循环移位模式的最小值作为旋转不变 LBP（切换至 LBP 旋转不变模式可查看结果图）。
-              </p>
-            </div>
+          {mode === 'lbp-rotation' && rotationStep && (
+            <>
+              <FormulaCard
+                label="旋转不变 LBP 代入"
+                mathML={buildRotationInvariantFormula(rotationStep.rotations.map(item => item.decimalValue), rotationStep.minValue, rotationStep.minShift)}
+                note="旋转不变 LBP 把同一二进制环的 8 种起点都算一遍，取最小值作为该邻域的编码。"
+              />
+              <TeachingCard>
+                <h3 className="mb-3 text-sm font-semibold text-slate-800">8 种循环移位</h3>
+                <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+                  {rotationStep.rotations.map(item => (
+                    <div
+                      key={`rotation-${item.shift}`}
+                      className={`rounded-xl border px-3 py-2 ${
+                        item.shift === rotationStep.minShift
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                          : 'border-slate-200 bg-white text-slate-600'
+                      }`}
+                    >
+                      <div className="text-[11px] font-semibold">shift={item.shift}</div>
+                      <div className="mt-1 font-mono text-xs">{item.binaryPattern.join('')}</div>
+                      <div className="mt-1 font-mono text-xs">value={item.decimalValue}</div>
+                    </div>
+                  ))}
+                </div>
+              </TeachingCard>
+            </>
           )}
-        </div>
+        </>
       )}
 
-      {mode === 'lbp-rotation' && (
-        <div className="border-t border-slate-200 pt-5">
-          <h2 className="mb-3 text-sm font-semibold text-slate-800">（4）旋转不变性</h2>
-          <p className="mb-3 text-xs leading-6 text-slate-600">
-            基本 LBP 按固定方向（从左上角顺时针）编码，图像旋转后二进制模式变化，LBP 值也变化。
-            旋转不变 LBP 通过循环移位所有 8 种二进制模式，取最小值作为该邻域的 LBP 值，
-            使得旋转后的纹理获得相同的 LBP 编码。
-          </p>
-          <figure className="mb-4">
-            <img
-              src="/assets/lbp-gabor-texture/169634d37509719dbd2eb5a4f663e8c43dbf5fbb5d8eb96e5044d78b8d95f117.jpg"
-              alt="旋转不变 LBP 原理"
-              className="w-full max-w-lg rounded-xl object-cover"
-            />
-            <figcaption className="mt-2 text-xs text-slate-500">
-              旋转不变 LBP：循环移位求最小值
-            </figcaption>
-          </figure>
+      {mode === 'gabor' && gaborStep && (
+        <>
           <TeachingCard>
-            <p className="text-xs leading-6 text-slate-700">
-              <span className="font-semibold text-emerald-700">灰度不变性：</span>
-              LBP 基于局部灰度比较，光照同增同减时不改变二进制模式，
-              因此对单调光照变化相对稳定。<br />
-              <span className="font-semibold text-red-600">局限性：</span>
-              基本 LBP 二进制模式较多（共 256 种），且不具有旋转不变性。
-              旋转不变 LBP 可以有效减少模式数量，但可能丢失方向信息。
+            <h2 className="mb-3 text-sm font-semibold text-slate-800">Gabor 当前窗口计算</h2>
+            <p className="text-xs leading-6 text-slate-600">
+              Gabor 滤波器用带方向和频率的核与局部窗口逐项相乘。当前演示只选核完整覆盖原图的位置，所以公式里的每一项都来自真实图像像素，不使用边界补零。
             </p>
           </TeachingCard>
-        </div>
+
+          <FormulaCard
+            label="当前 Gabor 核参数代入"
+            mathML={buildGaborKernelFormula(gaborParams)}
+            note={`当前参数：λ=${gaborParams.wavelength}，θ=${gaborParams.orientation}°，σ=${gaborParams.sigma}，γ=${formatFloat(gaborParams.gamma, 1)}，核大小=${gaborParams.kernelSize}x${gaborParams.kernelSize}。`}
+          />
+
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)]">
+            <TeachingCard>
+              <h3 className="mb-3 text-sm font-semibold text-slate-800">当前输入窗口</h3>
+              <ImageCanvas
+                image={gaborStep.inputRegion}
+                maxDisplaySize={220}
+                showGrid={windowSize <= 21}
+                selectedRegionMarker="dot"
+                selectedRegion={{ x: halfWindow, y: halfWindow, size: 1 }}
+              />
+              <p className="mt-3 text-xs leading-5 text-slate-600">
+                红点对应输出像素 ({gaborStep.x}, {gaborStep.y})，核围绕该中心与窗口逐项对齐。
+              </p>
+            </TeachingCard>
+
+            <TeachingCard>
+              <h3 className="mb-3 text-sm font-semibold text-slate-800">Gabor 核矩阵预览</h3>
+              <KernelPreview kernel={gaborStep.kernel} />
+              <p className="mt-3 text-xs leading-5 text-slate-600">
+                蓝色格表示正权重，红色格表示负权重。核的条纹方向、正负交替和密度会随参数实时改变。
+              </p>
+            </TeachingCard>
+          </div>
+
+          <FormulaCard
+            label="当前 Gabor 响应代入"
+            mathML={buildGaborResponseFormula(gaborStep.rawSum, gaborStep.kernelAbsSum, gaborStep.normalizedResponse, gaborStep.outputValue)}
+            note="先对窗口与核逐项相乘求和，再除以核绝对值和做归一化，最后映射回 [0,1] 作为结果图灰度。"
+          />
+
+          <TeachingCard>
+            <h3 className="mb-3 text-sm font-semibold text-slate-800">逐项乘积摘要</h3>
+            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+              {gaborStep.products
+                .filter((_, index) => index % Math.max(1, Math.floor(gaborStep.products.length / 12)) === 0)
+                .slice(0, 12)
+                .map(term => (
+                  <div key={`product-${term.kernelX}-${term.kernelY}`} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs">
+                    <div className="font-mono text-slate-500">k({term.kernelX},{term.kernelY})</div>
+                    <div className="mt-1 font-mono text-slate-700">
+                      {formatFloat(term.pixelValue)} x {formatFloat(term.kernelValue)} = {formatFloat(term.product)}
+                    </div>
+                  </div>
+                ))}
+            </div>
+            <p className="mt-3 text-xs leading-5 text-slate-600">
+              摘要只抽样展示部分乘积；当前响应值由全部 {gaborStep.products.length} 项共同求和得到。
+            </p>
+          </TeachingCard>
+        </>
       )}
 
-      {/* ===== Gabor 部分 ===== */}
-      <div className="border-t border-slate-200 pt-5">
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">Gabor 滤波器</h2>
-        <p className="mb-3 text-xs leading-6 text-slate-600">
-          Gabor 滤波器由特定频率和方向的正弦波与高斯核组合而成，
-          可同时检测特定方向与频率的纹理信息，广泛应用于纹理分割、边缘检测和对象检测。
-        </p>
-        <div className="mb-4 space-y-3">
-          <FormulaCard
-            label="Gabor 滤波器基本形式：h(x,y)=s(x,y)g(x,y)"
-            mathML={GABOR_BASIC}
-            note="s(x,y) 是复数正弦波，g(x,y) 是高斯核函数"
-          />
-          <FormulaCard
-            label="正弦波与高斯核"
-            mathML={GABOR_S_G}
-            note="u₀, v₀ 为空间频率分量"
-          />
-          <FormulaCard
-            label="简化空间域表达式（实部）"
-            mathML={GABOR_SIMPLIFIED}
-            note={'当前参数：λ=' + currentGaborParams.wavelength + ', θ=' + currentGaborParams.orientation + '°'}
-          />
-          <FormulaCard
-            label="坐标旋转变换"
-            mathML={GABOR_ROTATION}
-            note={'θ 控制条纹方向，当前 θ = ' + currentGaborParams.orientation + '°'}
-          />
+      <TeachingCard>
+        <h2 className="mb-3 text-sm font-semibold text-slate-800">LBP 与 Gabor 的教学对比</h2>
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-6 text-amber-800">
+            LBP 关注局部灰度相对大小。整体光照同增同减时，比较关系通常不变，因此编码相对稳定。
+          </div>
+          <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 text-xs leading-6 text-sky-800">
+            Gabor 关注特定方向和频率的纹理响应。改变 θ 或 λ，会直接改变核对条纹、棋盘和渐变区域的响应强度。
+          </div>
         </div>
-      </div>
-
-      <div className="border-t border-slate-200 pt-5">
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">Gabor 参数</h2>
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-slate-200">
-              <th className="px-3 py-2 text-left font-semibold text-slate-700">参数</th>
-              <th className="px-3 py-2 text-left font-semibold text-slate-700">符号</th>
-              <th className="px-3 py-2 text-left font-semibold text-slate-700">含义</th>
-              <th className="px-3 py-2 text-left font-semibold text-slate-700">当前值</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr className="border-b border-slate-100">
-              <td className="px-3 py-2 text-slate-600">波长</td>
-              <td className="px-3 py-2 font-mono text-slate-600">λ</td>
-              <td className="px-3 py-2 text-slate-600">正弦曲线的周期</td>
-              <td className="px-3 py-2 font-mono text-slate-700">{currentGaborParams.wavelength}</td>
-            </tr>
-            <tr className="border-b border-slate-100">
-              <td className="px-3 py-2 text-slate-600">方向</td>
-              <td className="px-3 py-2 font-mono text-slate-600">θ</td>
-              <td className="px-3 py-2 text-slate-600">平行条纹的法线角度</td>
-              <td className="px-3 py-2 font-mono text-slate-700">{currentGaborParams.orientation}°</td>
-            </tr>
-            <tr className="border-b border-slate-100">
-              <td className="px-3 py-2 text-slate-600">相位</td>
-              <td className="px-3 py-2 font-mono text-slate-600">ψ</td>
-              <td className="px-3 py-2 text-slate-600">正弦波的相位偏移</td>
-              <td className="px-3 py-2 font-mono text-slate-700">{currentGaborParams.phase}°</td>
-            </tr>
-            <tr className="border-b border-slate-100">
-              <td className="px-3 py-2 text-slate-600">方差</td>
-              <td className="px-3 py-2 font-mono text-slate-600">σ</td>
-              <td className="px-3 py-2 text-slate-600">高斯包络的标准差</td>
-              <td className="px-3 py-2 font-mono text-slate-700">{currentGaborParams.sigma}</td>
-            </tr>
-            <tr>
-              <td className="px-3 py-2 text-slate-600">纵横比</td>
-              <td className="px-3 py-2 font-mono text-slate-600">γ</td>
-              <td className="px-3 py-2 text-slate-600">高斯包络的空间纵横比</td>
-              <td className="px-3 py-2 font-mono text-slate-700">{currentGaborParams.gamma}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div className="border-t border-slate-200 pt-5">
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">LBP 与 Gabor 对比</h2>
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-slate-200">
-              <th className="px-3 py-2 text-left font-semibold text-slate-700">方面</th>
-              <th className="px-3 py-2 text-left font-semibold text-slate-700">LBP</th>
-              <th className="px-3 py-2 text-left font-semibold text-slate-700">Gabor</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr className="border-b border-slate-100">
-              <td className="px-3 py-2 font-semibold text-slate-600">基本原理</td>
-              <td className="px-3 py-2 text-slate-600">局部灰度比较与二值编码</td>
-              <td className="px-3 py-2 text-slate-600">方向频率选择性滤波</td>
-            </tr>
-            <tr className="border-b border-slate-100">
-              <td className="px-3 py-2 font-semibold text-slate-600">光照鲁棒性</td>
-              <td className="px-3 py-2 text-slate-600">灰度单调变化不敏感</td>
-              <td className="px-3 py-2 text-slate-600">受光照影响较大</td>
-            </tr>
-            <tr className="border-b border-slate-100">
-              <td className="px-3 py-2 font-semibold text-slate-600">方向信息</td>
-              <td className="px-3 py-2 text-slate-600">基本 LBP 含方向编码</td>
-              <td className="px-3 py-2 text-slate-600">显式选择多方向</td>
-            </tr>
-            <tr>
-              <td className="px-3 py-2 font-semibold text-slate-600">主要用途</td>
-              <td className="px-3 py-2 text-slate-600">纹理分类、人脸识别</td>
-              <td className="px-3 py-2 text-slate-600">纹理分割、边缘检测</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      </TeachingCard>
     </div>
   );
 
-  // ---- StepInfo ----
-  const stepInfo = { current: currentStepIndex, total: totalSteps };
+  const resultLabel = mode === 'lbp'
+    ? 'LBP 码图像'
+    : mode === 'lbp-rotation'
+      ? '旋转不变 LBP'
+      : 'Gabor 滤波结果';
 
   return (
     <ConceptLayout
       title="LBP 与 Gabor 纹理特征"
       subtitle="Local Binary Pattern & Gabor Filter - 纹理的局部编码与频率选择性滤波"
       operationLabel={mode === 'gabor' ? 'Gabor 滤波' : 'LBP 编码'}
-      parameterIntro="切换 LBP 基础、旋转不变 LBP 或 Gabor 滤波模式，观察不同纹理特征提取方法的效果。"
-      originalImage={testImage}
+      parameterIntro="选择输入图和纹理特征模式后，点击图像或使用方向键移动当前窗口，观察公式、编码和滤波响应实时刷新。"
+      originalImage={originalImage}
       resultImage={resultImage}
       parameters={parameters}
       analysisPreview={analysisPreview}
       stepDetails={stepDetails}
+      visualOverlay={visualOverlayPaths.length > 0 ? <AnchoredOverlay paths={visualOverlayPaths} /> : null}
       codeTab={
         <CodeViewer
           languages={[
@@ -777,17 +833,21 @@ export default function LBPGaborTexturePage() {
           ]}
         />
       }
-      currentStep={{ x: cx, y: cy, kernelSize: 3 }}
-      stepInfo={stepInfo}
-      imageLabels={{ input: '纹理测试图', output: resultLabel }}
-      imageHints={{ input: '点击像素查看 3×3 窗口 LBP 计算', output: mode === 'gabor' ? resultLabel + '（点击定位）' : 'LBP 编码结果（点击定位像素）' }}
-      showOriginalGrid
+      currentStep={totalSteps > 0 ? displayCurrentStep : null}
+      currentStepLabel={mode === 'gabor' ? '当前滤波中心' : '当前 LBP 中心'}
+      stepInfo={totalSteps > 0 ? { current: currentStepIndex, total: totalSteps } : null}
+      imageLabels={{ input: imageType === 'lenaOriginal' ? 'Lena 灰度图' : '纹理测试图', output: resultLabel }}
+      imageHints={{
+        input: `红框为当前 ${windowSize}x${windowSize} 输入窗口，点击可重新定位`,
+        output: '绿框为当前输出像素，点击结果图可反向定位窗口中心',
+      }}
+      showOriginalGrid={imageType === 'texture'}
+      originalRegionMarker="frame"
       singlePageScroll
+      navigationHintText="方向键移动 / 点击原图或结果图定位纹理窗口"
       onDirectionMove={handleDirectionMove}
-      onInputRegionSelect={handlePixelSelect}
-      onOutputPixelSelect={handlePixelSelect}
-      navigationHintText="方向键移动 / 点击纹理图或结果图定位像素"
+      onInputRegionSelect={handleInputRegionSelect}
+      onOutputPixelSelect={handleOutputPixelSelect}
     />
   );
 }
-

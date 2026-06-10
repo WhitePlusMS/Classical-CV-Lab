@@ -19,6 +19,26 @@ export interface LBPWindowResult {
   decimalValue: number;
 }
 
+/** 旋转不变 LBP 的单次循环移位结果 */
+export interface RotationInvariantLBPPattern {
+  /** 循环左移位数 */
+  shift: number;
+  /** 移位后的 8 位模式 */
+  binaryPattern: number[];
+  /** 该模式对应的十进制值 */
+  decimalValue: number;
+}
+
+/** 旋转不变 LBP 的完整教学步骤 */
+export interface RotationInvariantLBPStep {
+  /** 所有 8 种循环移位结果 */
+  rotations: RotationInvariantLBPPattern[];
+  /** 最小十进制值 */
+  minValue: number;
+  /** 产生最小值的循环移位位数 */
+  minShift: number;
+}
+
 /** 3×3 窗口的像素编号顺序：1=左上, 2=上, 3=右上, 4=右, 5=右下, 6=下, 7=左下, 8=左 */
 const LBP_INDICES = [
   { dy: -1, dx: -1 }, // p=1 左上
@@ -72,6 +92,34 @@ export function getLBPWindow(image: GrayscaleImage, x: number, y: number): LBPWi
   return { values, center, binaryPattern, decimalValue };
 }
 
+/** 根据 8 位 LBP 模式计算旋转不变 LBP 的所有循环移位。 */
+export function getRotationInvariantLBPStep(binaryPattern: number[]): RotationInvariantLBPStep {
+  const normalizedPattern = Array.from({ length: 8 }, (_, index) => binaryPattern[index] ?? 0);
+  const rotations: RotationInvariantLBPPattern[] = [];
+
+  for (let shift = 0; shift < 8; shift++) {
+    const rotated = [
+      ...normalizedPattern.slice(shift),
+      ...normalizedPattern.slice(0, shift),
+    ];
+    let decimalValue = 0;
+    for (let p = 0; p < 8; p++) {
+      decimalValue += rotated[p] * Math.pow(2, p);
+    }
+    rotations.push({ shift, binaryPattern: rotated, decimalValue });
+  }
+
+  const best = rotations.reduce((currentBest, item) =>
+    item.decimalValue < currentBest.decimalValue ? item : currentBest
+  );
+
+  return {
+    rotations,
+    minValue: best.decimalValue,
+    minShift: best.shift,
+  };
+}
+
 /**
  * 对整幅图像计算标准 LBP。
  * 边界像素（第 0 行/列、最后 1 行/列）置为 0。
@@ -105,22 +153,8 @@ export function computeRotationInvariantLBP(image: GrayscaleImage): GrayscaleIma
   for (let y = 1; y < height - 1; y++) {
     for (let x = 1; x < width - 1; x++) {
       const window = getLBPWindow(image, x, y);
-      let minValue = window.decimalValue;
-
-      // 循环移位，取最小值
-      for (let shift = 1; shift < 8; shift++) {
-        const rotated = [
-          ...window.binaryPattern.slice(shift),
-          ...window.binaryPattern.slice(0, shift),
-        ];
-        let value = 0;
-        for (let p = 0; p < 8; p++) {
-          value += rotated[p] * Math.pow(2, p);
-        }
-        minValue = Math.min(minValue, value);
-      }
-
-      result[y][x] = minValue / 255;
+      const step = getRotationInvariantLBPStep(window.binaryPattern);
+      result[y][x] = step.minValue / 255;
     }
   }
 
@@ -145,6 +179,50 @@ export interface GaborParams {
   gamma: number;
   /** 内核尺寸（边长，奇数） */
   kernelSize: number;
+}
+
+/** Gabor 当前窗口内的一项乘积 */
+export interface GaborProductTerm {
+  /** 核内列坐标 */
+  kernelX: number;
+  /** 核内行坐标 */
+  kernelY: number;
+  /** 原图列坐标 */
+  imageX: number;
+  /** 原图行坐标 */
+  imageY: number;
+  /** 输入灰度值 */
+  pixelValue: number;
+  /** Gabor 核权重 */
+  kernelValue: number;
+  /** pixelValue * kernelValue */
+  product: number;
+}
+
+/** 单个像素的 Gabor 滤波教学步骤 */
+export interface GaborFilterStep {
+  /** 输出像素列坐标，也是核中心对应的原图列坐标 */
+  x: number;
+  /** 输出像素行坐标，也是核中心对应的原图行坐标 */
+  y: number;
+  /** 输入窗口左上角列坐标 */
+  windowX: number;
+  /** 输入窗口左上角行坐标 */
+  windowY: number;
+  /** 输入窗口 */
+  inputRegion: GrayscaleImage;
+  /** 当前 Gabor 核 */
+  kernel: number[][];
+  /** 全部逐项乘积 */
+  products: GaborProductTerm[];
+  /** 绝对核权重和 */
+  kernelAbsSum: number;
+  /** 原始乘加响应 */
+  rawSum: number;
+  /** rawSum / kernelAbsSum */
+  normalizedResponse: number;
+  /** 映射到 [0, 1] 后的输出值 */
+  outputValue: number;
 }
 
 /** 默认 Gabor 参数预设 */
@@ -246,6 +324,69 @@ export function applyGaborFilter(image: GrayscaleImage, kernel: number[][]): Gra
   }
 
   return result;
+}
+
+/**
+ * 获取核完整覆盖图像时的单点 Gabor 滤波步骤。
+ * x、y 表示输出像素坐标，必须至少离边界 half 个像素。
+ */
+export function getGaborFilterStep(image: GrayscaleImage, kernel: number[][], x: number, y: number): GaborFilterStep | null {
+  const height = image.length;
+  const width = image[0]?.length || 0;
+  const kSize = kernel.length;
+  const half = Math.floor(kSize / 2);
+
+  if (width === 0 || height === 0 || kSize === 0) return null;
+  if (x < half || x >= width - half || y < half || y >= height - half) return null;
+
+  const windowX = x - half;
+  const windowY = y - half;
+  const inputRegion: GrayscaleImage = [];
+  const products: GaborProductTerm[] = [];
+  let rawSum = 0;
+  let kernelAbsSum = 0;
+
+  for (let ky = 0; ky < kSize; ky++) {
+    const row: number[] = [];
+    for (let kx = 0; kx < kSize; kx++) {
+      const imageX = windowX + kx;
+      const imageY = windowY + ky;
+      const pixelValue = image[imageY]?.[imageX] ?? 0;
+      const kernelValue = kernel[ky]?.[kx] ?? 0;
+      const product = pixelValue * kernelValue;
+
+      row.push(pixelValue);
+      products.push({
+        kernelX: kx,
+        kernelY: ky,
+        imageX,
+        imageY,
+        pixelValue,
+        kernelValue,
+        product,
+      });
+      rawSum += product;
+      kernelAbsSum += Math.abs(kernelValue);
+    }
+    inputRegion.push(row);
+  }
+
+  const normalizedResponse = kernelAbsSum > 0 ? rawSum / kernelAbsSum : 0;
+  const outputValue = Math.max(0, Math.min(1, (normalizedResponse + 1) / 2));
+
+  return {
+    x,
+    y,
+    windowX,
+    windowY,
+    inputRegion,
+    kernel,
+    products,
+    kernelAbsSum,
+    rawSum,
+    normalizedResponse,
+    outputValue,
+  };
 }
 
 /**
