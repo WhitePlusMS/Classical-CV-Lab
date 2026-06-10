@@ -2,6 +2,8 @@
 
 import React, { useCallback, useMemo, useState } from 'react';
 import {
+  AnchoredOverlay,
+  type AnchoredOverlayPath,
   CodeViewer,
   ConceptLayout,
   FlowColumn,
@@ -275,6 +277,17 @@ function grayAt(image: number[][], x: number, y: number): number {
   return Math.round((image[y]?.[x] ?? 0) * 255);
 }
 
+function countForegroundPixels(mask: number[][]): number {
+  return mask.reduce(
+    (total, row) => total + row.reduce((rowTotal, pixel) => rowTotal + (pixel > 0 ? 1 : 0), 0),
+    0
+  );
+}
+
+function formatPercent(value: number): string {
+  return value.toFixed(1) + '%';
+}
+
 function modelDescription(model: BackgroundModelType): string {
   switch (model) {
     case 'mean':
@@ -322,52 +335,245 @@ export default function BackgroundModelingSubtractionPage() {
   const diffGray = grayAt(result.difference, currentPosition.x, currentPosition.y);
   const deviationGray = grayAt(result.deviation, currentPosition.x, currentPosition.y);
   const maskValue = result.mask[currentPosition.y]?.[currentPosition.x] ?? 0;
+  const selectedPixelRegion = { x: currentPosition.x, y: currentPosition.y, size: 1 };
+  const foregroundCount = countForegroundPixels(result.mask);
+  const totalPixels = width * height;
+  const foregroundPercent = totalPixels > 0 ? (foregroundCount / totalPixels) * 100 : 0;
+  const alphaValue = learningRate / 100;
+  const gaussianLimit = Math.round(2.5 * deviationGray);
+  const activeLimit = model === 'singleGaussian' ? gaussianLimit : threshold;
+  const activeRuleText = model === 'singleGaussian'
+    ? '|I-μ| > 2.5·δ'
+    : '|I-B| > T';
+  const activeComparisonText = model === 'singleGaussian'
+    ? `|${currentGray} - ${backgroundGray}| = ${diffGray}，2.5·δ = ${gaussianLimit}`
+    : `|${currentGray} - ${backgroundGray}| = ${diffGray}，T = ${threshold}`;
+  const decisionText = maskValue > 0 ? '前景运动目标（D=1）' : '背景（D=0）';
+  const decisionClassName = maskValue > 0 ? 'font-semibold text-red-600' : 'font-semibold text-emerald-600';
+  const mainVisual = (
+    <div className="space-y-4">
+      <div className="grid gap-3 lg:grid-cols-4">
+        <div className="rounded-2xl border border-red-200 bg-white px-3 py-3 shadow-sm">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-red-700">当前帧 I(t)</span>
+            <span className="font-mono text-[11px] text-slate-400">{width}×{height}</span>
+          </div>
+          <div className="flex justify-center">
+            <ImageCanvas
+              image={result.current}
+              maxDisplaySize={190}
+              showGrid={false}
+              interactive
+              onRegionSelect={handlePixelSelect}
+              selectedRegion={selectedPixelRegion}
+              selectedRegionMarker="dot"
+              containerClassName="bg-anchor-current-main"
+            />
+          </div>
+          <div className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">
+            I({currentPosition.x}, {currentPosition.y}) = {currentGray}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-amber-200 bg-white px-3 py-3 shadow-sm">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-amber-700">背景模型 B(t)</span>
+            <span className="text-[11px] text-amber-700">{MODEL_OPTIONS.find(item => item.value === model)?.label}</span>
+          </div>
+          <div className="flex justify-center">
+            <ImageCanvas
+              image={result.background}
+              maxDisplaySize={190}
+              showGrid={false}
+              interactive
+              onRegionSelect={handlePixelSelect}
+              selectedRegion={selectedPixelRegion}
+              selectedRegionMarker="dot"
+              containerClassName="bg-anchor-background-main"
+            />
+          </div>
+          <div className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+            B({currentPosition.x}, {currentPosition.y}) = {backgroundGray}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-sky-200 bg-white px-3 py-3 shadow-sm">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-sky-700">差分 |I-B|</span>
+            <span className="font-mono text-[11px] text-sky-700">{diffGray}</span>
+          </div>
+          <div className="flex justify-center">
+            <ImageCanvas
+              image={result.difference}
+              maxDisplaySize={190}
+              showGrid={false}
+              interactive
+              onRegionSelect={handlePixelSelect}
+              selectedRegion={selectedPixelRegion}
+              selectedRegionMarker="dot"
+              containerClassName="bg-anchor-difference-main"
+            />
+          </div>
+          <div className="mt-3 rounded-xl bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-700">
+            |{currentGray} - {backgroundGray}| = {diffGray}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-emerald-200 bg-white px-3 py-3 shadow-sm">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-emerald-700">前景掩膜 D(t)</span>
+            <span className="font-mono text-[11px] text-emerald-700">{formatPercent(foregroundPercent)}</span>
+          </div>
+          <div className="flex justify-center">
+            <ImageCanvas
+              image={result.mask}
+              maxDisplaySize={190}
+              showGrid={false}
+              interactive
+              onRegionSelect={handlePixelSelect}
+              highlightPixel={currentPosition}
+              containerClassName="bg-anchor-mask-main"
+            />
+          </div>
+          <div className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-700">
+            前景 {foregroundCount} / {totalPixels} 像素，当前为 <span className={decisionClassName}>{decisionText}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm md:grid-cols-3">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">当前规则</div>
+          <div className="mt-1 font-mono text-sm font-semibold text-slate-800">{activeRuleText}</div>
+        </div>
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">代入比较</div>
+          <div className="mt-1 text-sm font-semibold text-slate-800">{activeComparisonText}</div>
+        </div>
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">当前结论</div>
+          <div className={`mt-1 text-sm ${decisionClassName}`}>{decisionText}</div>
+        </div>
+      </div>
+    </div>
+  );
   const analysisPreview = (
     <ProcessRail>
       <FlowColumns>
         <FlowColumn align="start">
           <FlowNode tone="red" className="max-w-sm">
-            <div className="mb-3 text-xs font-semibold text-red-600">当前帧 I(t)</div>
-            <ImageCanvas
-              image={result.current}
-              maxDisplaySize={130}
-              showGrid={false}
-              highlightPixel={currentPosition}
-            />
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <span className="text-[11px] font-semibold uppercase text-red-700">读取当前像素</span>
+              <span className="font-mono text-[11px] text-red-600">({currentPosition.x}, {currentPosition.y})</span>
+            </div>
+            <div className="rounded-xl border border-red-200 bg-white px-3 py-2">
+              <div className="text-[10px] text-red-500">当前帧灰度</div>
+              <div className="mt-1 font-mono text-lg font-bold text-red-700">{currentGray}</div>
+            </div>
             <p className="mt-3 text-xs leading-5 text-slate-600">
-              当前位置 ({currentPosition.x}, {currentPosition.y}) 灰度值为 {currentGray}。
+              当前帧只提供观测值，是否是前景要看它与长期背景模型的距离。
             </p>
           </FlowNode>
         </FlowColumn>
         <FlowColumn align="center">
           <FlowNode tone="amber" className="max-w-sm">
-            <div className="mb-3 text-xs font-semibold text-amber-700">背景模型 B(t)</div>
-            <ImageCanvas
-              image={result.background}
-              maxDisplaySize={130}
-              showGrid={false}
-              highlightPixel={currentPosition}
-            />
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <span className="text-[11px] font-semibold uppercase text-amber-800">读取背景模型</span>
+              <span className="text-[11px] text-amber-700">{MODEL_OPTIONS.find(item => item.value === model)?.label}</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-xl border border-amber-200 bg-white px-3 py-2">
+                <div className="text-[10px] text-amber-600">背景估计</div>
+                <div className="mt-1 font-mono text-lg font-bold text-amber-800">{backgroundGray}</div>
+              </div>
+              <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2">
+                <div className="text-[10px] text-sky-600">差分</div>
+                <div className="mt-1 font-mono text-lg font-bold text-sky-700">{diffGray}</div>
+              </div>
+            </div>
             <p className="mt-3 text-xs leading-5 text-slate-600">{modelDescription(model)}</p>
+          </FlowNode>
+
+          <FlowNode tone="sky" className="bg-anchor-calculation-node max-w-sm">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <span className="text-[11px] font-semibold uppercase text-sky-700">差分与阈值比较</span>
+              <span className="font-mono text-[11px] text-sky-700">{activeRuleText}</span>
+            </div>
+            <div className="rounded-xl border border-sky-200 bg-white px-3 py-3">
+              <div className="font-mono text-sm font-semibold text-slate-800">
+                |{currentGray} - {backgroundGray}| = {diffGray}
+              </div>
+              <div className="mt-2 text-xs leading-5 text-slate-600">
+                判定阈值 = {activeLimit}；{maskValue > 0 ? '差分超过阈值，写入前景。' : '差分未超过阈值，保留为背景。'}
+              </div>
+            </div>
           </FlowNode>
         </FlowColumn>
         <FlowColumn align="end">
           <FlowNode tone="emerald" className="max-w-sm">
-            <div className="mb-3 text-xs font-semibold text-emerald-700">前景掩膜 D(t)</div>
-            <ImageCanvas
-              image={result.mask}
-              maxDisplaySize={130}
-              showGrid={false}
-              highlightPixel={currentPosition}
-            />
-            <p className="mt-3 text-xs leading-5 text-slate-600">
-              差值 |I-B| = {diffGray}，当前像素判为{maskValue > 0 ? '前景' : '背景'}。
-            </p>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <span className="text-[11px] font-semibold uppercase text-emerald-700">写入前景掩膜</span>
+              <span className="font-mono text-[11px] text-emerald-700">D = {maskValue > 0 ? 1 : 0}</span>
+            </div>
+            <div className="rounded-xl border border-emerald-200 bg-white px-3 py-3">
+              <div className={`text-base ${decisionClassName}`}>{decisionText}</div>
+              <div className="mt-2 text-xs leading-5 text-slate-600">
+                当前整张掩膜中共有 {foregroundCount} 个前景像素，占 {formatPercent(foregroundPercent)}。
+              </div>
+            </div>
           </FlowNode>
         </FlowColumn>
       </FlowColumns>
     </ProcessRail>
   );
+  const visualOverlayPaths = useMemo<AnchoredOverlayPath[]>(() => {
+    if (width === 0 || height === 0) return [];
+
+    return [
+      {
+        id: 'background-current-to-calc',
+        tone: 'red',
+        from: {
+          kind: 'pixel',
+          selector: '.bg-anchor-current-main',
+          x: currentPosition.x,
+          y: currentPosition.y,
+          imageWidth: width,
+          imageHeight: height,
+        },
+        to: { kind: 'element', selector: '.bg-anchor-calculation-node' },
+      },
+      {
+        id: 'background-model-to-calc',
+        tone: 'amber',
+        from: {
+          kind: 'pixel',
+          selector: '.bg-anchor-background-main',
+          x: currentPosition.x,
+          y: currentPosition.y,
+          imageWidth: width,
+          imageHeight: height,
+        },
+        to: { kind: 'element', selector: '.bg-anchor-calculation-node' },
+      },
+      {
+        id: 'background-calc-to-mask',
+        tone: 'emerald',
+        from: { kind: 'element', selector: '.bg-anchor-calculation-node' },
+        to: {
+          kind: 'pixel',
+          selector: '.bg-anchor-mask-main',
+          x: currentPosition.x,
+          y: currentPosition.y,
+          imageWidth: width,
+          imageHeight: height,
+        },
+      },
+    ];
+  }, [currentPosition.x, currentPosition.y, height, width]);
+  const visualOverlay = visualOverlayPaths.length > 0 ? (
+    <AnchoredOverlay paths={visualOverlayPaths} />
+  ) : null;
   // ========================================
   // stepDetails - 按课件顺序组织
   // ========================================
@@ -559,12 +765,9 @@ export default function BackgroundModelingSubtractionPage() {
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
             <p className="font-semibold text-slate-800">前景判定 D(x,y)：</p>
             <p className="text-slate-600">
-              D(x,y) = {'{'} 1 当 |I–B| &gt; T; 0 其他 {'}'}
-              &emsp;代入：|{currentGray} – {backgroundGray}| = {diffGray}
-              &emsp;阈值 T = {threshold}
-              &emsp;结果：<span className={maskValue > 0 ? 'font-semibold text-red-600' : 'font-semibold text-emerald-600'}>
-                {maskValue > 0 ? '前景运动目标（D=1）' : '背景（D=0）'}
-              </span>
+              D(x,y) = {'{'} 1 当 {activeRuleText}; 0 其他 {'}'}
+              &emsp;代入：{activeComparisonText}
+              &emsp;结果：<span className={decisionClassName}>{decisionText}</span>
             </p>
           </div>
         </div>
@@ -623,8 +826,63 @@ export default function BackgroundModelingSubtractionPage() {
   const parameters = (
     <div className="space-y-4">
       <SelectParam label="背景模型" value={model} onChange={handleModelChange} options={MODEL_OPTIONS} />
-      <SliderParam label="前景阈值 T" value={threshold} onChange={setThreshold} min={10} max={120} step={1} />
-      <SliderParam label="学习率 α" value={learningRate} onChange={setLearningRate} min={1} max={40} step={1} unit="%" />
+      {model === 'mean' ? (
+        <>
+          <SliderParam label="前景阈值 T" value={threshold} onChange={setThreshold} min={10} max={120} step={1} />
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-800">
+            均值模型用前 K 帧平均得到背景，不使用学习率 α；调整阈值会直接改变前景掩膜。
+          </div>
+        </>
+      ) : null}
+      {model === 'adaptive' ? (
+        <>
+          <SliderParam label="前景阈值 T" value={threshold} onChange={setThreshold} min={10} max={120} step={1} />
+          <SliderParam label="学习率 α" value={learningRate} onChange={setLearningRate} min={1} max={40} step={1} unit="%" />
+          <div className="rounded-2xl border border-blue-200 bg-blue-50 px-3 py-3 text-xs leading-5 text-blue-800">
+            当前 α = {alphaValue.toFixed(2)}；α 越大，背景模型越快吸收新帧变化。
+          </div>
+        </>
+      ) : null}
+      {model === 'singleGaussian' ? (
+        <div className="space-y-3">
+          <div className="rounded-2xl border border-sky-200 bg-sky-50 px-3 py-3 text-xs leading-5 text-sky-800">
+            单高斯演示使用 μ 和 δ 判定，不使用前景阈值 T。当前 λ 固定为 2.5。
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+              <div className="text-slate-500">μ(x,y)</div>
+              <div className="mt-1 font-mono text-base font-semibold text-slate-800">{backgroundGray}</div>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+              <div className="text-slate-500">2.5·δ</div>
+              <div className="mt-1 font-mono text-base font-semibold text-slate-800">{gaussianLimit}</div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {model === 'mixtureGaussian' ? (
+        <>
+          <SliderParam label="前景阈值 T" value={threshold} onChange={setThreshold} min={10} max={120} step={1} />
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-xs leading-5 text-emerald-800">
+            当前页用混合高斯背景图生成差分，再用 T 生成掩膜；分量权重与均值在右侧代入区展示。
+          </div>
+          <div className="space-y-2">
+            {result.mixtureComponents.map((component, index) => (
+              <div key={`param-mixture-${index}`} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-slate-700">G{index + 1}</span>
+                  <span className={component.background ? 'text-emerald-600' : 'text-red-600'}>
+                    {component.background ? '背景分量' : '前景候选'}
+                  </span>
+                </div>
+                <div className="mt-1 font-mono text-[11px] text-slate-500">
+                  ω={component.weight.toFixed(2)} / μ={Math.round(component.mean * 255)} / δ={Math.round(component.sigma * 255)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : null}
     </div>
   );
 
@@ -637,6 +895,8 @@ export default function BackgroundModelingSubtractionPage() {
       originalImage={result.current}
       resultImage={result.mask}
       parameters={parameters}
+      mainVisual={mainVisual}
+      visualOverlay={visualOverlay}
       analysisPreview={analysisPreview}
       stepDetails={stepDetails}
       codeTab={<CodeViewer languages={[{ name: 'TypeScript', code: BACKGROUND_CODE_TS }]} />}
