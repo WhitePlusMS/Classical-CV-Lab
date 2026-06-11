@@ -13,3 +13,4 @@ export * from './haarLbpFeatureVector';
 export * from './classifierDetectionPipeline';
 export * from './histogramTemplateMatching';
 export * from './colorSpaceHistogram';
+export * from './keypointMatchingPipeline';
