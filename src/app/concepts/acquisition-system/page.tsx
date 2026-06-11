@@ -1,5 +1,7 @@
+'use client';
 import Link from 'next/link';
-
+import { useEffect, useState } from 'react';
+import { ConceptIntro, CONCEPT_INTRO_CONTENT, type ConceptIntroProps } from '@/components/teaching';
 const systemChain = [
   { title: '光源', desc: '提供照明、克服环境光干扰、形成稳定成像条件' },
   { title: '目标', desc: '被观测的物体或场景' },
@@ -127,6 +129,13 @@ function BackIcon() {
 }
 
 export default function AcquisitionSystemPage() {
+const [conceptIntro, setConceptIntro] = useState<ConceptIntroProps | null>(null);
+  useEffect(() => {
+    import('@/components/teaching/ConceptIntro').then(mod => {
+      setConceptIntro(mod.CONCEPT_INTRO_CONTENT['/concepts/acquisition-system']);
+    });
+  }, []);
+
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900">
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
@@ -149,6 +158,12 @@ export default function AcquisitionSystemPage() {
       </header>
 
       <main className="mx-auto max-w-6xl px-6 py-10">
+        {conceptIntro && (
+          <div className="mb-6 overflow-hidden rounded-2xl border border-slate-200/80 bg-white/92 px-4 py-4 shadow-sm">
+            <ConceptIntro {...conceptIntro} />
+          </div>
+        )}
+
         <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
           {/* 采集处理硬件链路 */}
           <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 via-white to-indigo-50/70 px-7 py-7">
@@ -490,3 +505,8 @@ export default function AcquisitionSystemPage() {
     </div>
   );
 }
+
+
+
+
+

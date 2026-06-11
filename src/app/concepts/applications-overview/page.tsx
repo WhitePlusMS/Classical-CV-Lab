@@ -1,5 +1,7 @@
+'use client';
 import Link from 'next/link';
-
+import { useEffect, useState } from 'react';
+import { ConceptIntro, type ConceptIntroProps } from '@/components/teaching';
 const taskTypes = [
   { title: '识别', detail: '对象类别' },
   { title: '检测', detail: '目标区域' },
@@ -253,6 +255,13 @@ function DetailItemGrid({ items, accentClass, columnsClass = 'sm:grid-cols-2', c
 }
 
 export default function ApplicationsOverviewPage() {
+  const [conceptIntro, setConceptIntro] = useState<ConceptIntroProps | null>(null);
+  useEffect(() => {
+    import('@/components/teaching/ConceptIntro').then(mod => {
+      setConceptIntro(mod.CONCEPT_INTRO_CONTENT['/concepts/applications-overview']);
+    });
+  }, []);
+
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900">
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
@@ -277,6 +286,12 @@ export default function ApplicationsOverviewPage() {
       </header>
 
       <main className="mx-auto max-w-6xl px-6 py-10">
+        {conceptIntro && (
+          <div className="mb-6 overflow-hidden rounded-2xl border border-slate-200/80 bg-white/92 px-4 py-4 shadow-sm">
+            <ConceptIntro {...conceptIntro} />
+          </div>
+        )}
+
         <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
           <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 via-white to-cyan-50/70 px-7 py-7">
             <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr] lg:items-end">
@@ -539,3 +554,15 @@ export default function ApplicationsOverviewPage() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+

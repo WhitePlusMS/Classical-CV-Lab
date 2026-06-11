@@ -748,39 +748,8 @@ export default function KeypointMatchingPipelinePage() {
     />
   );
 
-  const overviewIntro = useMemo(() => (
-    <div className="mb-4 rounded-2xl border border-slate-200 bg-white/95 px-4 py-4 shadow-sm">
-      <h2 className="text-sm font-semibold text-slate-800">特征点匹配概述</h2>
-      <p className="mt-2 text-xs leading-6 text-slate-600">
-        当目标存在旋转或尺度变化时，直接模板匹配容易失效。基于特征点的匹配方法将图像映射为一个局部特征向量集，这些特征向量具有平移、缩放、旋转不变性，同时对光照变化、仿射及投影变换也有一定不变性。
-      </p>
-      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:items-start">
-        <div>
-          <img
-            src="/assets/keypoint-matching-pipeline/feature-mapping.jpg"
-            alt="特征映射示意图"
-            className="w-full max-w-lg rounded-xl object-cover"
-          />
-          <figcaption className="mt-2 text-xs text-slate-500">
-            图像映射为局部特征向量集
-          </figcaption>
-        </div>
-        <div className="border-l-4 border-sky-300 pl-4 text-xs leading-6 text-slate-600">
-          <div className="font-semibold text-slate-800">问题来源</div>
-          <p className="mt-2">
-            模板匹配直接比较固定窗口的像素排列。当目标发生缩放、旋转、局部遮挡或光照变化时，同一物体的像素位置和灰度值会整体改变，固定模板难以保持高相似度。
-          </p>
-          <p className="mt-2">
-            特征点方法不要求整块图像完全一致，而是寻找可重复出现的局部显著位置，并把每个位置附近的结构编码成描述子。匹配问题因此转化为“局部结构是否相似”的比较问题。
-          </p>
-        </div>
-      </div>
-    </div>
-  ), []);
-
   const analysisPreview = useMemo(() => (
     <div>
-      {overviewIntro}
       <div className="mb-4">
         <KeypointMatchingVisual
           demo={demo}
@@ -848,7 +817,7 @@ export default function KeypointMatchingPipelinePage() {
         </FlowColumns>
       </ProcessRail>
     </div>
-  ), [demo, distanceType, method, methodPrinciple, overviewIntro, selectedKeypointIndex]);
+  ), [demo, distanceType, method, methodPrinciple, selectedKeypointIndex]);
 
   const stepDetails = useMemo(() => (
     <div className="space-y-6">

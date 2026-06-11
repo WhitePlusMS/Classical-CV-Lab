@@ -2,8 +2,10 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import ImageCanvas from './ImageCanvas';
 import { GrayscaleImage } from '@/lib/algorithms/types';
+import { ConceptIntro, CONCEPT_INTRO_CONTENT } from '@/components/teaching';
 
 interface ConceptLayoutProps {
   maxDisplaySize?: number;
@@ -93,8 +95,20 @@ export default function ConceptLayout({
   showNavigationBar = true,
   showNavigationControls = true,
 }: ConceptLayoutProps) {
+  const pathname = usePathname();
   const [showCode, setShowCode] = useState(false);
   const [showParameters, setShowParameters] = useState(true);
+  const conceptIntroContent = CONCEPT_INTRO_CONTENT[pathname ?? ''];
+  const mergedContentHeader = conceptIntroContent || contentHeader ? (
+    <div className="space-y-4">
+      {conceptIntroContent && <ConceptIntro {...conceptIntroContent} />}
+      {contentHeader && (
+        <div className={conceptIntroContent ? 'border-t border-slate-200 pt-4' : ''}>
+          {contentHeader}
+        </div>
+      )}
+    </div>
+  ) : null;
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -346,9 +360,9 @@ export default function ConceptLayout({
                 singlePageScroll ? 'pb-5 pt-5 xl:pt-5' : 'flex-1 min-h-0 overflow-auto pb-3 xl:pt-6 xl:pb-4'
               }`}
             >
-              {contentHeader && (
+              {mergedContentHeader && (
                 <div className="mb-4 overflow-hidden rounded-2xl border border-slate-200/80 bg-white/92 shadow-sm">
-                  <div className="px-4 py-4">{contentHeader}</div>
+                  <div className="px-4 py-4">{mergedContentHeader}</div>
                 </div>
               )}
 
