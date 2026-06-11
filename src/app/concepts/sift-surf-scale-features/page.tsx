@@ -21,6 +21,7 @@ import {
   createCircleImage,
 } from '@/lib/utils/sampleImages';
 import { useGridNavigation } from '@/hooks/useGridNavigation';
+import { useLenaGrayscaleImage } from '@/hooks/useLenaGrayscaleImage';
 
 // ==================== 教学步骤常量 ====================
 
@@ -35,10 +36,12 @@ const TEACHING_STEPS = [
 ] as const;
 
 type TeachingStepKey = (typeof TEACHING_STEPS)[number]['key'];
+type ScaleFeatureImageType = 'rectangle' | 'circle' | 'lenaOriginal';
 
-const IMAGE_OPTIONS: { value: string; label: string }[] = [
+const IMAGE_OPTIONS: { value: ScaleFeatureImageType; label: string }[] = [
   { value: 'rectangle', label: '矩形' },
   { value: 'circle', label: '圆形' },
+  { value: 'lenaOriginal', label: 'Lena 灰度图' },
 ];
 
 // ==================== 公式常量 ====================
@@ -225,20 +228,22 @@ function renderKeypointOverlay(
 
 export default function SiftSurfScaleFeaturesPage() {
   const [step, setStep] = useState<TeachingStepKey>('overview');
-  const [imageType, setImageType] = useState<string>('rectangle');
+  const [imageType, setImageType] = useState<ScaleFeatureImageType>('rectangle');
   const [sigma, setSigma] = useState(1.0);
   const [numScales, setNumScales] = useState(3);
   const [selectedKpIdx, setSelectedKpIdx] = useState(0);
   const [currentPosition, setCurrentPosition] = useState({ x: 16, y: 16 });
+  const lenaImage = useLenaGrayscaleImage(96);
 
   // 获取源图像
   const sourceImage = useMemo(() => {
     switch (imageType) {
       case 'rectangle': return createRectangleImage();
       case 'circle': return createCircleImage();
+      case 'lenaOriginal': return lenaImage ?? createRectangleImage();
       default: return createRectangleImage();
     }
-  }, [imageType]);
+  }, [imageType, lenaImage]);
 
   // 计算 SIFT/SURF 结果
   const result = useMemo(
@@ -264,7 +269,7 @@ export default function SiftSurfScaleFeaturesPage() {
   }, []);
 
   const handleImageChange = useCallback((value: string) => {
-    setImageType(value);
+    setImageType(value as ScaleFeatureImageType);
     setSelectedKpIdx(0);
   }, []);
 

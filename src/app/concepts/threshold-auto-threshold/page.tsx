@@ -22,8 +22,10 @@ import {
   createThresholdScene,
 } from '@/lib/algorithms/simpleBackground';
 import { GrayscaleImage } from '@/lib/algorithms/types';
+import { useLenaGrayscaleImage } from '@/hooks/useLenaGrayscaleImage';
 
 type ThresholdMethod = 'manual' | 'otsu' | 'kittler';
+type ThresholdInputType = ThresholdSceneType | 'lenaOriginal';
 
 const METHOD_OPTIONS = [
   { value: 'manual', label: '固定阈值 T' },
@@ -35,6 +37,7 @@ const SCENE_OPTIONS = [
   { value: 'bimodal', label: '双峰前景' },
   { value: 'spotlight', label: '光斑目标' },
   { value: 'noisyObject', label: '含噪目标' },
+  { value: 'lenaOriginal', label: 'Lena 灰度图' },
 ] as const;
 
 const OUTPUT_OPTIONS = [
@@ -401,11 +404,15 @@ function countNonZero(image: GrayscaleImage): number {
 }
 
 export default function ThresholdAutoThresholdPage() {
-  const [sceneType, setSceneType] = useState<ThresholdSceneType>('bimodal');
+  const [sceneType, setSceneType] = useState<ThresholdInputType>('bimodal');
   const [method, setMethod] = useState<ThresholdMethod>('otsu');
   const [manualThreshold, setManualThreshold] = useState(128);
   const [outputMode, setOutputMode] = useState<ThresholdOutputMode>('binary');
-  const originalImage = useMemo(() => createThresholdScene(sceneType), [sceneType]);
+  const lenaImage = useLenaGrayscaleImage(96);
+  const originalImage = useMemo(() => {
+    if (sceneType === 'lenaOriginal') return lenaImage ?? createThresholdScene('bimodal');
+    return createThresholdScene(sceneType);
+  }, [lenaImage, sceneType]);
 
   const otsuResult = useMemo(() => otsuThreshold(originalImage), [originalImage]);
   const kittlerResult = useMemo(() => computeKittlerGradientThreshold(originalImage), [originalImage]);
@@ -455,7 +462,7 @@ export default function ThresholdAutoThresholdPage() {
   }, []);
 
   const handleSceneChange = useCallback((value: string) => {
-    setSceneType(value as ThresholdSceneType);
+    setSceneType(value as ThresholdInputType);
   }, []);
 
   const handleOutputModeChange = useCallback((value: string) => {

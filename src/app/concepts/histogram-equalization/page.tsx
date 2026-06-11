@@ -17,8 +17,9 @@ import {
   generateCourseExample,
 } from '@/lib/algorithms/equalization';
 import type { GrayscaleImage } from '@/lib/algorithms/types';
+import { useLenaGrayscaleImage } from '@/hooks/useLenaGrayscaleImage';
 
-type ExampleType = 'dark' | 'bright' | 'lowContrast' | 'bimodal' | 'standard' | 'courseExample';
+type ExampleType = 'dark' | 'bright' | 'lowContrast' | 'bimodal' | 'standard' | 'courseExample' | 'lenaOriginal';
 
 const EQUALIZATION_CODE_TS = `// 1. 计算直方图
 function computeHistogram(image) {
@@ -179,12 +180,14 @@ export default function HistogramEqualizationPage() {
   const [exampleType, setExampleType] = useState<ExampleType>('standard');
   const [hoveredGray, setHoveredGray] = useState<number | null>(null);
   const [pinnedGray, setPinnedGray] = useState<number | null>(null);
+  const lenaImage = useLenaGrayscaleImage(128);
 
   // 原图（根据类型生成）
   const originalImage: GrayscaleImage = useMemo(() => {
+    if (exampleType === 'lenaOriginal') return lenaImage ?? generateExampleImage('standard');
     if (exampleType === 'courseExample') return generateCourseExample();
-    return generateExampleImage(exampleType as Exclude<ExampleType, 'courseExample'>);
-  }, [exampleType]);
+    return generateExampleImage(exampleType as Exclude<ExampleType, 'courseExample' | 'lenaOriginal'>);
+  }, [exampleType, lenaImage]);
 
   // 原始直方图
   const originalHistogram = useMemo(() => computeHistogram(originalImage), [originalImage]);
@@ -534,6 +537,7 @@ export default function HistogramEqualizationPage() {
           { value: 'bright', label: '偏亮图' },
           { value: 'lowContrast', label: '低对比图' },
           { value: 'bimodal', label: '双峰图' },
+          { value: 'lenaOriginal', label: 'Lena 灰度图' },
         ]}
       />
     </div>

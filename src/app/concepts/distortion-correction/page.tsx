@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   CodeViewer,
   ConceptLayout,
@@ -15,6 +15,7 @@ import {
   buildInlineMathML,
 } from '@/components';
 import { useGridNavigation } from '@/hooks/useGridNavigation';
+import { centerCropRgbImage, loadImageAsRgb, resizeRgbImage } from '@/lib/utils/imageProcessing';
 import {
   buildUndistortionMaps,
   createCheckerboardRgbImage,
@@ -38,6 +39,7 @@ for (let y = 0; y < height; y++) {
 const SAMPLE_OPTIONS = [
   { value: 'checkerboard', label: '棋盘直线' },
   { value: 'geometry', label: '几何轮廓' },
+  { value: 'lenaOriginal', label: 'Lena 彩色图' },
 ] as const;
 
 const DISTORTION_OPTIONS = [
@@ -61,10 +63,27 @@ export default function DistortionCorrectionPage() {
   const [distortionMode, setDistortionMode] = useState<DistortionMode>('barrel');
   const [strength, setStrength] = useState(0.32);
   const [selectedPixel, setSelectedPixel] = useState({ x: 60, y: 60 });
+  const [lenaRgb, setLenaRgb] = useState<ReturnType<typeof createCheckerboardRgbImage> | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadImageAsRgb('/assets/lena-original.jpg')
+      .then(raw => {
+        if (!cancelled) {
+          const cropped = centerCropRgbImage(raw);
+          setLenaRgb(resizeRgbImage(cropped, 120) as any);
+        }
+      })
+      .catch(() => { if (!cancelled) setLenaRgb(null); });
+    return () => { cancelled = true; };
+  }, []);
 
   const idealRgb = useMemo(
-    () => (sampleMode === 'checkerboard' ? createCheckerboardRgbImage(120, 10) : createGeometryTeachingImage(120, 120)),
-    [sampleMode]
+    () => {
+      if (sampleMode === 'lenaOriginal') return lenaRgb ?? createCheckerboardRgbImage(120, 10);
+      return sampleMode === 'checkerboard' ? createCheckerboardRgbImage(120, 10) : createGeometryTeachingImage(120, 120);
+    },
+    [sampleMode, lenaRgb]
   );
 
   const coefficients = useMemo<DistortionCoefficients>(() => {

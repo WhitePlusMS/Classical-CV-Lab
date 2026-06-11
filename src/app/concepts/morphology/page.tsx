@@ -31,13 +31,15 @@ import {
   type MorphologyStep,
 } from '@/lib/algorithms/morphology';
 import type { GrayscaleImage, StructElement } from '@/lib/algorithms/types';
+import { useLenaGrayscaleImage } from '@/hooks/useLenaGrayscaleImage';
+import { otsuThreshold } from '@/lib/algorithms/threshold';
 import { useGridNavigation } from '@/hooks/useGridNavigation';
 
 // ========== 类型定义 ==========
 
 type MorphologyOperation = 'erode' | 'dilate' | 'open' | 'close';
 type SeShape = 'rectangle' | 'cross' | 'ellipse';
-type MorphologyTask = 'removeNoise' | 'connectCrack' | 'fillHole';
+type MorphologyTask = 'removeNoise' | 'connectCrack' | 'fillHole' | 'lenaClean';
 type MorphologyViewMode = 'theory' | 'task';
 
 const OPERATION_LABELS: Record<MorphologyOperation, string> = {
@@ -70,30 +72,34 @@ const TASK_LABELS: Record<MorphologyTask, string> = {
   removeNoise: '噪点去除（开操作）',
   connectCrack: '裂缝连接（闭操作）',
   fillHole: '小孔填补（闭操作）',
+  lenaClean: 'Lena 二值轮廓清理（开操作）',
 };
 
 const TASK_HINTS: Record<MorphologyTask, string> = {
   removeNoise: '孤立小点不属于主体目标，通常先腐蚀去掉，再膨胀恢复主体。',
   connectCrack: '目标内部存在细小断裂，通常先膨胀连接裂缝，再腐蚀恢复轮廓。',
   fillHole: '目标内部有小孔洞，闭操作可以先扩张边界填孔，再回收外轮廓。',
+  lenaClean: '真实 Lena 图二值化后存在细纹理和孤点噪点，开操作可以平滑轮廓并去除小亮斑。',
 };
 
 const TASK_RECOMMENDED_OPERATION: Record<MorphologyTask, MorphologyOperation> = {
   removeNoise: 'open',
   connectCrack: 'close',
   fillHole: 'close',
+  lenaClean: 'open',
 };
 
 const TASK_RECOMMENDED_REASON: Record<MorphologyTask, string> = {
   removeNoise: '孤立噪点尺度比主体小，先腐蚀能去掉小点，再膨胀把主体大致恢复回来。',
   connectCrack: '裂缝本质是前景中的小缺口，先膨胀能把断裂处接上，再腐蚀收回边界。',
   fillHole: '小孔洞是前景内部的背景空缺，闭操作能优先填补内部空洞，再维持整体轮廓。',
+  lenaClean: 'Lena 的头发和帽子区域有微纹理，二值化后产生小亮点，开操作顺序正好先腐蚀去掉亮点再膨胀恢复主体。',
 };
 
 const TASK_OPS: { value: string; label: string }[] = [
   { value: 'removeNoise', label: TASK_LABELS.removeNoise },
   { value: 'connectCrack', label: TASK_LABELS.connectCrack },
-  { value: 'fillHole', label: TASK_LABELS.fillHole },
+  { value: 'fillHole', label: TASK_LABELS.fillHole }, { value: 'lenaClean', label: TASK_LABELS.lenaClean },
 ];
 
 // ========== 代码示例 ==========
@@ -380,12 +386,16 @@ export default function MorphologyPage() {
   const effectiveOperation: MorphologyOperation =
     viewMode === 'task' ? recommendedOperation : (operation as MorphologyOperation);
 
+  const lenaImage = useLenaGrayscaleImage(64);
+  const lenaBinaryImage = useMemo(() => lenaImage ? otsuThreshold(lenaImage).image : createMorphologyTaskImage('removeNoise'), [lenaImage]);
+
   const originalImage = useMemo(
-    () =>
-      viewMode === 'theory'
-        ? createMorphologyPrincipleImage()
-        : createMorphologyTaskImage(task as MorphologyTask),
-    [task, viewMode]
+    () => {
+      if (viewMode === 'theory') return createMorphologyPrincipleImage();
+      if (currentTask === 'lenaClean') return lenaBinaryImage;
+      return createMorphologyTaskImage(task as MorphologyTask);
+    },
+    [task, viewMode, currentTask, lenaBinaryImage]
   );
 
   const structElement = useMemo(

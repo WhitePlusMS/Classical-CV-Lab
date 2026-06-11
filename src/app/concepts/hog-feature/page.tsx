@@ -26,9 +26,27 @@ import {
   loadImageAsGrayscale,
   resizeGrayscaleImage,
 } from '@/lib/utils/imageProcessing';
+import { createLenaImage } from '@/lib/utils/sampleImages';
 
 const CELL_SIZE = 8;
 const CELL_RENDER_SIZE = 24;
+const HOG_IMAGE_SIZE = 256;
+
+function upscaleNearest(image: GrayscaleImage, targetSize: number): GrayscaleImage {
+  const height = image.length;
+  const width = image[0]?.length ?? 0;
+  if (!height || !width) return image;
+
+  return Array.from({ length: targetSize }, (_, y) => {
+    const sourceY = Math.min(height - 1, Math.floor((y / targetSize) * height));
+    return Array.from({ length: targetSize }, (_, x) => {
+      const sourceX = Math.min(width - 1, Math.floor((x / targetSize) * width));
+      return image[sourceY][sourceX];
+    });
+  });
+}
+
+const FALLBACK_HOG_IMAGE = upscaleNearest(createLenaImage(), HOG_IMAGE_SIZE);
 
 const NBINS_OPTIONS = [
   { value: '6', label: '6 个方向（30°/柱）' },
@@ -239,7 +257,7 @@ function BlockCellsView({ step }: { step: HogCellStep }) {
 export default function HogFeaturePage() {
   const [nbins, setNbins] = useState(9);
   const [cellsPerBlock, setCellsPerBlock] = useState(2);
-  const [rawImage, setRawImage] = useState<GrayscaleImage | null>(null);
+  const [rawImage, setRawImage] = useState<GrayscaleImage>(FALLBACK_HOG_IMAGE);
   const [currentCell, setCurrentCell] = useState({ x: 8, y: 8 });
 
   useEffect(() => {
@@ -247,12 +265,12 @@ export default function HogFeaturePage() {
     loadImageAsGrayscale('/assets/lena-original.jpg')
       .then(image => {
         if (!cancelled) {
-          setRawImage(resizeGrayscaleImage(centerCropGrayscaleImage(image), 256));
+          setRawImage(resizeGrayscaleImage(centerCropGrayscaleImage(image), HOG_IMAGE_SIZE));
         }
       })
       .catch(error => {
         console.error('加载 HOG Lena 示例图失败:', error);
-        if (!cancelled) setRawImage(null);
+        if (!cancelled) setRawImage(FALLBACK_HOG_IMAGE);
       });
 
     return () => {
@@ -260,7 +278,7 @@ export default function HogFeaturePage() {
     };
   }, []);
 
-  const originalImage = rawImage ?? [];
+  const originalImage = rawImage;
   const imageWidth = originalImage[0]?.length ?? 0;
   const imageHeight = originalImage.length;
   const cellsX = Math.floor(imageWidth / CELL_SIZE);
@@ -276,15 +294,12 @@ export default function HogFeaturePage() {
   const featureDim = totalBlocks * cellsPerBlock * cellsPerBlock * nbins;
 
   const currentHogStep = useMemo(
-    () => rawImage ? getHogCellStepAt(rawImage, safeCell.x, safeCell.y, CELL_SIZE, nbins, cellsPerBlock) : null,
+    () => getHogCellStepAt(rawImage, safeCell.x, safeCell.y, CELL_SIZE, nbins, cellsPerBlock),
     [cellsPerBlock, nbins, rawImage, safeCell.x, safeCell.y]
   );
 
   const resultImage = useMemo(
-    () =>
-      rawImage
-        ? renderHogVisualization(rawImage, CELL_SIZE, nbins, cellsPerBlock, safeCell.x, safeCell.y, CELL_RENDER_SIZE)
-        : [],
+    () => renderHogVisualization(rawImage, CELL_SIZE, nbins, cellsPerBlock, safeCell.x, safeCell.y, CELL_RENDER_SIZE),
     [cellsPerBlock, nbins, rawImage, safeCell.x, safeCell.y]
   );
 

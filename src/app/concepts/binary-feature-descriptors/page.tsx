@@ -15,6 +15,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
    TeachingCard,
    buildInlineMathML,
  } from '@/components';
+import { useLenaGrayscaleImage } from '@/hooks/useLenaGrayscaleImage';
 import { GrayscaleImage } from '@/lib/algorithms/types';
 import { loadImageAsGrayscale, resizeGrayscaleImage } from '@/lib/utils/imageProcessing';
 
@@ -23,6 +24,7 @@ import { loadImageAsGrayscale, resizeGrayscaleImage } from '@/lib/utils/imagePro
 /// ============================================================
 
 type SamplingMethod = 'GI' | 'GII' | 'GIII' | 'GIV' | 'GV';
+type PatchSource = 'synthetic' | 'lenaPatch';
 
 const SAMPLING_OPTIONS: { value: SamplingMethod; label: string; desc: string }[] = [
   { value: 'GI',   label: 'GI - 均匀分布',           desc: 'X、Y 在 Patch 内均匀分布' },
@@ -52,6 +54,31 @@ const SYNTHETIC_PATCH: number[][] = [
 ];
 
 const PATCH_SIZE = 9;
+
+function createPatchPreviewImage(): GrayscaleImage {
+  const size = 64;
+  return Array.from({ length: size }, (_, y) => {
+    const sourceY = Math.min(PATCH_SIZE - 1, Math.floor((y / size) * PATCH_SIZE));
+    return Array.from({ length: size }, (_, x) => {
+      const sourceX = Math.min(PATCH_SIZE - 1, Math.floor((x / size) * PATCH_SIZE));
+      return SYNTHETIC_PATCH[sourceY][sourceX] / 255;
+    });
+  });
+}
+
+const FALLBACK_PATCH_IMAGE = createPatchPreviewImage();
+
+/** 从 Lena 灰度图中提取 9x9 区域作为真实 Patch */
+function extractLenaPatch(lenaImage: GrayscaleImage): number[][] {
+  const h = lenaImage.length;
+  const w = lenaImage[0]?.length ?? 1;
+  const cx = Math.floor(w * 0.58);
+  const cy = Math.floor(h * 0.42);
+  const half = Math.floor(PATCH_SIZE / 2);
+  const x0 = Math.max(0, Math.min(cx - half, w - PATCH_SIZE));
+  const y0 = Math.max(0, Math.min(cy - half, h - PATCH_SIZE));
+  return lenaImage.slice(y0, y0 + PATCH_SIZE).map(row => row.slice(x0, x0 + PATCH_SIZE).map(v => Math.round(v * 255)));
+}
 
 /// 根据采样方式生成随机点对坐标
 function generatePairs(method: SamplingMethod, count: number, seed: number = 42): [number, number, number, number][] {
@@ -245,7 +272,9 @@ export default function BinaryFeatureDescriptorsPage() {
   const [samplingMethod, setSamplingMethod] = useState<SamplingMethod>('GI');
   const [numPairs, setNumPairs] = useState(256);
  const [currentPairIndex, setCurrentPairIndex] = useState(0);
- const [loadedImage, setLoadedImage] = useState<GrayscaleImage | null>(null);
+ const [patchSource, setPatchSource] = useState<PatchSource>("synthetic");
+  const lenaImage = useLenaGrayscaleImage(64);
+  const [loadedImage, setLoadedImage] = useState<GrayscaleImage>(FALLBACK_PATCH_IMAGE);
  /// 异步加载课件中的真实图像作为原图展示
  useEffect(() => {
    let cancelled = false;
@@ -259,6 +288,7 @@ export default function BinaryFeatureDescriptorsPage() {
      .catch(() => {
        if (!cancelled) {
          console.warn('加载参考图像失败');
+         setLoadedImage(FALLBACK_PATCH_IMAGE);
        }
      });
    return () => { cancelled = true; };
@@ -267,6 +297,8 @@ export default function BinaryFeatureDescriptorsPage() {
   const totalPairs = numPairs;
 
   /// 生成点对（使用种子保证重现性）
+  const activePatch = useMemo(() => patchSource === "lenaPatch" && lenaImage ? extractLenaPatch(lenaImage) : SYNTHETIC_PATCH, [patchSource, lenaImage]);
+
   const pairs = useMemo(
     () => generatePairs(samplingMethod, totalPairs, 42),
     [samplingMethod, totalPairs]
@@ -274,7 +306,7 @@ export default function BinaryFeatureDescriptorsPage() {
 
   /// 前 currentPairIndex 对对应的二进制串
   const binaryString = useMemo(
-    () => buildDescriptor(SYNTHETIC_PATCH, pairs, currentPairIndex + 1),
+    () => buildDescriptor(activePatch, pairs, currentPairIndex + 1),
     [pairs, currentPairIndex]
   );
 
@@ -283,7 +315,7 @@ export default function BinaryFeatureDescriptorsPage() {
   const [cx1, cy1, cx2, cy2] = currentPair;
   const v1 = SYNTHETIC_PATCH[cy1]?.[cx1] ?? 0;
   const v2 = SYNTHETIC_PATCH[cy2]?.[cx2] ?? 0;
-  const tauResult = tauTest(SYNTHETIC_PATCH, cx1, cy1, cx2, cy2);
+  const tauResult = tauTest(activePatch, cx1, cy1, cx2, cy2);
 
   /// 汉明距离（对比一个偏移后的描述子）
   const offsetPairs = useMemo(
@@ -291,7 +323,7 @@ export default function BinaryFeatureDescriptorsPage() {
     [samplingMethod, totalPairs]
   );
   const binaryString2 = useMemo(
-    () => buildDescriptor(SYNTHETIC_PATCH, offsetPairs, currentPairIndex + 1),
+    () => buildDescriptor(activePatch, offsetPairs, currentPairIndex + 1),
     [offsetPairs, currentPairIndex]
   );
 
@@ -610,7 +642,7 @@ export default function BinaryFeatureDescriptorsPage() {
             <div className="mb-3 text-xs font-semibold text-red-600">特征点邻域 Patch</div>
             <div className="flex justify-center">
               <ImageCanvas
-                image={SYNTHETIC_PATCH}
+                image={activePatch}
                 maxDisplaySize={160}
                 showGrid
                 highlightPixel={{ x: cx1, y: cy1 }}
@@ -739,6 +771,7 @@ export default function BinaryFeatureDescriptorsPage() {
     />
   );
 }
+
 
 
 
