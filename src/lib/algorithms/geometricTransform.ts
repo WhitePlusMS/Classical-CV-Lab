@@ -4,6 +4,7 @@ import { GrayscaleImage } from './types';
 export type InterpolationMethod = 'nearest' | 'bilinear';
 export type FlipMode = 'none' | 'horizontal' | 'vertical' | 'both';
 export type TransformFamilyKey = 'orthogonal' | 'rigid' | 'similar' | 'affine';
+export type RgbImage = number[][][];
 
 export interface TransformParameters {
   translateX: number;
@@ -258,6 +259,18 @@ function getImageValue(image: GrayscaleImage, x: number, y: number): number {
   return image[y][x];
 }
 
+function getRgbValue(image: RgbImage, x: number, y: number): [number, number, number] {
+  const height = image.length;
+  const width = image[0]?.length ?? 0;
+
+  if (x < 0 || x >= width || y < 0 || y >= height) {
+    return [0, 0, 0];
+  }
+
+  const pixel = image[y][x];
+  return [pixel[0] ?? 0, pixel[1] ?? 0, pixel[2] ?? 0];
+}
+
 function getNearestRegion(point: Point2D, width: number, height: number) {
   const x = clamp(Math.round(point.x), 0, width - 1);
   const y = clamp(Math.round(point.y), 0, height - 1);
@@ -333,6 +346,44 @@ function sampleBilinear(image: GrayscaleImage, sourceImage: Point2D) {
   };
 }
 
+function sampleNearestRgb(image: RgbImage, sourceImage: Point2D): [number, number, number] {
+  return getRgbValue(image, Math.round(sourceImage.x), Math.round(sourceImage.y));
+}
+
+function sampleBilinearRgb(image: RgbImage, sourceImage: Point2D): [number, number, number] {
+  const x0 = Math.floor(sourceImage.x);
+  const y0 = Math.floor(sourceImage.y);
+  const x1 = x0 + 1;
+  const y1 = y0 + 1;
+  const dx = sourceImage.x - x0;
+  const dy = sourceImage.y - y0;
+
+  const neighbors = [
+    { value: getRgbValue(image, x0, y0), weight: (1 - dx) * (1 - dy) },
+    { value: getRgbValue(image, x1, y0), weight: dx * (1 - dy) },
+    { value: getRgbValue(image, x0, y1), weight: (1 - dx) * dy },
+    { value: getRgbValue(image, x1, y1), weight: dx * dy },
+  ];
+
+  return [0, 1, 2].map(channel =>
+    clamp(
+      neighbors.reduce((sum, item) => sum + item.value[channel] * item.weight, 0),
+      0,
+      1
+    )
+  ) as [number, number, number];
+}
+
+function sampleRgb(
+  image: RgbImage,
+  sourceImage: Point2D,
+  interpolation: InterpolationMethod
+): [number, number, number] {
+  return interpolation === 'nearest'
+    ? sampleNearestRgb(image, sourceImage)
+    : sampleBilinearRgb(image, sourceImage);
+}
+
 export function classifyTransformFamily(parameters: TransformParameters): TransformFamilyKey {
   const hasTranslation =
     Math.abs(parameters.translateX) > EPSILON || Math.abs(parameters.translateY) > EPSILON;
@@ -394,31 +445,35 @@ export function createGeometricTransformSampleImage(size: number = 15): Grayscal
 export function createGeometricTransformLandmarks(size: number): TeachingLandmark[] {
   const centerX = (size - 1) / 2;
   const centerY = (size - 1) / 2;
+  const point = (x: number, y: number): Point2D => ({
+    x: clamp(Math.round(x), 0, size - 1),
+    y: clamp(Math.round(y), 0, size - 1),
+  });
 
   return [
     {
       id: 'top-bar',
       label: 'A',
-      description: 'F 形结构上横条的右端点',
-      point: { x: centerX + 1, y: centerY - 3 },
+      description: '上方纹理区域的参考点',
+      point: point(centerX + 1, centerY - 3),
     },
     {
       id: 'mid-bar',
       label: 'B',
-      description: 'F 形结构中横条的右端点',
-      point: { x: centerX, y: centerY },
+      description: '图像中心附近的参考点',
+      point: point(centerX, centerY),
     },
     {
       id: 'bright-dot',
       label: 'C',
-      description: '右下角亮点中心',
-      point: { x: centerX + 3, y: centerY + 3 },
+      description: '右下区域的参考点',
+      point: point(centerX + 3, centerY + 3),
     },
     {
       id: 'bottom-stem',
       label: 'D',
-      description: '竖直主干底端',
-      point: { x: centerX - 4, y: centerY + 4 },
+      description: '下方边缘附近的参考点',
+      point: point(centerX - 4, centerY + 4),
     },
   ];
 }
@@ -493,6 +548,29 @@ export function transformGrayscaleImage(
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       output[y][x] = getGeometricTransformStep(image, inverseMatrix, x, y, interpolation).outputValue;
+    }
+  }
+
+  return output;
+}
+
+export function transformRgbImage(
+  image: RgbImage,
+  inverseMatrix: Matrix3,
+  interpolation: InterpolationMethod
+): RgbImage {
+  const height = image.length;
+  const width = image[0]?.length ?? 0;
+  const output: RgbImage = Array.from({ length: height }, () =>
+    Array.from({ length: width }, () => [0, 0, 0])
+  );
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const destinationCartesian = imageToCartesian({ x, y }, width, height);
+      const sourceCartesian = applyMatrix(destinationCartesian, inverseMatrix);
+      const sourceImage = cartesianToImage(sourceCartesian, width, height);
+      output[y][x] = sampleRgb(image, sourceImage, interpolation);
     }
   }
 

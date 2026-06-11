@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AnchoredOverlay,
   type AnchoredOverlayPath,
@@ -37,7 +37,11 @@ import {
   invertAffineMatrix,
   mapSourcePointToDestination,
   transformGrayscaleImage,
+  transformRgbImage,
+  type RgbImage,
 } from '@/lib/algorithms/geometricTransform';
+import { centerCropRgbImage, loadImageAsRgb, resizeRgbImage } from '@/lib/utils/imageProcessing';
+import { rgbToGrayscaleWeighted } from '@/lib/algorithms/grayscale';
 
 const GEOMETRIC_TRANSFORM_CODE = `function warpAffine(
   image: number[][],
@@ -61,10 +65,9 @@ const GEOMETRIC_TRANSFORM_CODE = `function warpAffine(
   return output;
 }`;
 
-const SAMPLE_SIZE = 15;
-const SOURCE_IMAGE = createGeometricTransformSampleImage(SAMPLE_SIZE);
-const SOURCE_LANDMARKS = createGeometricTransformLandmarks(SAMPLE_SIZE);
-const INITIAL_SOURCE_POINT = SOURCE_LANDMARKS[0].point;
+const SAMPLE_SIZE = 96;
+const FALLBACK_SOURCE_IMAGE = createGeometricTransformSampleImage(SAMPLE_SIZE);
+const INITIAL_SOURCE_POINT = createGeometricTransformLandmarks(SAMPLE_SIZE)[0].point;
 const INITIAL_MATRIX = buildCompositeTransformMatrix(DEFAULT_GEOMETRIC_TRANSFORM_PARAMS);
 const INITIAL_OUTPUT_POINT = clampPointToImage(
   mapSourcePointToDestination(
@@ -171,13 +174,13 @@ const SHEAR_FORMULA_MATHML = buildInlineMathML(`
 
 const FAMILY_ORDER_MATHML = buildInlineMathML(`
   <mrow>
-    <mi>Orthogonal</mi>
+    <mi>正交</mi>
     <mo>&#x2282;</mo>
-    <mi>Rigid</mi>
+    <mi>刚体</mi>
     <mo>&#x2282;</mo>
-    <mi>Similar</mi>
+    <mi>相似</mi>
     <mo>&#x2282;</mo>
-    <mi>Affine</mi>
+    <mi>仿射</mi>
   </mrow>
 `);
 
@@ -400,11 +403,52 @@ export default function GeometricTransformPage() {
   const [interpolation, setInterpolation] = useState<InterpolationMethod>('bilinear');
   const [selectedSourcePoint, setSelectedSourcePoint] = useState<Point2D>(INITIAL_SOURCE_POINT);
   const [currentPosition, setCurrentPosition] = useState<Point2D>(INITIAL_OUTPUT_POINT);
+  const [sourceRgbImage, setSourceRgbImage] = useState<RgbImage | null>(null);
+  const [sourceGrayImage, setSourceGrayImage] = useState(FALLBACK_SOURCE_IMAGE);
 
-  const originalImage = SOURCE_IMAGE;
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const rawImage = await loadImageAsRgb('/assets/lena-original.jpg');
+        if (cancelled) return;
+
+        const lenaRgb = resizeRgbImage(centerCropRgbImage(rawImage), SAMPLE_SIZE);
+        setSourceRgbImage(lenaRgb);
+        setSourceGrayImage(rgbToGrayscaleWeighted(lenaRgb));
+
+        const nextSourcePoint = createGeometricTransformLandmarks(lenaRgb.length)[0].point;
+        const nextWidth = lenaRgb[0]?.length ?? SAMPLE_SIZE;
+        const nextHeight = lenaRgb.length;
+        const nextMatrix = buildCompositeTransformMatrix(DEFAULT_GEOMETRIC_TRANSFORM_PARAMS);
+        setSelectedSourcePoint(nextSourcePoint);
+        setCurrentPosition(
+          clampPointToImage(
+            mapSourcePointToDestination(
+              nextSourcePoint,
+              nextMatrix,
+              nextWidth,
+              nextHeight
+            ).roundedDestinationImage,
+            nextWidth,
+            nextHeight
+          )
+        );
+      } catch {
+        // Lena 资源异常时保留合成图兜底，保证教学流程仍可操作。
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const originalImage = sourceGrayImage;
   const width = originalImage[0]?.length ?? 0;
   const height = originalImage.length;
-  const landmarks = SOURCE_LANDMARKS;
+  const landmarks = useMemo(() => createGeometricTransformLandmarks(height), [height]);
 
   const matrix = useMemo(() => buildCompositeTransformMatrix(transform), [transform]);
   const inverseMatrix = useMemo(() => invertAffineMatrix(matrix), [matrix]);
@@ -424,6 +468,22 @@ export default function GeometricTransformPage() {
 
   const resultImage =
     interpolation === 'nearest' ? nearestResultImage : bilinearResultImage;
+  const nearestResultRgbImage = useMemo(
+    () =>
+      sourceRgbImage
+        ? transformRgbImage(sourceRgbImage, inverseMatrix, 'nearest')
+        : null,
+    [inverseMatrix, sourceRgbImage]
+  );
+  const bilinearResultRgbImage = useMemo(
+    () =>
+      sourceRgbImage
+        ? transformRgbImage(sourceRgbImage, inverseMatrix, 'bilinear')
+        : null,
+    [inverseMatrix, sourceRgbImage]
+  );
+  const resultRgbImage =
+    interpolation === 'nearest' ? nearestResultRgbImage : bilinearResultRgbImage;
 
   const currentStep = useMemo(
     () =>
@@ -1081,7 +1141,9 @@ export default function GeometricTransformPage() {
       operationLabel="几何映射"
       parameterIntro="调整平移、旋转、缩放、翻转和剪切后，重点观察两个问题：一个点如何被矩阵映射到新位置，以及结果图像为什么必须依赖插值。"
       originalImage={originalImage}
+      originalRgbImage={sourceRgbImage}
       resultImage={resultImage}
+      resultRgbImage={resultRgbImage}
       parameters={parameters}
       analysisPreview={analysisPreview}
       stepDetails={stepDetails}
@@ -1090,7 +1152,7 @@ export default function GeometricTransformPage() {
         input: `红框表示当前输出像素在原图中的${currentStep.regionWidth}×${currentStep.regionHeight}采样邻域；点击原图可选教学点`,
         output: `绿框表示当前输出像素；点击结果图可查看该像素的反向映射来源`,
       }}
-      showOriginalGrid
+      showOriginalGrid={false}
       originalRegionMarker="frame"
       currentStep={{
         x: currentPosition.x,
