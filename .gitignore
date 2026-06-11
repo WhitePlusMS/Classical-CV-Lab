@@ -49,3 +49,6 @@ dev-server.err.log
 
 # local course materials
 cv 课程北理工/
+
+# temp artifacts
+/tmp/
