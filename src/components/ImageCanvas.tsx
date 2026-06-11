@@ -36,7 +36,13 @@ export default function ImageCanvas({
   const display = useMemo(() => {
     const effectiveImage = rgbImage || image;
     if (!effectiveImage || effectiveImage.length === 0) {
-      return { width: maxDisplaySize, height: maxDisplaySize, scale: 1 };
+      return {
+        width: maxDisplaySize,
+        height: maxDisplaySize,
+        imageWidth: maxDisplaySize,
+        imageHeight: maxDisplaySize,
+        scale: 1,
+      };
     }
 
     const imgHeight = effectiveImage.length;
@@ -46,11 +52,13 @@ export default function ImageCanvas({
     return {
       width: imgWidth * scale,
       height: imgHeight * scale,
+      imageWidth: imgWidth,
+      imageHeight: imgHeight,
       scale,
     };
   }, [image, rgbImage, maxDisplaySize]);
 
-  const { width, height, scale } = display;
+  const { width, height, imageWidth, imageHeight, scale } = display;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -172,6 +180,8 @@ export default function ImageCanvas({
     >
       <canvas
         ref={canvasRef}
+        width={imageWidth}
+        height={imageHeight}
         style={{
           width,
           height,
