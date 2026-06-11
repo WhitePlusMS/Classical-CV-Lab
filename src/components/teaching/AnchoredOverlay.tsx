@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 
-type OverlayTone = 'red' | 'amber' | 'emerald';
+type OverlayTone = 'red' | 'amber' | 'emerald' | 'sky';
 
 interface OverlayPoint {
   x: number;
@@ -42,6 +42,7 @@ export interface AnchoredOverlayPath {
   tone: OverlayTone;
   from: OverlayAnchor;
   to: OverlayAnchor;
+  dashed?: boolean;
 }
 
 interface ResolvedOverlayPath {
@@ -49,6 +50,7 @@ interface ResolvedOverlayPath {
   tone: OverlayTone;
   from: OverlayPoint;
   to: OverlayPoint;
+  dashed?: boolean;
 }
 
 interface AnchoredOverlayProps {
@@ -97,7 +99,7 @@ export function AnchoredOverlay({ paths }: AnchoredOverlayProps) {
         const from = resolveAnchor(path.from);
         const to = resolveAnchor(path.to);
         if (!from || !to) return [];
-        return [{ id: path.id, tone: path.tone, from, to }];
+        return [{ id: path.id, tone: path.tone, from, to, dashed: path.dashed }];
       });
 
       setResolvedPaths(nextPaths);
@@ -120,6 +122,7 @@ export function AnchoredOverlay({ paths }: AnchoredOverlayProps) {
     red: 'text-red-500',
     amber: 'text-amber-500',
     emerald: 'text-emerald-500',
+    sky: 'text-sky-500',
   };
 
   return (
@@ -142,6 +145,7 @@ export function AnchoredOverlay({ paths }: AnchoredOverlayProps) {
               stroke="currentColor"
               strokeWidth="3"
               strokeLinecap="round"
+              strokeDasharray={path.dashed ? '9 7' : undefined}
             />
             <circle cx={path.from.x} cy={path.from.y} r="5" fill="white" stroke="currentColor" strokeWidth="3" />
             <path
