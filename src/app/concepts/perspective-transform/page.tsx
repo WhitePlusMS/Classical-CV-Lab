@@ -23,7 +23,8 @@ import {
   isValidPerspectiveQuad,
   type PerspectivePoint,
 } from '@/lib/algorithms/perspectiveTransform';
-import { imageRgbToCanvas } from '@/lib/utils/imageProcessing';
+import { centerCropRgbImage, imageRgbToCanvas, loadImageAsRgb, resizeRgbImage } from '@/lib/utils/imageProcessing';
+import type { RgbImage } from '@/lib/algorithms/grayscale';
 
 const HANDLE_OPTIONS = [
   { value: '0', label: 'A 左上角' },
@@ -38,6 +39,8 @@ const HANDLE_COLORS = ['#dc2626', '#2563eb', '#059669', '#ea580c'] as const;
 const SOURCE_VIEW_MAX_SIZE = 300;
 const OUTPUT_VIEW_MAX_SIZE = 188;
 const DRAG_PADDING = 10;
+
+type PerspectiveImageType = 'document' | 'lenaOriginal';
 
 const PERSPECTIVE_CODE = `const dstQuad = [
   [0, 0],
@@ -363,8 +366,34 @@ function DraggablePerspectiveSource({
 }
 
 export default function PerspectiveTransformPage() {
-  const scene = useMemo(() => createPerspectiveTeachingScene(), []);
+  useEffect(() => {
+    let cancelled = false;
+    loadImageAsRgb('/assets/lena-original.jpg')
+      .then(raw => {
+        if (!cancelled) {
+          const cropped = centerCropRgbImage(raw);
+          const h = cropped.length;
+          const w = cropped[0]?.length ?? 1;
+          const scaleX = 168 / w;
+          const scaleY = 120 / h;
+          const scale = Math.min(scaleX, scaleY);
+          const nw = Math.max(1, Math.round(w * scale));
+          const nh = Math.max(1, Math.round(h * scale));
+          const resized = resizeRgbImage(cropped, Math.max(nw, nh));
+          const finalRgb: RgbImage = Array.from({ length: 120 }, (_, y) =>
+            Array.from({ length: 168 }, (_, x) => (resized[y]?.[x] ?? [0, 0, 0]))
+          );
+          setLenaReferenceRgb(finalRgb);
+        }
+      })
+      .catch(() => { if (!cancelled) setLenaReferenceRgb(null); });
+    return () => { cancelled = true; };
+  }, []);
+
   const [selectedHandleIndex, setSelectedHandleIndex] = useState(0);
+  const [imageType, setImageType] = useState<PerspectiveImageType>('document');
+  const [lenaReferenceRgb, setLenaReferenceRgb] = useState<RgbImage | null>(null);
+  const scene = useMemo(() => createPerspectiveTeachingScene(imageType === 'lenaOriginal' && lenaReferenceRgb ? lenaReferenceRgb : undefined), [imageType, lenaReferenceRgb]);
   const [controlPoints, setControlPoints] = useState<PerspectivePoint[]>(() =>
     scene.sourcePoints.map(point => ({ ...point }))
   );

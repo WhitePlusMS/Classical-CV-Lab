@@ -450,10 +450,10 @@ export function clampPerspectivePoint(point: PerspectivePoint, bounds: Perspecti
   };
 }
 
-export function createPerspectiveTeachingScene(): PerspectiveTeachingScene {
+export function createPerspectiveTeachingScene(referenceOverrideRgb?: RgbImage): PerspectiveTeachingScene {
   const destinationSize = { width: 168, height: 120 };
   const sourceSize = { width: 232, height: 176 };
-  const referenceRgb = createTeachingDocument(destinationSize.width, destinationSize.height);
+  const referenceRgb = referenceOverrideRgb ?? createTeachingDocument(destinationSize.width, destinationSize.height);
   const sourcePoints: PerspectivePoint[] = [
     { x: 58, y: 30 },
     { x: 184, y: 24 },
