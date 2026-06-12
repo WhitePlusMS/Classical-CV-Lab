@@ -1096,7 +1096,7 @@ export default function KeypointMatchingPipelinePage() {
           </table>
         </div>
         <p className="mt-2 text-[11px] leading-5 text-slate-500">
-          表格中被高亮的列为当前参数面板选中的方法，方便学生聚焦对比。
+          表格中被高亮的列为当前参数面板选中的方法，方便聚焦对比。
         </p>
       </div>
     </div>

@@ -265,7 +265,7 @@ export default function DistortionCorrectionPage() {
           <div className="border-l-4 border-violet-300 pl-4 text-sm leading-7 text-violet-900">
             <div className="font-semibold">学习检查</div>
             <div className="mt-2">
-              学生应能说明：畸变校正的核心不是“改亮度”，而是“用标定参数把输出像素重新映射回原图中的正确采样位置”。
+              畸变校正的核心不是”改亮度”，而是”用标定参数把输出像素重新映射回原图中的正确采样位置”。
             </div>
           </div>
         </div>

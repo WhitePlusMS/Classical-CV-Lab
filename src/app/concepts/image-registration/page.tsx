@@ -442,7 +442,7 @@ export default function ImageRegistrationPage() {
               叠加强度误差 {formatRegistrationValue(scenario.robustEstimate.meanIntensityError, 3)}。
             </div>
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
-              当误匹配数量增加时，学生应重点观察“矩阵偏差”和“叠加后重影”是否同步恶化。前者说明参数被拉偏，后者说明全图像素已经无法对齐。
+              当误匹配数量增加时，重点观察”矩阵偏差”和”叠加后重影”是否同步恶化。前者说明参数被拉偏，后者说明全图像素已经无法对齐。
             </div>
           </div>
         </TeachingCard>
