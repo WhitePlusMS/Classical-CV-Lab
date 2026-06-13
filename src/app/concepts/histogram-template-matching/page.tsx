@@ -76,11 +76,11 @@ const TEXTBOOK_IMAGES = [
   { src: '/assets/histogram-template-matching/templ-sliding-window.jpg', label: '模板匹配滑动窗口原理' },
   { src: '/assets/histogram-template-matching/templ-concept-1.jpg', label: '模板匹配过程示意' },
   { src: '/assets/histogram-template-matching/templ-concept-2.jpg', label: '子图与模板比较' },
-  { src: '/assets/histogram-template-matching/original-image.jpg', label: '课程实验原图' },
-  { src: '/assets/histogram-template-matching/template-image.jpg', label: '课程模板图像' },
-  { src: '/assets/histogram-template-matching/matching-result.jpg', label: '课程匹配结果' },
-  { src: '/assets/histogram-template-matching/matching-process.jpg', label: '课程匹配过程图' },
-  { src: '/assets/histogram-template-matching/matching-final-result.jpg', label: '课程最终定位图' },
+  { src: '/assets/histogram-template-matching/original-image.jpg', label: '实验原图' },
+  { src: '/assets/histogram-template-matching/template-image.jpg', label: '模板图像' },
+  { src: '/assets/histogram-template-matching/matching-result.jpg', label: '匹配结果' },
+  { src: '/assets/histogram-template-matching/matching-process.jpg', label: '匹配过程图' },
+  { src: '/assets/histogram-template-matching/matching-final-result.jpg', label: '最终定位图' },
 ] as const;
 
 function createFallbackImage(size: number): GrayscaleImage {
