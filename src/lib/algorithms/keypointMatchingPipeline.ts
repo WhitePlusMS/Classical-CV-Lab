@@ -3,6 +3,24 @@ import type { GrayscaleImage } from './types';
 export type FeatureMethod = 'sift' | 'surf' | 'brief' | 'orb' | 'brisk';
 export type DistanceType = 'euclidean' | 'hamming';
 
+export interface MethodDescriptors {
+  sift: number[];
+  surf: number[];
+  brief: number[];
+  orb: number[];
+  brisk: number[];
+}
+
+export interface DetectionEvidence {
+  responseValue: number;
+  responseLabel: string;
+  detectionHint: string;
+}
+
+export interface DetectionKeypointData {
+  evidence: Record<FeatureMethod, DetectionEvidence>;
+}
+
 export interface TeachingKeypoint {
   id: string;
   label: string;
@@ -10,8 +28,8 @@ export interface TeachingKeypoint {
   y: number;
   scale: number;
   orientation: number;
-  floatDescriptor: number[];
-  binaryDescriptor: number[];
+  descriptors: MethodDescriptors;
+  detection: DetectionKeypointData;
 }
 
 export interface CandidateMatch {
@@ -19,6 +37,13 @@ export interface CandidateMatch {
   distance: number;
   rank: number;
   accepted: boolean;
+}
+
+export interface ReferenceMatchSummary {
+  reference: TeachingKeypoint;
+  bestMatch: CandidateMatch;
+  secondBestMatch: CandidateMatch;
+  ratio: number;
 }
 
 export interface KeypointMatchingDemoResult {
@@ -33,6 +58,7 @@ export interface KeypointMatchingDemoResult {
   descriptorLength: number;
   selectedDescriptor: number[];
   candidates: CandidateMatch[];
+  referenceMatches: ReferenceMatchSummary[];
   bestMatch: CandidateMatch;
   secondBestMatch: CandidateMatch;
   ratio: number;
@@ -40,6 +66,7 @@ export interface KeypointMatchingDemoResult {
   acceptedMatches: CandidateMatch[];
   sensitiveKeypointIndex: number;
   statusText: string;
+  selectedDetectionEvidence: DetectionEvidence;
 }
 
 const IMAGE_SIZE = 12;
@@ -83,8 +110,42 @@ const REFERENCE_KEYPOINTS: TeachingKeypoint[] = [
     y: 3,
     scale: 1.6,
     orientation: 38,
-    floatDescriptor: [0.12, 0.26, 0.58, 0.72, 0.44, 0.18, 0.10, 0.08],
-    binaryDescriptor: [1, 1, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0, 0, 1, 0, 1],
+    descriptors: {
+      sift: [0.12, 0.26, 0.58, 0.72, 0.44, 0.18, 0.10, 0.08],
+      surf: [0.10, 0.22, 0.50, 0.62, 0.38, 0.15, 0.09, 0.07],
+      brief: [1, 1, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0, 0, 1, 0, 1],
+      orb: [0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 1],
+      brisk: [1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 1, 0, 1, 0],
+    },
+    detection: {
+      evidence: {
+        sift: {
+          responseValue: 0.87,
+          responseLabel: 'DoG 响应 0.87',
+          detectionHint: '该点在相邻尺度层都保持局部极值，说明角点和纹理结构都比较稳定。',
+        },
+        surf: {
+          responseValue: 0.79,
+          responseLabel: 'Hessian 行列式 0.79',
+          detectionHint: '盒式滤波近似的 Hessian 响应明显，亮暗突变位置集中在该邻域。',
+        },
+        brief: {
+          responseValue: 0,
+          responseLabel: '无独立检测',
+          detectionHint: 'BRIEF 只负责描述，不负责检测，这个关键点来自外部检测器的输入。',
+        },
+        orb: {
+          responseValue: 12,
+          responseLabel: 'FAST 圆周差异 12',
+          detectionHint: '圆周上存在连续像素显著亮于中心，FAST 将其判断为角点。',
+        },
+        brisk: {
+          responseValue: 0.83,
+          responseLabel: 'AGAST 响应 0.83',
+          detectionHint: '多尺度 AGAST 在该尺度下仍然给出高响应，说明位置重复性较好。',
+        },
+      },
+    },
   },
   {
     id: 'r1',
@@ -93,8 +154,42 @@ const REFERENCE_KEYPOINTS: TeachingKeypoint[] = [
     y: 3,
     scale: 1.4,
     orientation: 112,
-    floatDescriptor: [0.10, 0.20, 0.38, 0.86, 0.78, 0.35, 0.18, 0.11],
-    binaryDescriptor: [0, 1, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1],
+    descriptors: {
+      sift: [0.10, 0.20, 0.38, 0.86, 0.78, 0.35, 0.18, 0.11],
+      surf: [0.09, 0.18, 0.32, 0.74, 0.66, 0.30, 0.16, 0.10],
+      brief: [0, 1, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1],
+      orb: [1, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 0, 1],
+      brisk: [0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0],
+    },
+    detection: {
+      evidence: {
+        sift: {
+          responseValue: 0.82,
+          responseLabel: 'DoG 响应 0.82',
+          detectionHint: '该点处于高对比边角交汇处，尺度空间中的极值位置清晰。',
+        },
+        surf: {
+          responseValue: 0.74,
+          responseLabel: 'Hessian 行列式 0.74',
+          detectionHint: '二阶导数近似响应集中，说明局部曲率变化足够大。',
+        },
+        brief: {
+          responseValue: 0,
+          responseLabel: '无独立检测',
+          detectionHint: 'BRIEF 继承外部关键点，这里重点观察的是后续的二进制描述。',
+        },
+        orb: {
+          responseValue: 11,
+          responseLabel: 'FAST 圆周差异 11',
+          detectionHint: 'FAST 在该位置找到连续像素差异，角点强度略低于 A 但仍稳定。',
+        },
+        brisk: {
+          responseValue: 0.78,
+          responseLabel: 'AGAST 响应 0.78',
+          detectionHint: 'AGAST 在局部亮斑边缘给出稳定响应，适合进入 BRISK 描述阶段。',
+        },
+      },
+    },
   },
   {
     id: 'r2',
@@ -103,8 +198,42 @@ const REFERENCE_KEYPOINTS: TeachingKeypoint[] = [
     y: 6,
     scale: 1.8,
     orientation: 64,
-    floatDescriptor: [0.14, 0.22, 0.44, 0.66, 0.82, 0.76, 0.40, 0.20],
-    binaryDescriptor: [1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 0, 1, 0, 1, 0],
+    descriptors: {
+      sift: [0.14, 0.22, 0.44, 0.66, 0.82, 0.76, 0.40, 0.20],
+      surf: [0.12, 0.19, 0.38, 0.58, 0.72, 0.68, 0.35, 0.18],
+      brief: [1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 0, 1, 0, 1, 0],
+      orb: [1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0],
+      brisk: [1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0],
+    },
+    detection: {
+      evidence: {
+        sift: {
+          responseValue: 0.91,
+          responseLabel: 'DoG 响应 0.91',
+          detectionHint: '中心区域在多个尺度下都呈现显著极值，是最稳定的教学示例点之一。',
+        },
+        surf: {
+          responseValue: 0.88,
+          responseLabel: 'Hessian 行列式 0.88',
+          detectionHint: 'Hessian 响应在中心块最强，说明斑点结构非常突出。',
+        },
+        brief: {
+          responseValue: 0,
+          responseLabel: '无独立检测',
+          detectionHint: 'BRIEF 仍需依赖外部关键点，这里借助中心稳定点展示描述子编码效果。',
+        },
+        orb: {
+          responseValue: 14,
+          responseLabel: 'FAST 圆周差异 14',
+          detectionHint: '圆周对比最明显，ORB 会优先把这种高角点分数位置保留下来。',
+        },
+        brisk: {
+          responseValue: 0.89,
+          responseLabel: 'AGAST 响应 0.89',
+          detectionHint: '多尺度 AGAST 在中心区域稳定响应，适合演示 BRISK 的尺度鲁棒性。',
+        },
+      },
+    },
   },
   {
     id: 'r3',
@@ -113,8 +242,42 @@ const REFERENCE_KEYPOINTS: TeachingKeypoint[] = [
     y: 8,
     scale: 1.5,
     orientation: 206,
-    floatDescriptor: [0.16, 0.42, 0.82, 0.76, 0.46, 0.24, 0.18, 0.12],
-    binaryDescriptor: [0, 0, 1, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0],
+    descriptors: {
+      sift: [0.16, 0.42, 0.82, 0.76, 0.46, 0.24, 0.18, 0.12],
+      surf: [0.14, 0.36, 0.70, 0.66, 0.40, 0.20, 0.15, 0.10],
+      brief: [0, 0, 1, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0],
+      orb: [1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0],
+      brisk: [0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 0, 1, 0, 1],
+    },
+    detection: {
+      evidence: {
+        sift: {
+          responseValue: 0.84,
+          responseLabel: 'DoG 响应 0.84',
+          detectionHint: '该点位于斜向纹理与亮斑边界交汇处，尺度空间响应连续。',
+        },
+        surf: {
+          responseValue: 0.76,
+          responseLabel: 'Hessian 行列式 0.76',
+          detectionHint: '局部二阶变化明显，SURF 能较快锁定这一块的显著结构。',
+        },
+        brief: {
+          responseValue: 0,
+          responseLabel: '无独立检测',
+          detectionHint: 'BRIEF 仅描述已有关键点，这里用于观察下方区域的二进制编码区别。',
+        },
+        orb: {
+          responseValue: 10,
+          responseLabel: 'FAST 圆周差异 10',
+          detectionHint: 'FAST 可以检测到角点，但该处对比度略弱，因此分值低于中心点。',
+        },
+        brisk: {
+          responseValue: 0.80,
+          responseLabel: 'AGAST 响应 0.80',
+          detectionHint: 'AGAST 在斜向结构上仍有稳定反应，适合演示多尺度二进制匹配。',
+        },
+      },
+    },
   },
   {
     id: 'r4',
@@ -123,8 +286,42 @@ const REFERENCE_KEYPOINTS: TeachingKeypoint[] = [
     y: 8,
     scale: 1.7,
     orientation: 318,
-    floatDescriptor: [0.12, 0.28, 0.50, 0.74, 0.90, 0.70, 0.36, 0.16],
-    binaryDescriptor: [1, 0, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1],
+    descriptors: {
+      sift: [0.12, 0.28, 0.50, 0.74, 0.90, 0.70, 0.36, 0.16],
+      surf: [0.11, 0.24, 0.44, 0.63, 0.78, 0.60, 0.31, 0.14],
+      brief: [1, 0, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1],
+      orb: [0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1],
+      brisk: [1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1],
+    },
+    detection: {
+      evidence: {
+        sift: {
+          responseValue: 0.89,
+          responseLabel: 'DoG 响应 0.89',
+          detectionHint: '该亮斑边缘在大尺度下仍然清晰，是视角变化后也容易复现的关键点。',
+        },
+        surf: {
+          responseValue: 0.81,
+          responseLabel: 'Hessian 行列式 0.81',
+          detectionHint: 'Hessian 对该块亮暗结构的响应充足，适合作为 SURF 的示例点。',
+        },
+        brief: {
+          responseValue: 0,
+          responseLabel: '无独立检测',
+          detectionHint: 'BRIEF 没有检测器，这个点主要用于对比不同描述子的区分能力。',
+        },
+        orb: {
+          responseValue: 13,
+          responseLabel: 'FAST 圆周差异 13',
+          detectionHint: '圆周连续差异充足，ORB 会把它视为强角点并计算方向。',
+        },
+        brisk: {
+          responseValue: 0.86,
+          responseLabel: 'AGAST 响应 0.86',
+          detectionHint: '多尺度角点响应强，适合作为 BRISK 的稳定匹配案例。',
+        },
+      },
+    },
   },
 ];
 
@@ -136,8 +333,42 @@ const TARGET_KEYPOINTS: TeachingKeypoint[] = [
     y: 3,
     scale: 1.6,
     orientation: 42,
-    floatDescriptor: [0.11, 0.27, 0.56, 0.74, 0.42, 0.20, 0.11, 0.07],
-    binaryDescriptor: [1, 1, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0, 0, 1, 1, 1],
+    descriptors: {
+      sift: [0.11, 0.27, 0.56, 0.74, 0.42, 0.20, 0.11, 0.07],
+      surf: [0.10, 0.23, 0.49, 0.64, 0.37, 0.16, 0.10, 0.06],
+      brief: [1, 1, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0, 0, 1, 1, 1],
+      orb: [0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 0, 1, 0, 1],
+      brisk: [1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 1, 0, 1, 1],
+    },
+    detection: {
+      evidence: {
+        sift: {
+          responseValue: 0.85,
+          responseLabel: 'DoG 响应 0.85',
+          detectionHint: '视角变化后仍保留稳定极值，说明这个点具有较好的重复检测性。',
+        },
+        surf: {
+          responseValue: 0.77,
+          responseLabel: 'Hessian 行列式 0.77',
+          detectionHint: '目标图中亮暗变化稍有偏移，但 Hessian 响应仍然集中。',
+        },
+        brief: {
+          responseValue: 0,
+          responseLabel: '无独立检测',
+          detectionHint: 'BRIEF 继续复用外部检测结果，便于和参考图同一结构对比。',
+        },
+        orb: {
+          responseValue: 12,
+          responseLabel: 'FAST 圆周差异 12',
+          detectionHint: 'FAST 在目标图的对应位置依旧能看到明显角点对比。',
+        },
+        brisk: {
+          responseValue: 0.81,
+          responseLabel: 'AGAST 响应 0.81',
+          detectionHint: 'AGAST 响应略有下降，但仍属于稳定匹配的候选点。',
+        },
+      },
+    },
   },
   {
     id: 't1',
@@ -146,8 +377,42 @@ const TARGET_KEYPOINTS: TeachingKeypoint[] = [
     y: 3,
     scale: 1.4,
     orientation: 116,
-    floatDescriptor: [0.11, 0.18, 0.36, 0.84, 0.80, 0.36, 0.19, 0.10],
-    binaryDescriptor: [0, 1, 1, 1, 1, 0, 0, 1, 0, 1, 1, 1, 1, 0, 0, 1],
+    descriptors: {
+      sift: [0.11, 0.18, 0.36, 0.84, 0.80, 0.36, 0.19, 0.10],
+      surf: [0.10, 0.16, 0.31, 0.73, 0.68, 0.31, 0.17, 0.09],
+      brief: [0, 1, 1, 1, 1, 0, 0, 1, 0, 1, 1, 1, 1, 0, 0, 1],
+      orb: [1, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1],
+      brisk: [0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 0],
+    },
+    detection: {
+      evidence: {
+        sift: {
+          responseValue: 0.81,
+          responseLabel: 'DoG 响应 0.81',
+          detectionHint: '目标图中该边缘拐角仍保持明显极值，适合作为对应点。',
+        },
+        surf: {
+          responseValue: 0.73,
+          responseLabel: 'Hessian 行列式 0.73',
+          detectionHint: 'Hessian 响应略受视角影响，但仍足够区分此处结构。',
+        },
+        brief: {
+          responseValue: 0,
+          responseLabel: '无独立检测',
+          detectionHint: 'BRIEF 只对这个已检测点做二进制比较，不单独判断显著性。',
+        },
+        orb: {
+          responseValue: 11,
+          responseLabel: 'FAST 圆周差异 11',
+          detectionHint: 'FAST 圆周差异与参考点接近，说明角点性质仍然稳定。',
+        },
+        brisk: {
+          responseValue: 0.77,
+          responseLabel: 'AGAST 响应 0.77',
+          detectionHint: 'AGAST 在目标图也能找到类似角点，尺度适配保持稳定。',
+        },
+      },
+    },
   },
   {
     id: 't2',
@@ -156,8 +421,42 @@ const TARGET_KEYPOINTS: TeachingKeypoint[] = [
     y: 6,
     scale: 1.8,
     orientation: 70,
-    floatDescriptor: [0.15, 0.24, 0.43, 0.64, 0.84, 0.74, 0.42, 0.19],
-    binaryDescriptor: [1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 0, 1, 1, 1, 0],
+    descriptors: {
+      sift: [0.15, 0.24, 0.43, 0.64, 0.84, 0.74, 0.42, 0.19],
+      surf: [0.13, 0.21, 0.37, 0.56, 0.74, 0.66, 0.36, 0.17],
+      brief: [1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 0, 1, 1, 1, 0],
+      orb: [1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 0],
+      brisk: [1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1, 1],
+    },
+    detection: {
+      evidence: {
+        sift: {
+          responseValue: 0.90,
+          responseLabel: 'DoG 响应 0.90',
+          detectionHint: '中心稳定结构在目标图中依旧显著，是最可靠的对应点之一。',
+        },
+        surf: {
+          responseValue: 0.86,
+          responseLabel: 'Hessian 行列式 0.86',
+          detectionHint: 'Hessian 在中心斑块上的响应依然最强，SURF 能稳定检测到它。',
+        },
+        brief: {
+          responseValue: 0,
+          responseLabel: '无独立检测',
+          detectionHint: 'BRIEF 在这里重点体现的是描述子对中心纹理的编码稳定性。',
+        },
+        orb: {
+          responseValue: 14,
+          responseLabel: 'FAST 圆周差异 14',
+          detectionHint: '目标图中心仍有明显圆周对比，ORB 会优先保留这个点。',
+        },
+        brisk: {
+          responseValue: 0.88,
+          responseLabel: 'AGAST 响应 0.88',
+          detectionHint: 'AGAST 的多尺度响应和参考图接近，说明匹配潜力最高。',
+        },
+      },
+    },
   },
   {
     id: 't3',
@@ -166,8 +465,42 @@ const TARGET_KEYPOINTS: TeachingKeypoint[] = [
     y: 8,
     scale: 1.5,
     orientation: 211,
-    floatDescriptor: [0.18, 0.40, 0.84, 0.74, 0.48, 0.22, 0.17, 0.13],
-    binaryDescriptor: [0, 0, 1, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0],
+    descriptors: {
+      sift: [0.18, 0.40, 0.84, 0.74, 0.48, 0.22, 0.17, 0.13],
+      surf: [0.15, 0.35, 0.72, 0.64, 0.41, 0.19, 0.14, 0.11],
+      brief: [0, 0, 1, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0],
+      orb: [1, 0, 1, 0, 1, 1, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0],
+      brisk: [0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1],
+    },
+    detection: {
+      evidence: {
+        sift: {
+          responseValue: 0.83,
+          responseLabel: 'DoG 响应 0.83',
+          detectionHint: '目标图下方的斜向结构仍形成局部极值，可与参考图对应起来。',
+        },
+        surf: {
+          responseValue: 0.75,
+          responseLabel: 'Hessian 行列式 0.75',
+          detectionHint: 'Hessian 对该处边缘和亮斑组合依旧敏感，响应较为稳定。',
+        },
+        brief: {
+          responseValue: 0,
+          responseLabel: '无独立检测',
+          detectionHint: 'BRIEF 继续沿用外部检测点，方便展示目标图的局部二进制差异。',
+        },
+        orb: {
+          responseValue: 10,
+          responseLabel: 'FAST 圆周差异 10',
+          detectionHint: 'FAST 能检测到此处角点，但受亮度变化影响，分值略低。',
+        },
+        brisk: {
+          responseValue: 0.79,
+          responseLabel: 'AGAST 响应 0.79',
+          detectionHint: 'AGAST 在这一块仍给出稳定响应，便于保留真实匹配。',
+        },
+      },
+    },
   },
   {
     id: 't4',
@@ -176,8 +509,42 @@ const TARGET_KEYPOINTS: TeachingKeypoint[] = [
     y: 8,
     scale: 1.7,
     orientation: 324,
-    floatDescriptor: [0.11, 0.30, 0.52, 0.72, 0.88, 0.72, 0.35, 0.18],
-    binaryDescriptor: [1, 0, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1],
+    descriptors: {
+      sift: [0.11, 0.30, 0.52, 0.72, 0.88, 0.72, 0.35, 0.18],
+      surf: [0.10, 0.26, 0.45, 0.61, 0.77, 0.62, 0.30, 0.15],
+      brief: [1, 0, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1],
+      orb: [0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 1],
+      brisk: [1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 1, 1],
+    },
+    detection: {
+      evidence: {
+        sift: {
+          responseValue: 0.88,
+          responseLabel: 'DoG 响应 0.88',
+          detectionHint: '大尺度亮斑结构在目标图中仍保持明显极值，适合作为稳定对应点。',
+        },
+        surf: {
+          responseValue: 0.80,
+          responseLabel: 'Hessian 行列式 0.80',
+          detectionHint: 'Hessian 对该处块状结构响应充分，SURF 匹配通常比较稳定。',
+        },
+        brief: {
+          responseValue: 0,
+          responseLabel: '无独立检测',
+          detectionHint: 'BRIEF 在这里主要展示和参考图同类亮斑的二进制相似性。',
+        },
+        orb: {
+          responseValue: 13,
+          responseLabel: 'FAST 圆周差异 13',
+          detectionHint: 'FAST 对目标图右下亮斑边缘依旧给出较高角点分数。',
+        },
+        brisk: {
+          responseValue: 0.85,
+          responseLabel: 'AGAST 响应 0.85',
+          detectionHint: 'AGAST 的尺度响应和参考点相近，通常会通过后续比值检验。',
+        },
+      },
+    },
   },
   {
     id: 't5',
@@ -186,56 +553,60 @@ const TARGET_KEYPOINTS: TeachingKeypoint[] = [
     y: 9,
     scale: 1.2,
     orientation: 18,
-    floatDescriptor: [0.09, 0.25, 0.55, 0.77, 0.48, 0.22, 0.13, 0.06],
-    binaryDescriptor: [1, 1, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 1],
+    descriptors: {
+      sift: [0.09, 0.25, 0.55, 0.77, 0.48, 0.22, 0.13, 0.06],
+      surf: [0.08, 0.21, 0.47, 0.67, 0.40, 0.18, 0.10, 0.05],
+      brief: [1, 1, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 1],
+      orb: [0, 1, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 0, 1, 1, 0],
+      brisk: [1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 1],
+    },
+    detection: {
+      evidence: {
+        sift: {
+          responseValue: 0.62,
+          responseLabel: 'DoG 响应 0.62',
+          detectionHint: '这个点也能形成极值，但稳定性和可区分性都弱于真实对应点。',
+        },
+        surf: {
+          responseValue: 0.58,
+          responseLabel: 'Hessian 行列式 0.58',
+          detectionHint: 'Hessian 响应存在但不够突出，容易成为干扰候选。',
+        },
+        brief: {
+          responseValue: 0,
+          responseLabel: '无独立检测',
+          detectionHint: 'BRIEF 无法单独排除该点，干扰主要依赖匹配阶段的距离与 ratio test 过滤。',
+        },
+        orb: {
+          responseValue: 8,
+          responseLabel: 'FAST 圆周差异 8',
+          detectionHint: 'FAST 勉强检测到角点，但圆周差异较弱，更像容易误匹配的候选。',
+        },
+        brisk: {
+          responseValue: 0.61,
+          responseLabel: 'AGAST 响应 0.61',
+          detectionHint: 'AGAST 响应偏弱，适合作为教学中的干扰点展示。',
+        },
+      },
+    },
   },
 ];
 
-export function getRecommendedDistanceType(method: FeatureMethod): DistanceType {
+export function getMethodDistanceType(method: FeatureMethod): DistanceType {
   return method === 'sift' || method === 'surf' ? 'euclidean' : 'hamming';
 }
 
-function methodFloatDescriptor(keypoint: TeachingKeypoint, method: FeatureMethod): number[] {
-  if (method === 'surf') {
-    return keypoint.floatDescriptor.map((value, index) =>
-      Number((value * (index % 2 === 0 ? 0.86 : 0.74)).toFixed(3))
-    );
-  }
-
-  return keypoint.floatDescriptor;
-}
-
-function methodBinaryDescriptor(keypoint: TeachingKeypoint, method: FeatureMethod): number[] {
-  if (method === 'brisk') {
-    return keypoint.binaryDescriptor.map((value, index) =>
-      index % 5 === 0 ? 1 - value : value
-    );
-  }
-
-  if (method === 'brief') {
-    return keypoint.binaryDescriptor.map((value, index) =>
-      index % 7 === 0 ? 1 - value : value
-    );
-  }
-
-  return keypoint.binaryDescriptor;
-}
-
-function getDescriptor(
-  keypoint: TeachingKeypoint,
-  method: FeatureMethod,
-  distanceType: DistanceType
-): number[] {
-  return distanceType === 'euclidean'
-    ? methodFloatDescriptor(keypoint, method)
-    : methodBinaryDescriptor(keypoint, method);
+function getDescriptor(keypoint: TeachingKeypoint, method: FeatureMethod): number[] {
+  return keypoint.descriptors[method];
 }
 
 function euclideanDistance(a: number[], b: number[]): number {
-  return Math.sqrt(a.reduce((sum, value, index) => {
-    const delta = value - (b[index] ?? 0);
-    return sum + delta * delta;
-  }, 0));
+  return Math.sqrt(
+    a.reduce((sum, value, index) => {
+      const delta = value - (b[index] ?? 0);
+      return sum + delta * delta;
+    }, 0)
+  );
 }
 
 function hammingDistance(a: number[], b: number[]): number {
@@ -262,16 +633,16 @@ function extractPatch(image: GrayscaleImage, cx: number, cy: number): GrayscaleI
 function buildMatchesForKeypoint(
   referenceKeypoint: TeachingKeypoint,
   method: FeatureMethod,
-  distanceType: DistanceType,
   ratioThreshold: number
 ): CandidateMatch[] {
-  const referenceDescriptor = getDescriptor(referenceKeypoint, method, distanceType);
+  const distanceType = getMethodDistanceType(method);
+  const referenceDescriptor = getDescriptor(referenceKeypoint, method);
   const sorted = TARGET_KEYPOINTS
     .map(target => ({
       target,
       distance: descriptorDistance(
         referenceDescriptor,
-        getDescriptor(target, method, distanceType),
+        getDescriptor(target, method),
         distanceType
       ),
     }))
@@ -287,21 +658,12 @@ function buildMatchesForKeypoint(
   }));
 }
 
-function findSensitiveKeypointIndex(
-  method: FeatureMethod,
-  distanceType: DistanceType,
-  ratioThreshold: number
-): number {
+function findSensitiveKeypointIndex(method: FeatureMethod, ratioThreshold: number): number {
   let bestIndex = 0;
   let bestScore = Number.POSITIVE_INFINITY;
 
   for (let index = 0; index < REFERENCE_KEYPOINTS.length; index++) {
-    const matches = buildMatchesForKeypoint(
-      REFERENCE_KEYPOINTS[index],
-      method,
-      distanceType,
-      ratioThreshold
-    );
+    const matches = buildMatchesForKeypoint(REFERENCE_KEYPOINTS[index], method, ratioThreshold);
     const ratio = matches[0].distance / matches[1].distance;
     const inTeachingRange = ratio >= 0.45 && ratio <= 0.95;
     const score = (inTeachingRange ? 0 : 1) + Math.abs(ratio - ratioThreshold);
@@ -317,34 +679,34 @@ function findSensitiveKeypointIndex(
 
 export function computeKeypointMatchingDemo(
   method: FeatureMethod,
-  distanceType: DistanceType,
   selectedKeypointIndex: number,
   ratioThreshold: number
 ): KeypointMatchingDemoResult {
+  const distanceType = getMethodDistanceType(method);
   const safeSelectedIndex = Math.max(
     0,
     Math.min(selectedKeypointIndex, REFERENCE_KEYPOINTS.length - 1)
   );
   const selectedKeypoint = REFERENCE_KEYPOINTS[safeSelectedIndex];
-  const candidates = buildMatchesForKeypoint(
-    selectedKeypoint,
-    method,
-    distanceType,
-    ratioThreshold
-  );
+  const candidates = buildMatchesForKeypoint(selectedKeypoint, method, ratioThreshold);
   const bestMatch = candidates[0];
   const secondBestMatch = candidates[1];
   const ratio = bestMatch.distance / secondBestMatch.distance;
-  const acceptedMatches = REFERENCE_KEYPOINTS
-    .map(referenceKeypoint => buildMatchesForKeypoint(
-      referenceKeypoint,
-      method,
-      distanceType,
-      ratioThreshold
-    )[0])
+  const selectedDescriptor = getDescriptor(selectedKeypoint, method);
+  const referenceMatches = REFERENCE_KEYPOINTS.map(referenceKeypoint => {
+    const matches = buildMatchesForKeypoint(referenceKeypoint, method, ratioThreshold);
+    return {
+      reference: referenceKeypoint,
+      bestMatch: matches[0],
+      secondBestMatch: matches[1],
+      ratio: matches[0].distance / matches[1].distance,
+    };
+  });
+  const acceptedMatches = referenceMatches
+    .map(item => item.bestMatch)
     .filter(match => match.accepted);
-  const selectedDescriptor = getDescriptor(selectedKeypoint, method, distanceType);
-  const sensitiveKeypointIndex = findSensitiveKeypointIndex(method, distanceType, ratioThreshold);
+  const sensitiveKeypointIndex = findSensitiveKeypointIndex(method, ratioThreshold);
+  const selectedDetectionEvidence = selectedKeypoint.detection.evidence[method];
   const statusText = bestMatch.accepted
     ? `ratio ${ratio.toFixed(3)} ≤ ${ratioThreshold.toFixed(2)}，保留该匹配`
     : `ratio ${ratio.toFixed(3)} > ${ratioThreshold.toFixed(2)}，拒绝该匹配`;
@@ -358,11 +720,10 @@ export function computeKeypointMatchingDemo(
     selectedPatch: extractPatch(REFERENCE_IMAGE, selectedKeypoint.x, selectedKeypoint.y),
     targetPatch: extractPatch(TARGET_IMAGE, bestMatch.target.x, bestMatch.target.y),
     descriptorKind: distanceType === 'euclidean' ? 'float' : 'binary',
-    descriptorLength: distanceType === 'euclidean'
-      ? (method === 'surf' ? 64 : 128)
-      : (method === 'brisk' ? 512 : 256),
+    descriptorLength: selectedDescriptor.length,
     selectedDescriptor,
     candidates,
+    referenceMatches,
     bestMatch,
     secondBestMatch,
     ratio,
@@ -370,5 +731,6 @@ export function computeKeypointMatchingDemo(
     acceptedMatches,
     sensitiveKeypointIndex,
     statusText,
+    selectedDetectionEvidence,
   };
 }
