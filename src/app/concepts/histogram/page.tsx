@@ -79,16 +79,39 @@ function HistogramSVG({
     return Math.max(0, Math.min(255, gray));
   };
 
+  const handleKeyDown = (event: React.KeyboardEvent<SVGSVGElement>) => {
+    const currentGray = activeGray ?? 128;
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      onPinGray(Math.max(0, currentGray - 1));
+      onHoverGrayChange(null);
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      onPinGray(Math.min(255, currentGray + 1));
+      onHoverGrayChange(null);
+    } else if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onPinGray(currentGray);
+      onHoverGrayChange(null);
+    }
+  };
+
   return (
     <svg
       width={svgWidth}
       height={svgHeight}
       viewBox={`0 0 ${svgWidth} ${svgHeight}`}
       className="font-mono"
+      role="img"
+      tabIndex={0}
+      aria-label="灰度直方图，左右方向键移动锁定灰度，回车或空格锁定当前灰度"
       onMouseMove={event => onHoverGrayChange(readGrayFromMouse(event))}
       onMouseLeave={() => onHoverGrayChange(null)}
       onClick={event => onPinGray(readGrayFromMouse(event))}
+      onKeyDown={handleKeyDown}
     >
+      <title>灰度直方图</title>
+      <desc>显示 0 到 255 灰度级的像素数量分布，可用鼠标或键盘锁定灰度级。</desc>
       <rect x={0} y={0} width={svgWidth} height={svgHeight} fill="#f8fafc" rx={4} />
 
       <text x={14} y={14} textAnchor="end" fontSize={8} fill="#64748b">

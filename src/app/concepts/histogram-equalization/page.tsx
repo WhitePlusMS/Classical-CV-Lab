@@ -104,12 +104,33 @@ function HistogramBarChart({
     return Math.max(0, Math.min(255, gray));
   };
 
+  const handleKeyDown = (event: React.KeyboardEvent<SVGSVGElement>) => {
+    if (!onPinGray) return;
+    const currentGray = activeGray ?? 128;
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      onPinGray(Math.max(0, currentGray - 1));
+      onHoverGrayChange?.(null);
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      onPinGray(Math.min(255, currentGray + 1));
+      onHoverGrayChange?.(null);
+    } else if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onPinGray(currentGray);
+      onHoverGrayChange?.(null);
+    }
+  };
+
   return (
     <svg
       width={svgWidth}
       height={svgHeight}
       viewBox={`0 0 ${svgWidth} ${svgHeight}`}
       className="font-mono"
+      role="img"
+      tabIndex={isInteractive ? 0 : undefined}
+      aria-label={isInteractive ? '直方图，左右方向键移动锁定灰度，回车或空格锁定当前灰度' : '直方图'}
       onMouseMove={onHoverGrayChange ? (event) => {
         const g = readGrayFromMouse(event);
         if (g !== null) onHoverGrayChange(g);
@@ -119,8 +140,11 @@ function HistogramBarChart({
         const g = readGrayFromMouse(event);
         if (g !== null) onPinGray(g);
       } : undefined}
+      onKeyDown={isInteractive ? handleKeyDown : undefined}
       style={isInteractive ? { cursor: 'crosshair' } : undefined}
     >
+      <title>直方图</title>
+      <desc>显示 0 到 255 灰度级的像素数量分布。</desc>
       <rect x={0} y={0} width={svgWidth} height={svgHeight} fill="#f8fafc" rx={4} />
 
       {bins.map((count, gray) => {
