@@ -352,6 +352,12 @@ function computeSiftDescriptor(
       grid.push(hist);
     }
   }
+  // 最终 L2 归一化：标准 SIFT 对 128 维向量整体归一化
+  const norm = Math.sqrt(descriptor.reduce((s, v) => s + v * v, 0));
+  if (norm > 0) {
+    for (let i = 0; i < descriptor.length; i++) descriptor[i] /= norm;
+    for (let r = 0; r < 16; r++) for (let c = 0; c < 8; c++) grid[r][c] /= norm;
+  }
   return { descriptor, grid };
 }
 
