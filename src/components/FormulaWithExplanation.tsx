@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 
 interface FormulaWithExplanationProps {
   formula: string;
@@ -12,17 +12,21 @@ export default function FormulaWithExplanation({
   detailedExplanation,
 }: FormulaWithExplanationProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const detailId = useId();
 
   return (
     <div className="bg-blue-50 border border-blue-200 rounded-lg overflow-hidden">
-      <div 
-        className="flex items-start justify-between gap-3 px-3 py-2 cursor-pointer hover:bg-blue-100/50 transition-colors"
+      <button
+        type="button"
+        className="flex w-full items-start justify-between gap-3 px-3 py-2 text-left hover:bg-blue-100/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
         onClick={() => setIsExpanded(!isExpanded)}
+        aria-expanded={isExpanded}
+        aria-controls={detailId}
       >
         <code className="flex-1 min-w-0 text-sm text-blue-800 font-mono leading-relaxed whitespace-normal break-all">
           {formula}
         </code>
-        <button className="text-blue-600 hover:text-blue-800 shrink-0">
+        <span className="text-blue-600 shrink-0" aria-hidden="true">
           <svg 
             className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
             viewBox="0 0 24 24" 
@@ -32,11 +36,11 @@ export default function FormulaWithExplanation({
           >
             <path d="M19 9l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-        </button>
-      </div>
+        </span>
+      </button>
       
       {isExpanded && (
-        <div className="px-3 py-3 border-t border-blue-200 bg-white/50">
+        <div id={detailId} className="px-3 py-3 border-t border-blue-200 bg-white/50">
           <div className="text-xs text-slate-600 space-y-1">
             {detailedExplanation}
           </div>

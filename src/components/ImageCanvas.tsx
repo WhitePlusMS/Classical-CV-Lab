@@ -99,6 +99,41 @@ export default function ImageCanvas({
     [image, interactive, onRegionSelect]
   );
 
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (!interactive || !onRegionSelect || !image || image.length === 0) return;
+
+      const imageWidth = image[0]?.length || 0;
+      const imageHeight = image.length;
+      const currentX = selectedRegion?.x ?? highlightPixel?.x ?? Math.floor(imageWidth / 2);
+      const currentY = selectedRegion?.y ?? highlightPixel?.y ?? Math.floor(imageHeight / 2);
+      let nextX = currentX;
+      let nextY = currentY;
+
+      if (e.key === 'ArrowLeft') nextX -= 1;
+      else if (e.key === 'ArrowRight') nextX += 1;
+      else if (e.key === 'ArrowUp') nextY -= 1;
+      else if (e.key === 'ArrowDown') nextY += 1;
+      else if (e.key === 'Enter' || e.key === ' ') {
+        onRegionSelect(
+          Math.max(0, Math.min(currentX, imageWidth - 1)),
+          Math.max(0, Math.min(currentY, imageHeight - 1))
+        );
+        e.preventDefault();
+        return;
+      } else {
+        return;
+      }
+
+      e.preventDefault();
+      onRegionSelect(
+        Math.max(0, Math.min(nextX, imageWidth - 1)),
+        Math.max(0, Math.min(nextY, imageHeight - 1))
+      );
+    },
+    [highlightPixel, image, interactive, onRegionSelect, selectedRegion]
+  );
+
   const selectedRegionStyle = useMemo(() => {
     if (!selectedRegion) return null;
 
@@ -175,7 +210,11 @@ export default function ImageCanvas({
     <div
       ref={containerRef}
       onClick={handleClick}
-      className={`relative overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm ${interactive ? 'cursor-crosshair' : ''} ${containerClassName}`.trim()}
+      onKeyDown={handleKeyDown}
+      role={interactive ? 'button' : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      aria-label={interactive ? '选择图像中的像素位置，方向键可微调' : undefined}
+      className={`relative overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm ${interactive ? 'cursor-crosshair focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-2' : ''} ${containerClassName}`.trim()}
       style={{ width, height }}
     >
       <canvas

@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useId } from 'react';
 
 interface ParameterPanelProps {
   children: React.ReactNode;
@@ -29,16 +29,19 @@ export function SliderParam({
   step = 1,
   unit = '',
 }: SliderParamProps) {
+  const inputId = useId();
+
   return (
     <div className="w-full min-w-0 space-y-2">
       <div className="flex items-center justify-between gap-3">
-        <span className="min-w-0 break-words text-sm font-medium text-slate-700">{label}</span>
+        <label htmlFor={inputId} className="min-w-0 break-words text-sm font-medium text-slate-700">{label}</label>
         <span className="shrink-0 text-sm font-mono text-slate-600 tabular-nums">
           {value}
           {unit}
         </span>
       </div>
       <input
+        id={inputId}
         type="range"
         min={min}
         max={max}
@@ -59,11 +62,14 @@ interface SelectParamProps {
 }
 
 export function SelectParam({ label, value, onChange, options }: SelectParamProps) {
+  const selectId = useId();
+
   return (
     <div className="w-full min-w-0 max-w-full space-y-1.5">
-      <span className="block break-words text-sm font-medium text-slate-700">{label}</span>
+      <label htmlFor={selectId} className="block break-words text-sm font-medium text-slate-700">{label}</label>
       <div className="relative min-w-0 max-w-full">
         <select
+          id={selectId}
           value={value}
           onChange={e => onChange(e.target.value)}
           className="w-full min-w-0 max-w-full cursor-pointer appearance-none truncate rounded-lg border border-slate-200 bg-white px-3 py-2 pr-9 text-sm text-slate-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
@@ -90,6 +96,8 @@ interface KernelEditorProps {
 }
 
 export function KernelEditor({ label, kernel, onChange, size }: KernelEditorProps) {
+  const groupId = useId();
+
   const handleChange = (y: number, x: number, value: string) => {
     const numValue = parseFloat(value) || 0;
     const newKernel = kernel.map(row => [...row]);
@@ -99,8 +107,10 @@ export function KernelEditor({ label, kernel, onChange, size }: KernelEditorProp
 
   return (
     <div className="w-full min-w-0 max-w-full space-y-3 overflow-x-hidden">
-      {label && <span className="block break-words text-sm font-medium text-slate-700">{label}</span>}
+      {label && <div id={groupId} className="block break-words text-sm font-medium text-slate-700">{label}</div>}
       <div
+        role="group"
+        aria-labelledby={label ? groupId : undefined}
         className="grid w-full min-w-0 max-w-full gap-1 rounded-xl border border-slate-100 bg-slate-50 p-2"
         style={{ gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))` }}
       >
@@ -112,6 +122,7 @@ export function KernelEditor({ label, kernel, onChange, size }: KernelEditorProp
               step="0.1"
               value={value}
               onChange={e => handleChange(y, x, e.target.value)}
+              aria-label={`${label || '卷积核'}第 ${y + 1} 行第 ${x + 1} 列`}
               className="h-10 w-full min-w-0 rounded-lg border border-slate-200 bg-white text-center font-mono text-xs transition-all focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             />
           ))

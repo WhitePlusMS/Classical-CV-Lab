@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 export interface ConceptIntroImage {
   src: string;
@@ -410,6 +410,8 @@ export function ConceptIntro({
   image,
 }: ConceptIntroProps) {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const previewTriggerRef = useRef<HTMLButtonElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
   const items = [
     { label: '任务', text: problem, tone: 'border-sky-200 bg-sky-50/70 text-sky-800' },
     { label: '思路', text: idea, tone: 'border-amber-200 bg-amber-50/70 text-amber-800' },
@@ -418,6 +420,7 @@ export function ConceptIntro({
 
   useEffect(() => {
     if (!isPreviewOpen) return;
+    closeButtonRef.current?.focus();
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -426,7 +429,10 @@ export function ConceptIntro({
     };
 
     document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      previewTriggerRef.current?.focus();
+    };
   }, [isPreviewOpen]);
 
   return (
@@ -442,16 +448,19 @@ export function ConceptIntro({
         {image && (
         <figure className="min-w-0 xl:max-w-[22rem]">
           <button
+            ref={previewTriggerRef}
             type="button"
             className="block w-full cursor-zoom-in rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2"
-            onDoubleClick={() => setIsPreviewOpen(true)}
-            aria-label={`双击放大查看：${image.alt}`}
+            onClick={() => setIsPreviewOpen(true)}
+            aria-label={`放大查看：${image.alt}`}
           >
             <img
               src={image.src}
               alt={image.alt}
               className="aspect-[16/9] w-full rounded-xl border border-slate-200 bg-slate-50 object-contain"
               loading="lazy"
+              width={640}
+              height={360}
             />
           </button>
           <figcaption className="mt-2 text-xs leading-5 text-slate-500">
@@ -496,6 +505,7 @@ export function ConceptIntro({
             onClick={event => event.stopPropagation()}
           >
             <button
+              ref={closeButtonRef}
               type="button"
               className="absolute right-2 top-2 rounded-full border border-white/30 bg-slate-950/75 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
               onClick={() => setIsPreviewOpen(false)}
@@ -507,6 +517,8 @@ export function ConceptIntro({
               src={image.src}
               alt={image.alt}
               className="max-h-[82vh] max-w-full rounded-lg bg-white object-contain shadow-2xl"
+              width={1280}
+              height={720}
             />
             <div className="max-w-4xl rounded-lg bg-slate-950/70 px-3 py-2 text-center text-xs leading-5 text-slate-100">
               {image.caption}
