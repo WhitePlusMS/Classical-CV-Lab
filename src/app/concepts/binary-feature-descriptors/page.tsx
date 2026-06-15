@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CodeViewer,
   ConceptLayout,
@@ -23,6 +23,75 @@ import { loadImageAsGrayscale, resizeGrayscaleImage } from '@/lib/utils/imagePro
 type AlgorithmMode = 'brief' | 'orb' | 'brisk';
 type SamplingMethod = 'GI' | 'GII' | 'GIII' | 'GIV' | 'GV';
 type PatchSource = 'synthetic' | 'image';
+
+type TaskStage = 'intro' | 'brief' | 'orb' | 'brisk' | 'compare';
+
+interface StageItem {
+  key: TaskStage;
+  label: string;
+  summary: string;
+}
+
+const TASK_STAGES: StageItem[] = [
+  { key: 'intro', label: '任务概览', summary: '二进制描述子解决什么问题' },
+  { key: 'brief', label: 'BRIEF', summary: '点对比较与 τ 测试' },
+  { key: 'orb', label: 'ORB', summary: '灰度质心 + 旋转 BRIEF' },
+  { key: 'brisk', label: 'BRISK', summary: '长点对定方向 + 短点对编码' },
+  { key: 'compare', label: '三方对比', summary: 'BRIEF / ORB / BRISK 怎么选' },
+];
+
+function getStageIndex(stage: TaskStage): number {
+  return TASK_STAGES.findIndex(item => item.key === stage);
+}
+
+function StageStepper({
+  activeStage,
+  onStageChange,
+}: {
+  activeStage: TaskStage;
+  onStageChange: (stage: TaskStage) => void;
+}) {
+  const activeIndex = getStageIndex(activeStage);
+
+  return (
+    <div className="space-y-2">
+      {TASK_STAGES.map((stage, index) => {
+        const active = stage.key === activeStage;
+        const completed = index < activeIndex;
+
+        return (
+          <button
+            key={stage.key}
+            type="button"
+            onClick={() => onStageChange(stage.key)}
+            className={`w-full rounded-xl border px-3 py-2 text-left transition ${
+              active
+                ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                : completed
+                  ? 'border-slate-200 bg-white text-slate-700'
+                  : 'border-slate-200 bg-slate-50 text-slate-500'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
+                active
+                  ? 'bg-emerald-600 text-white'
+                  : completed
+                    ? 'bg-slate-700 text-white'
+                    : 'bg-white text-slate-500'
+              }`}>
+                {index + 1}
+              </span>
+              <span className="text-sm font-semibold">{stage.label}</span>
+            </div>
+            <div className="mt-1 pl-8 text-xs leading-5">{stage.summary}</div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 type Pair = [number, number, number, number];
 type Point = { x: number; y: number };
 
@@ -394,6 +463,32 @@ export default function BinaryFeatureDescriptorsPage() {
   const [patchCenter, setPatchCenter] = useState<Point>(DEFAULT_CENTER);
   const [loadedImage, setLoadedImage] = useState<GrayscaleImage>(FALLBACK_PATCH_IMAGE);
 
+  const [taskStage, setTaskStage] = useState<TaskStage>('intro');
+
+  const stageIndex = getStageIndex(taskStage);
+
+  const goStage = useCallback((stage: TaskStage) => {
+    setTaskStage(stage);
+    setCurrentPairIndex(0);
+    // 将算法阶段同步到 algorithm 状态，StageStepper 取代旧算法下拉框
+    if (stage === 'brief' || stage === 'orb' || stage === 'brisk') {
+      setAlgorithm(stage);
+    }
+    if (stage === 'brisk') {
+      setNumPairs(512);
+    }
+  }, []);
+
+  const goPrevious = useCallback(() => {
+    const nextIndex = Math.max(0, stageIndex - 1);
+    goStage(TASK_STAGES[nextIndex].key);
+  }, [goStage, stageIndex]);
+
+  const goNext = useCallback(() => {
+    const nextIndex = Math.min(TASK_STAGES.length - 1, stageIndex + 1);
+    goStage(TASK_STAGES[nextIndex].key);
+  }, [goStage, stageIndex]);
+
   useEffect(() => {
     let cancelled = false;
     loadImageAsGrayscale('/assets/binary-feature-descriptors/0611a984f7a384894e8779c0c84166142a64673d53ccbdac68d1da6bba77e06d.jpg')
@@ -420,22 +515,31 @@ export default function BinaryFeatureDescriptorsPage() {
   const briskLongPairs = useMemo(() => generateBriskPairs(16, 'long'), []);
   const briskDirection = useMemo(() => calculateBriskDirection(activePatch, briskLongPairs), [activePatch, briskLongPairs]);
 
+  // 对比阶段由侧边栏按钮控制 algorithm，其他阶段由 stage 自身决定算法
+  const effectiveAlgorithm: AlgorithmMode = taskStage === 'compare'
+    ? algorithm
+    : taskStage === 'orb'
+      ? 'orb'
+      : taskStage === 'brisk'
+        ? 'brisk'
+        : 'brief';
+
   const basePairs = useMemo(() => {
-    if (algorithm === 'brisk') return generateBriskPairs(numPairs, 'short');
-    return generatePairs(algorithm === 'orb' ? 'GII' : samplingMethod, numPairs, 42);
-  }, [algorithm, numPairs, samplingMethod]);
+    if (effectiveAlgorithm === 'brisk') return generateBriskPairs(numPairs, 'short');
+    return generatePairs(effectiveAlgorithm === 'orb' ? 'GII' : samplingMethod, numPairs, 42);
+  }, [effectiveAlgorithm, numPairs, samplingMethod]);
 
   const pairs = useMemo(() => {
-    if (algorithm === 'orb') return rotatePairs(basePairs, centroid.theta);
-    if (algorithm === 'brisk') return rotatePairs(basePairs, briskDirection.theta);
+    if (effectiveAlgorithm === 'orb') return rotatePairs(basePairs, centroid.theta);
+    if (effectiveAlgorithm === 'brisk') return rotatePairs(basePairs, briskDirection.theta);
     return basePairs;
-  }, [algorithm, basePairs, briskDirection.theta, centroid.theta]);
+  }, [effectiveAlgorithm, basePairs, briskDirection.theta, centroid.theta]);
 
   const comparePairs = useMemo(() => {
-    if (algorithm === 'brisk') return rotatePairs(generateBriskPairs(numPairs, 'short'), briskDirection.theta + 0.22);
-    if (algorithm === 'orb') return rotatePairs(generatePairs('GII', numPairs, 137), centroid.theta + 0.18);
+    if (effectiveAlgorithm === 'brisk') return rotatePairs(generateBriskPairs(numPairs, 'short'), briskDirection.theta + 0.22);
+    if (effectiveAlgorithm === 'orb') return rotatePairs(generatePairs('GII', numPairs, 137), centroid.theta + 0.18);
     return generatePairs(samplingMethod, numPairs, 137);
-  }, [algorithm, briskDirection.theta, centroid.theta, numPairs, samplingMethod]);
+  }, [effectiveAlgorithm, briskDirection.theta, centroid.theta, numPairs, samplingMethod]);
 
   const binaryString = useMemo(
     () => buildDescriptor(activePatch, pairs, currentPairIndex + 1),
@@ -502,183 +606,182 @@ export default function BinaryFeatureDescriptorsPage() {
 
   const stepDetails = (
     <div className="space-y-6">
-      <TeachingCard>
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">从像素块到二进制描述子</h2>
-        <p className="text-xs leading-6 text-slate-600">
-          局部特征匹配不直接保存整块原始像素，而是把关键点附近的
-          <TeachingTerm term="Patch" explanation="围绕关键点截取的小图像块，描述子只编码这个局部区域的结构。" className="mx-1" />
-          转成更稳定、更容易比较的
-          <TeachingTerm term="描述子" explanation="描述子是局部图像结构的编码。二进制描述子使用 0/1 串，适合用位运算快速匹配。" className="mx-1" />
-          。BRIEF、ORB、BRISK 都利用像素点对的亮暗关系生成 bit；这样同一局部结构在距离、旋转或亮度略有变化时，仍然有机会被识别为相同目标的一部分。
-        </p>
-      </TeachingCard>
-
-      <TeachingCard>
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">当前算法：{algorithmLabel}</h2>
-        <div className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
-            <div className="text-xs font-semibold text-slate-700">检测位置</div>
-            <p className="mt-2 text-xs leading-5 text-slate-600">
-              {algorithm === 'brief'
-                ? 'BRIEF 通常接收外部关键点，只负责把当前 Patch 编码成二进制串。'
-                : algorithm === 'orb'
-                  ? 'ORB 用 FAST 快速找角点，再用 Harris 响应保留更可靠的候选点。'
-                  : 'BRISK 在尺度空间中找稳定关键点，让远近变化后的同一结构更容易被再次定位。'}
-            </p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
-            <div className="text-xs font-semibold text-slate-700">方向与尺度</div>
-            <p className="mt-2 text-xs leading-5 text-slate-600">
-              {algorithm === 'brief'
-                ? '原始 BRIEF 不估计方向和尺度，所以目标旋转或变大变小时会更敏感。'
-                : algorithm === 'orb'
-                  ? 'ORB 用灰度质心估计主方向，再旋转 BRIEF 点对，减少旋转带来的 bit 翻转。'
-                  : 'BRISK 先用长距离点对估计整体方向，再用短距离点对描述局部细节。'}
-            </p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
-            <div className="text-xs font-semibold text-slate-700">匹配方式</div>
-            <p className="mt-2 text-xs leading-5 text-slate-600">
-              最终比较的是二进制描述子，不是逐像素相减。汉明距离只统计不同 bit 的数量，能快速判断两个局部结构是否相似。
-            </p>
-          </div>
-        </div>
-      </TeachingCard>
-
-      <TeachingCard>
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">（1）点对比较与 τ 测试</h2>
-        <div className="grid gap-4 lg:grid-cols-[auto_1fr]">
-          <PatchPairView
-            patch={activePatch}
-            pair={currentPair}
-            longPairs={algorithm === 'brisk' ? briskLongPairs : []}
-            theta={algorithm === 'orb' ? centroid.theta : algorithm === 'brisk' ? briskDirection.theta : undefined}
-          />
-          <div className="space-y-3">
+      {taskStage === 'intro' && (
+        <>
+          <TeachingCard>
+            <h2 className="mb-3 text-sm font-semibold text-slate-800">从像素块到二进制描述子</h2>
             <p className="text-xs leading-6 text-slate-600">
-              当前第 {currentPairIndex + 1} 对采样点为 x=({cx1},{cy1})、y=({cx2},{cy2})。
-              比较两个位置的灰度值即可得到一个
-              <TeachingTerm term="bit" explanation="一次点对比较只输出 0 或 1；很多 bit 顺序排列后就是描述子。" className="mx-1" />
-              。
+              局部特征匹配不直接保存整块原始像素，而是把关键点附近的
+              <TeachingTerm term="Patch" explanation="围绕关键点截取的小图像块，描述子只编码这个局部区域的结构。" className="mx-1" />
+              转成更稳定、更容易比较的
+              <TeachingTerm term="描述子" explanation="描述子是局部图像结构的编码。二进制描述子使用 0/1 串，适合用位运算快速匹配。" className="mx-1" />
+              。BRIEF、ORB、BRISK 都利用像素点对的亮暗关系生成 bit；这样同一局部结构在距离、旋转或亮度略有变化时，仍然有机会被识别为相同目标的一部分。
             </p>
-            <FormulaCard
-              label="τ 测试"
-              mathML={TAU_FORMULA}
-              tone="embedded"
-              note={`当前 p(x)=${v1}，p(y)=${v2}，因此 τ=${tauResult}。`}
-            />
-          </div>
-        </div>
-      </TeachingCard>
+          </TeachingCard>
+          <TeachingCard>
+            <h2 className="mb-3 text-sm font-semibold text-slate-800">三种算法概览</h2>
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                <div className="text-xs font-semibold text-slate-700">BRIEF</div>
+                <p className="mt-2 text-xs leading-5 text-slate-600">最基础的二进制描述子。直接比较 Patch 内随机点对的灰度大小生成 0/1 串，极快但不具备旋转和尺度不变性。</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                <div className="text-xs font-semibold text-slate-700">ORB</div>
+                <p className="mt-2 text-xs leading-5 text-slate-600">在 BRIEF 基础上加入灰度质心方向估计，将点对按主方向旋转后再比较，大幅改善旋转适应性。</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                <div className="text-xs font-semibold text-slate-700">BRISK</div>
+                <p className="mt-2 text-xs leading-5 text-slate-600">使用长短点对分工：长点对估计整体方向，短点对编码局部细节。在尺度空间中寻找稳定关键点。</p>
+              </div>
+            </div>
+          </TeachingCard>
+        </>
+      )}
 
-      <TeachingCard>
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">（2）描述子编码与汉明距离</h2>
-        <p className="mb-3 text-xs leading-6 text-slate-600">
-          当前页面把前 {currentPairIndex + 1} 次点对比较串成二进制描述子。输出图中深色表示 bit=1，浅色表示 bit=0，中灰色表示两条描述子在该位不同，当前位用更深色标出。
-        </p>
-        <div className="grid gap-3 lg:grid-cols-2">
-          <FormulaCard
-            label="BRIEF 描述子"
-            mathML={BRIEF_DESCRIPTOR_FORMULA}
-            tone="embedded"
-            note={`当前描述子前 ${Math.min(binaryString.length, 24)} 位：${binaryString.slice(0, 24)}${binaryString.length > 24 ? '...' : ''}`}
-          />
-          <FormulaCard
-            label="汉明距离"
-            mathML={HAMMING_FORMULA}
-            tone="embedded"
-            note={`当前两条描述子已比较 ${binaryString.length} 位，差异 bit 数为 ${hammingDist}。`}
-          />
-        </div>
-        <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50">
-          <table className="w-full text-left text-[11px] tabular-nums">
-            <thead>
-              <tr className="bg-slate-100">
-                <th className="px-2 py-1.5 font-semibold text-slate-600">i</th>
-                <th className="px-2 py-1.5 font-semibold text-slate-600">τ</th>
-                <th className="px-2 py-1.5 font-semibold text-slate-600">权重</th>
-                <th className="px-2 py-1.5 font-semibold text-slate-600">贡献</th>
-                <th className="px-2 py-1.5 font-semibold text-slate-600">累计</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
-              {chainSubstitution.map(row => (
-                <tr key={row.i}>
-                  <td className="px-2 py-1.5 font-mono text-slate-800">{row.i}</td>
-                  <td className="px-2 py-1.5 font-mono text-slate-700">{row.tau}</td>
-                  <td className="px-2 py-1.5 font-mono text-slate-700">{row.weight}</td>
-                  <td className="px-2 py-1.5 font-mono text-slate-700">{row.contrib}</td>
-                  <td className="px-2 py-1.5 font-mono font-semibold text-blue-700">{row.sum}</td>
+      {(taskStage === 'brief' || taskStage === 'orb' || taskStage === 'brisk') && (
+        <>
+          {taskStage === 'orb' && (
+            <TeachingCard>
+              <h2 className="mb-3 text-sm font-semibold text-slate-800">ORB：方向让 BRIEF 更稳定</h2>
+              <p className="mb-3 text-xs leading-6 text-slate-600">
+                ORB 不是另起炉灶，而是把 FAST 角点、Harris 筛选和旋转 BRIEF 串起来。当前 Patch 中亮暗分布的重心给出方向
+                <InlineMath mathML={inlineMath('<mi>θ</mi>')} className="mx-1" />
+                ，点对按这个方向旋转后再比较；这样图像发生旋转时，描述子的采样关系仍尽量对齐同一局部结构。
+              </p>
+              <FormulaCard
+                label="Intensity Centroid 方向"
+                mathML={ORB_CENTROID_FORMULA}
+                tone="embedded"
+                note={`当前 m10=${centroid.m10}，m01=${centroid.m01}，θ≈${centroid.degrees}°。`}
+              />
+            </TeachingCard>
+          )}
+
+          {taskStage === 'brisk' && (
+            <TeachingCard>
+              <h2 className="mb-3 text-sm font-semibold text-slate-800">BRISK：长点对定方向，短点对做编码</h2>
+              <p className="mb-3 text-xs leading-6 text-slate-600">
+                BRISK 的教学模型把采样点对分成两类：距离较远的点对更能反映局部结构的整体朝向，距离较近的点对更适合记录细节。它还会在尺度空间中寻找稳定位置，避免只在原图上找到的角点在目标变远或变近后消失。
+              </p>
+              <FormulaCard
+                label="BRISK 主方向"
+                mathML={BRISK_DIRECTION_FORMULA}
+                tone="embedded"
+                note={`当前长点对累计 gx=${briskDirection.gx}，gy=${briskDirection.gy}，θ≈${briskDirection.degrees}°。`}
+              />
+            </TeachingCard>
+          )}
+
+          <TeachingCard>
+            <h2 className="mb-3 text-sm font-semibold text-slate-800">点对比较与 τ 测试</h2>
+            <div className="grid gap-4 lg:grid-cols-[auto_1fr]">
+              <PatchPairView
+                patch={activePatch}
+                pair={currentPair}
+                longPairs={taskStage === 'brisk' ? briskLongPairs : []}
+                theta={taskStage === 'orb' ? centroid.theta : taskStage === 'brisk' ? briskDirection.theta : undefined}
+              />
+              <div className="space-y-3">
+                <p className="text-xs leading-6 text-slate-600">
+                  当前第 {currentPairIndex + 1} 对采样点为 x=({cx1},{cy1})、y=({cx2},{cy2})。
+                  比较两个位置的灰度值即可得到一个
+                  <TeachingTerm term="bit" explanation="一次点对比较只输出 0 或 1；很多 bit 顺序排列后就是描述子。" className="mx-1" />
+                  。
+                </p>
+                <FormulaCard
+                  label="τ 测试"
+                  mathML={TAU_FORMULA}
+                  tone="embedded"
+                  note={`当前 p(x)=${v1}，p(y)=${v2}，因此 τ=${tauResult}。`}
+                />
+              </div>
+            </div>
+          </TeachingCard>
+
+          <TeachingCard>
+            <h2 className="mb-3 text-sm font-semibold text-slate-800">描述子编码与汉明距离</h2>
+            <p className="mb-3 text-xs leading-6 text-slate-600">
+              当前页面把前 {currentPairIndex + 1} 次点对比较串成二进制描述子。输出图中深色表示 bit=1，浅色表示 bit=0，中灰色表示两条描述子在该位不同，当前位用更深色标出。
+            </p>
+            <div className="grid gap-3 lg:grid-cols-2">
+              <FormulaCard
+                label="BRIEF 描述子"
+                mathML={BRIEF_DESCRIPTOR_FORMULA}
+                tone="embedded"
+                note={`当前描述子前 ${Math.min(binaryString.length, 24)} 位：${binaryString.slice(0, 24)}${binaryString.length > 24 ? '...' : ''}`}
+              />
+              <FormulaCard
+                label="汉明距离"
+                mathML={HAMMING_FORMULA}
+                tone="embedded"
+                note={`当前两条描述子已比较 ${binaryString.length} 位，差异 bit 数为 ${hammingDist}。`}
+              />
+            </div>
+            <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50">
+              <table className="w-full text-left text-[11px] tabular-nums">
+                <thead>
+                  <tr className="bg-slate-100">
+                    <th className="px-2 py-1.5 font-semibold text-slate-600">i</th>
+                    <th className="px-2 py-1.5 font-semibold text-slate-600">τ</th>
+                    <th className="px-2 py-1.5 font-semibold text-slate-600">权重</th>
+                    <th className="px-2 py-1.5 font-semibold text-slate-600">贡献</th>
+                    <th className="px-2 py-1.5 font-semibold text-slate-600">累计</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {chainSubstitution.map(row => (
+                    <tr key={row.i}>
+                      <td className="px-2 py-1.5 font-mono text-slate-800">{row.i}</td>
+                      <td className="px-2 py-1.5 font-mono text-slate-700">{row.tau}</td>
+                      <td className="px-2 py-1.5 font-mono text-slate-700">{row.weight}</td>
+                      <td className="px-2 py-1.5 font-mono text-slate-700">{row.contrib}</td>
+                      <td className="px-2 py-1.5 font-mono font-semibold text-blue-700">{row.sum}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </TeachingCard>
+        </>
+      )}
+
+      {taskStage === 'compare' && (
+        <TeachingCard>
+          <h2 className="mb-3 text-sm font-semibold text-slate-800">三种二进制描述子的差异</h2>
+          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="bg-slate-100">
+                  <th className="px-3 py-2 font-semibold text-slate-700">算法</th>
+                  <th className="px-3 py-2 font-semibold text-slate-700">关键动作</th>
+                  <th className="px-3 py-2 font-semibold text-slate-700">优势</th>
+                  <th className="px-3 py-2 font-semibold text-slate-700">仍需注意</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </TeachingCard>
-
-      <TeachingCard>
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">（3）ORB：方向让 BRIEF 更稳定</h2>
-        <p className="mb-3 text-xs leading-6 text-slate-600">
-          ORB 不是另起炉灶，而是把 FAST 角点、Harris 筛选和旋转 BRIEF 串起来。当前 Patch 中亮暗分布的重心给出方向
-          <InlineMath mathML={inlineMath('<mi>θ</mi>')} className="mx-1" />
-          ，点对按这个方向旋转后再比较；这样图像发生旋转时，描述子的采样关系仍尽量对齐同一局部结构。
-        </p>
-        <FormulaCard
-          label="Intensity Centroid 方向"
-          mathML={ORB_CENTROID_FORMULA}
-          tone="embedded"
-          note={`当前 m10=${centroid.m10}，m01=${centroid.m01}，θ≈${centroid.degrees}°。`}
-        />
-      </TeachingCard>
-
-      <TeachingCard>
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">（4）BRISK：长点对定方向，短点对做编码</h2>
-        <p className="mb-3 text-xs leading-6 text-slate-600">
-          BRISK 的教学模型把采样点对分成两类：距离较远的点对更能反映局部结构的整体朝向，距离较近的点对更适合记录细节。它还会在尺度空间中寻找稳定位置，避免只在原图上找到的角点在目标变远或变近后消失。
-        </p>
-        <FormulaCard
-          label="BRISK 主方向"
-          mathML={BRISK_DIRECTION_FORMULA}
-          tone="embedded"
-          note={`当前长点对累计 gx=${briskDirection.gx}，gy=${briskDirection.gy}，θ≈${briskDirection.degrees}°。`}
-        />
-      </TeachingCard>
-
-      <TeachingCard>
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">（5）三种二进制描述子的差异</h2>
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="bg-slate-100">
-                <th className="px-3 py-2 font-semibold text-slate-700">算法</th>
-                <th className="px-3 py-2 font-semibold text-slate-700">关键动作</th>
-                <th className="px-3 py-2 font-semibold text-slate-700">优势</th>
-                <th className="px-3 py-2 font-semibold text-slate-700">仍需注意</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200">
-              <tr className={algorithm === 'brief' ? 'bg-amber-50' : ''}>
-                <td className="px-3 py-2 font-semibold text-slate-700">BRIEF</td>
-                <td className="px-3 py-2 text-slate-600">直接比较 Patch 点对</td>
-                <td className="px-3 py-2 text-slate-600">极快、存储小</td>
-                <td className="px-3 py-2 text-slate-600">旋转和尺度变化下更敏感</td>
-              </tr>
-              <tr className={algorithm === 'orb' ? 'bg-amber-50' : ''}>
-                <td className="px-3 py-2 font-semibold text-slate-700">ORB</td>
-                <td className="px-3 py-2 text-slate-600">FAST/Harris + 灰度质心 + 旋转 BRIEF</td>
-                <td className="px-3 py-2 text-slate-600">速度快，旋转适应性更好</td>
-                <td className="px-3 py-2 text-slate-600">大尺度变化和重复纹理仍可能不稳</td>
-              </tr>
-              <tr className={algorithm === 'brisk' ? 'bg-amber-50' : ''}>
-                <td className="px-3 py-2 font-semibold text-slate-700">BRISK</td>
-                <td className="px-3 py-2 text-slate-600">尺度空间 + 长点对方向 + 短点对编码</td>
-                <td className="px-3 py-2 text-slate-600">兼顾尺度、方向和二进制匹配速度</td>
-                <td className="px-3 py-2 text-slate-600">512 位常更重，复杂场景仍需几何筛选</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </TeachingCard>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                <tr>
+                  <td className="px-3 py-2 font-semibold text-slate-700">BRIEF</td>
+                  <td className="px-3 py-2 text-slate-600">直接比较 Patch 点对</td>
+                  <td className="px-3 py-2 text-slate-600">极快、存储小</td>
+                  <td className="px-3 py-2 text-slate-600">旋转和尺度变化下更敏感</td>
+                </tr>
+                <tr>
+                  <td className="px-3 py-2 font-semibold text-slate-700">ORB</td>
+                  <td className="px-3 py-2 text-slate-600">FAST/Harris + 灰度质心 + 旋转 BRIEF</td>
+                  <td className="px-3 py-2 text-slate-600">速度快，旋转适应性更好</td>
+                  <td className="px-3 py-2 text-slate-600">大尺度变化和重复纹理仍可能不稳</td>
+                </tr>
+                <tr>
+                  <td className="px-3 py-2 font-semibold text-slate-700">BRISK</td>
+                  <td className="px-3 py-2 text-slate-600">尺度空间 + 长点对方向 + 短点对编码</td>
+                  <td className="px-3 py-2 text-slate-600">兼顾尺度、方向和二进制匹配速度</td>
+                  <td className="px-3 py-2 text-slate-600">512 位常更重，复杂场景仍需几何筛选</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </TeachingCard>
+      )}
     </div>
   );
 
@@ -688,44 +791,78 @@ export default function BinaryFeatureDescriptorsPage() {
         <FlowColumn align="start">
           <FlowNode tone="red" className="max-w-xs">
             <div className="mb-3 text-xs font-semibold text-red-600">当前 Patch</div>
-            <PatchPairView
-              patch={activePatch}
-              pair={currentPair}
-              longPairs={algorithm === 'brisk' ? briskLongPairs : []}
-              theta={algorithm === 'orb' ? centroid.theta : algorithm === 'brisk' ? briskDirection.theta : undefined}
-            />
-            <p className="mt-3 text-xs leading-5 text-slate-600">
-              Patch 中保留的是局部结构，不是整张原图；描述子会把这些亮暗关系压缩成 bit 串。
-            </p>
+            {taskStage === 'intro' ? (
+              <p className="text-xs leading-5 text-slate-600">
+                选择一个局部图像块（Patch），后续步骤会把它编码成二进制描述子。
+              </p>
+            ) : (
+              <>
+                <div className="relative mx-auto grid w-32 grid-cols-9 gap-px rounded-lg border border-slate-200 bg-slate-100 p-0.5">
+                  {activePatch.flatMap((row, y) => row.map((value, x) => (
+                    <div
+                      key={`${x}-${y}`}
+                      className="aspect-square rounded-sm"
+                      style={{ background: `rgb(${value}, ${value}, ${value})` }}
+                      title={`p(${x},${y})=${value}`}
+                    />
+                  )))}
+                </div>
+                <p className="mt-2 text-xs leading-5 text-slate-600">
+                  Patch 中保留的是局部结构，不是整张原图；描述子会把这些亮暗关系压缩成 bit 串。
+                </p>
+              </>
+            )}
           </FlowNode>
         </FlowColumn>
 
         <FlowColumn align="center">
           <FlowNode tone="amber" className="max-w-xs">
             <div className="mb-3 text-xs font-semibold text-amber-700">点对采样与方向</div>
-            <div className="grid gap-2">
-              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
-                <div className="text-[10px] text-amber-700">当前算法</div>
-                <div className="font-semibold text-amber-900">{algorithmLabel}</div>
-              </div>
-              <div className="rounded-xl border border-amber-200 bg-white px-3 py-2">
-                <div className="text-[10px] text-amber-600">方向处理</div>
-                <div className="text-xs font-semibold text-amber-800">{directionInfo}</div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-xl border border-amber-200 bg-white px-3 py-2">
-                  <div className="text-[10px] text-amber-600">x 点 p({cx1},{cy1})</div>
-                  <div className="font-mono font-semibold text-amber-800">{v1}</div>
+            {taskStage === 'intro' ? (
+              <p className="text-xs leading-5 text-slate-600">
+                不同算法使用不同的点对采样策略和方向估计方法，影响描述子的旋转不变性。
+              </p>
+            ) : (
+              <div className="grid gap-2">
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+                  <div className="text-[10px] text-amber-700">当前算法</div>
+                  <div className="font-semibold text-amber-900">
+                    {taskStage === 'brief'
+                      ? 'BRIEF：点对比较'
+                      : taskStage === 'orb'
+                        ? 'ORB：带方向的 BRIEF'
+                        : taskStage === 'brisk'
+                          ? 'BRISK：长短点对'
+                          : algorithmLabel}
+                  </div>
                 </div>
                 <div className="rounded-xl border border-amber-200 bg-white px-3 py-2">
-                  <div className="text-[10px] text-amber-600">y 点 p({cx2},{cy2})</div>
-                  <div className="font-mono font-semibold text-amber-800">{v2}</div>
+                  <div className="text-[10px] text-amber-600">方向处理</div>
+                  <div className="text-xs font-semibold text-amber-800">
+                    {taskStage === 'orb'
+                      ? `灰度质心方向 θ=${centroid.degrees}°`
+                      : taskStage === 'brisk'
+                        ? `长点对方向 θ=${briskDirection.degrees}°`
+                        : taskStage === 'brief'
+                          ? '原始 BRIEF 不估计主方向'
+                          : directionInfo}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-xl border border-amber-200 bg-white px-3 py-2">
+                    <div className="text-[10px] text-amber-600">x 点 p({cx1},{cy1})</div>
+                    <div className="font-mono font-semibold text-amber-800">{v1}</div>
+                  </div>
+                  <div className="rounded-xl border border-amber-200 bg-white px-3 py-2">
+                    <div className="text-[10px] text-amber-600">y 点 p({cx2},{cy2})</div>
+                    <div className="font-mono font-semibold text-amber-800">{v2}</div>
+                  </div>
+                </div>
+                <div className="rounded-xl bg-amber-100 px-3 py-2 text-center text-xs font-semibold text-amber-800">
+                  p(x)={v1} {v1 < v2 ? '<' : '≥'} p(y)={v2}，τ={tauResult}
                 </div>
               </div>
-              <div className="rounded-xl bg-amber-100 px-3 py-2 text-center text-xs font-semibold text-amber-800">
-                p(x)={v1} {v1 < v2 ? '<' : '≥'} p(y)={v2}，τ={tauResult}
-              </div>
-            </div>
+            )}
           </FlowNode>
 
           <FlowNode tone="sky" className="max-w-xs">
@@ -744,14 +881,20 @@ export default function BinaryFeatureDescriptorsPage() {
         <FlowColumn align="end">
           <FlowNode tone="emerald" className="max-w-xs">
             <div className="mb-3 text-xs font-semibold text-emerald-700">汉明距离匹配</div>
-            <div className="grid gap-2">
-              <ImageCanvas image={resultImage} maxDisplaySize={150} showGrid />
-              <div className="rounded-xl bg-emerald-100 px-3 py-2 text-center">
-                <div className="text-[10px] text-emerald-700">差异 bit 数</div>
-                <div className="font-mono text-sm font-bold text-emerald-800">{hammingDist}</div>
-                <div className="text-[10px] text-emerald-600">已比较 {binaryString.length} / {numPairs} 位</div>
+            {taskStage === 'intro' ? (
+              <p className="text-xs leading-5 text-slate-600">
+                通过比较两条描述子的汉明距离（不同 bit 的数量）来判断是否为同一局部结构。
+              </p>
+            ) : (
+              <div className="grid gap-2">
+                <ImageCanvas image={resultImage} maxDisplaySize={150} showGrid />
+                <div className="rounded-xl bg-emerald-100 px-3 py-2 text-center">
+                  <div className="text-[10px] text-emerald-700">差异 bit 数</div>
+                  <div className="font-mono text-sm font-bold text-emerald-800">{hammingDist}</div>
+                  <div className="text-[10px] text-emerald-600">已比较 {binaryString.length} / {numPairs} 位</div>
+                </div>
               </div>
-            </div>
+            )}
           </FlowNode>
         </FlowColumn>
       </FlowColumns>
@@ -760,64 +903,123 @@ export default function BinaryFeatureDescriptorsPage() {
 
   const parameters = (
     <div className="space-y-4">
-      <SelectParam
-        label="算法模式"
-        value={algorithm}
-        onChange={value => {
-          const nextAlgorithm = value as AlgorithmMode;
-          setAlgorithm(nextAlgorithm);
-          setCurrentPairIndex(0);
-          if (nextAlgorithm === 'brisk') setNumPairs(512);
-        }}
-        options={ALGORITHM_OPTIONS}
-      />
-      <SelectParam
-        label="采样方式"
-        value={samplingMethod}
-        onChange={value => {
-          setSamplingMethod(value as SamplingMethod);
-          setCurrentPairIndex(0);
-        }}
-        options={SAMPLING_OPTIONS.map(option => ({ value: option.value, label: option.label }))}
-      />
-      {samplingInfo && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3">
-          <p className="text-xs leading-5 text-amber-800">{samplingInfo.desc}</p>
+      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-3">
+        <div className="text-xs font-semibold text-emerald-800">课堂任务</div>
+        <p className="mt-2 text-xs leading-5 text-emerald-800">
+          用二进制描述子快速编码局部结构，通过汉明距离实现高效匹配。
+        </p>
+      </div>
+
+      <StageStepper activeStage={taskStage} onStageChange={goStage} />
+
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={goPrevious}
+          disabled={stageIndex === 0}
+          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          上一步
+        </button>
+        <button
+          type="button"
+          onClick={goNext}
+          disabled={stageIndex === TASK_STAGES.length - 1}
+          className="rounded-xl border border-emerald-200 bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          下一步
+        </button>
+      </div>
+
+      {(taskStage === 'brief' || taskStage === 'orb' || taskStage === 'brisk') && (
+        <>
+          {taskStage === 'brief' && (
+            <>
+              <SelectParam
+                label="采样方式"
+                value={samplingMethod}
+                onChange={value => {
+                  setSamplingMethod(value as SamplingMethod);
+                  setCurrentPairIndex(0);
+                }}
+                options={SAMPLING_OPTIONS.map(option => ({ value: option.value, label: option.label }))}
+              />
+              {samplingInfo && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3">
+                  <p className="text-xs leading-5 text-amber-800">{samplingInfo.desc}</p>
+                </div>
+              )}
+            </>
+          )}
+
+          <SelectParam
+            label="Patch 来源"
+            value={patchSource}
+            onChange={value => {
+              setPatchSource(value as PatchSource);
+              setCurrentPairIndex(0);
+            }}
+            options={[
+              { value: 'image', label: '点击主图选 Patch' },
+              { value: 'synthetic', label: '教学 Patch' },
+            ]}
+          />
+
+          {(taskStage === 'orb' || taskStage === 'brisk') && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-800">
+              {taskStage === 'orb'
+                ? `灰度质心方向 θ=${centroid.degrees}°（m10=${centroid.m10}，m01=${centroid.m01}）`
+                : `长点对方向 θ=${briskDirection.degrees}°（gx=${briskDirection.gx}，gy=${briskDirection.gy}）`}
+            </div>
+          )}
+
+          <SelectParam
+            label="描述子位数"
+            value={String(numPairs)}
+            onChange={value => {
+              setNumPairs(Number(value));
+              setCurrentPairIndex(0);
+            }}
+            options={PAIR_OPTIONS.map(option => ({ value: String(option.value), label: option.label }))}
+          />
+
+          <SliderParam
+            label="当前点对"
+            value={currentPairIndex}
+            onChange={setCurrentPairIndex}
+            min={0}
+            max={Math.max(0, numPairs - 1)}
+            step={1}
+          />
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-5 text-slate-600">
+            当前第 {currentPairIndex + 1} 对：p({cx1},{cy1})={v1} 与 p({cx2},{cy2})={v2}，τ={tauResult}。
+            {patchSource === 'image' ? ` 当前主图中心为 (${patchCenter.x}, ${patchCenter.y})。` : ' 当前使用固定教学 Patch。'}
+          </div>
+        </>
+      )}
+
+      {taskStage === 'compare' && (
+        <div className="space-y-2">
+          <div className="text-xs font-semibold text-slate-600">查看算法</div>
+          <div className="grid grid-cols-3 gap-1.5">
+            {(['brief', 'orb', 'brisk'] as AlgorithmMode[]).map(mode => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setAlgorithm(mode)}
+                className={`rounded-lg border px-2 py-1.5 text-[11px] font-semibold transition ${
+                  algorithm === mode
+                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                    : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
+                }`}
+              >
+                {mode === 'brief' ? 'BRIEF' : mode === 'orb' ? 'ORB' : 'BRISK'}
+              </button>
+            ))}
+          </div>
         </div>
       )}
-      <SelectParam
-        label="Patch 来源"
-        value={patchSource}
-        onChange={value => {
-          setPatchSource(value as PatchSource);
-          setCurrentPairIndex(0);
-        }}
-        options={[
-          { value: 'image', label: '点击主图选 Patch' },
-          { value: 'synthetic', label: '教学 Patch' },
-        ]}
-      />
-      <SelectParam
-        label="描述子位数"
-        value={String(numPairs)}
-        onChange={value => {
-          setNumPairs(Number(value));
-          setCurrentPairIndex(0);
-        }}
-        options={PAIR_OPTIONS.map(option => ({ value: String(option.value), label: option.label }))}
-      />
-      <SliderParam
-        label="当前点对"
-        value={currentPairIndex}
-        onChange={setCurrentPairIndex}
-        min={0}
-        max={Math.max(0, numPairs - 1)}
-        step={1}
-      />
-      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-5 text-slate-600">
-        当前第 {currentPairIndex + 1} 对：p({cx1},{cy1})={v1} 与 p({cx2},{cy2})={v2}，τ={tauResult}。
-        {patchSource === 'image' ? ` 当前主图中心为 (${patchCenter.x}, ${patchCenter.y})。` : ' 当前使用固定教学 Patch。'}
-      </div>
     </div>
   );
 
