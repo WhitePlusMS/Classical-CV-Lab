@@ -14,6 +14,7 @@ export {
   PixelColorSwatch,
   ProcessRail,
   TeachingCard,
+  TeachingTerm,
   buildInlineMathML,
   type AnchoredOverlayPath,
   type CameraCalibrationScenePoint,

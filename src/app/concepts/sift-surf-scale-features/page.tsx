@@ -13,6 +13,7 @@ import {
   SelectParam,
   SliderParam,
   TeachingCard,
+  TeachingTerm,
   buildInlineMathML,
 } from '@/components';
 import { computeSiftSurf, type SiftKeypoint } from '@/lib/algorithms/siftSurf';
@@ -224,6 +225,27 @@ function renderKeypointOverlay(
   return overlay;
 }
 
+function stepTermHints(step: TeachingStepKey): Array<{ term: string; explanation: string }> {
+  switch (step) {
+    case 'scale-space':
+      return [{ term: '尺度空间', explanation: '尺度空间就是同一张图在不同模糊尺度下的表示，用来观察不同大小结构。' }];
+    case 'dog-detection':
+      return [
+        { term: 'DoG', explanation: 'DoG 是相邻两层高斯模糊图相减后的响应图，用来突出局部结构变化。' },
+        { term: '26 邻域', explanation: '26 邻域表示同一点在上、中、下三层周围一共 26 个邻居，要同时比较它们。' },
+      ];
+    case 'orientation':
+      return [{ term: '主方向', explanation: '主方向是当前关键点邻域中梯度投票最多的方向，用来消除旋转影响。' }];
+    case 'surf':
+      return [
+        { term: 'Hessian', explanation: 'Hessian 用二阶变化强度判断一个位置是不是稳定兴趣点。' },
+        { term: '积分图', explanation: '积分图把矩形区域求和变成几次查表，所以 SURF 能更快。' },
+      ];
+    default:
+      return [];
+  }
+}
+
 // ==================== 页面组件 ====================
 
 export default function SiftSurfScaleFeaturesPage() {
@@ -252,6 +274,8 @@ export default function SiftSurfScaleFeaturesPage() {
   );
 
   const { keypoints, gaussianScales, dogScales, stepData } = result;
+  const currentKeypoint = stepData.currentKeypoint;
+  const currentTermHints = stepTermHints(step);
 
   // 导航
   const handleDirectionMove = useGridNavigation({
@@ -283,6 +307,51 @@ export default function SiftSurfScaleFeaturesPage() {
     () => renderKeypointOverlay(sourceImage, keypoints, selectedKpIdx),
     [sourceImage, keypoints, selectedKpIdx]
   );
+
+  const currentKeypointRail = currentKeypoint ? (
+    <TeachingCard>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)_minmax(0,0.9fr)]">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">当前关键点</div>
+          <div className="mt-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-800">
+            ({currentKeypoint.x}, {currentKeypoint.y}) / octave {currentKeypoint.octave} / σ={currentKeypoint.scale.toFixed(2)}
+          </div>
+        </div>
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">当前证据</div>
+          <div className="mt-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-slate-700">
+            {step === 'scale-space'
+              ? '观察同一关键点在不同模糊尺度下的局部 patch。'
+              : step === 'dog-detection'
+                ? '观察当前点的 DoG 响应，以及它与三层 26 邻域的大小比较。'
+                : step === 'orientation'
+                  ? '观察当前点邻域的梯度投票，主方向由最高柱决定。'
+                  : step === 'descriptor'
+                    ? '观察同一关键点的 16×16 邻域如何切成 4×4 子区域，再累积成描述子。'
+                    : step === 'surf'
+                      ? '观察 SURF 如何对同一关键点用 Hessian 近似和积分图给出更快的证据。'
+                      : step === 'matching'
+                        ? '观察当前关键点的描述子距离如何决定保留哪条匹配。'
+                        : '先锁定一个关键点，再沿着检测、方向、描述子和匹配逐段看证据。'}
+          </div>
+        </div>
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">当前结果</div>
+          <div className="mt-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-800">
+            关键点已保留，主方向 {(currentKeypoint.orientation * 180 / Math.PI).toFixed(0)}°，
+            当前可以继续展开 SIFT 128 维 / SURF 64 维证据。
+          </div>
+        </div>
+      </div>
+      {currentTermHints.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
+          {currentTermHints.map(item => (
+            <TeachingTerm key={item.term} term={item.term} explanation={item.explanation} />
+          ))}
+        </div>
+      ) : null}
+    </TeachingCard>
+  ) : null;
 
   // ==================== Parameters ====================
 
@@ -359,46 +428,49 @@ export default function SiftSurfScaleFeaturesPage() {
     switch (step) {
       case 'scale-space':
         return (
-          <ProcessRail>
-            <FlowColumns>
-              <FlowColumn align="start">
-                <FlowNode tone="red">
-                  <div className="mb-2 text-[11px] font-semibold text-red-700">原图 I(x,y)</div>
-                  <ImageCanvas image={sourceImage} maxDisplaySize={120} showGrid={false} />
-                </FlowNode>
-              </FlowColumn>
-              <FlowColumn align="center">
-                <FlowNode tone="amber">
-                  <div className="mb-2 text-[11px] font-semibold text-amber-700">高斯卷积</div>
-                  <div className="rounded bg-amber-50 px-3 py-3 text-center text-xs text-amber-800">
-                    G(x,y,&sigma;) * I(x,y)
-                  </div>
-                  {gaussianScales.length > 1 && (
-                    <div className="mt-3">
-                      <div className="mb-1 text-[10px] text-amber-700">尺度层</div>
-                      <div className="grid grid-cols-4 gap-1">
-                        {gaussianScales.slice(0, 4).map((g, i) => (
-                          <div key={i} className="flex flex-col items-center">
-                            <ImageCanvas image={g} maxDisplaySize={50} showGrid={false} />
-                            <span className="mt-0.5 text-[8px] text-slate-500">s={i}</span>
-                          </div>
-                        ))}
-                      </div>
+          <div className="space-y-4">
+            {currentKeypointRail}
+            <ProcessRail>
+              <FlowColumns>
+                <FlowColumn align="start">
+                  <FlowNode tone="red">
+                    <div className="mb-2 text-[11px] font-semibold text-red-700">原图 I(x,y)</div>
+                    <ImageCanvas image={sourceImage} maxDisplaySize={120} showGrid={false} />
+                  </FlowNode>
+                </FlowColumn>
+                <FlowColumn align="center">
+                  <FlowNode tone="amber">
+                    <div className="mb-2 text-[11px] font-semibold text-amber-700">高斯卷积</div>
+                    <div className="rounded bg-amber-50 px-3 py-3 text-center text-xs text-amber-800">
+                      G(x,y,&sigma;) * I(x,y)
                     </div>
-                  )}
-                </FlowNode>
-              </FlowColumn>
-              <FlowColumn align="end">
-                <FlowNode tone="emerald">
-                  <div className="mb-2 text-[11px] font-semibold text-emerald-700">模糊结果</div>
-                  <ImageCanvas image={gaussianScales[1] ?? sourceImage} maxDisplaySize={120} showGrid={false} />
-                  <p className="mt-2 text-xs leading-5 text-slate-600">
-                    尺度 &sigma; 越大，图像越模糊。相邻两层的尺度因子比例系数为 k。
-                  </p>
-                </FlowNode>
-              </FlowColumn>
-            </FlowColumns>
-          </ProcessRail>
+                    {gaussianScales.length > 1 && (
+                      <div className="mt-3">
+                        <div className="mb-1 text-[10px] text-amber-700">尺度层</div>
+                        <div className="grid grid-cols-4 gap-1">
+                          {gaussianScales.slice(0, 4).map((g, i) => (
+                            <div key={i} className="flex flex-col items-center">
+                              <ImageCanvas image={g} maxDisplaySize={50} showGrid={false} />
+                              <span className="mt-0.5 text-[8px] text-slate-500">s={i}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </FlowNode>
+                </FlowColumn>
+                <FlowColumn align="end">
+                  <FlowNode tone="emerald">
+                    <div className="mb-2 text-[11px] font-semibold text-emerald-700">模糊结果</div>
+                    <ImageCanvas image={gaussianScales[1] ?? sourceImage} maxDisplaySize={120} showGrid={false} />
+                    <p className="mt-2 text-xs leading-5 text-slate-600">
+                      尺度 &sigma; 越大，图像越模糊。相邻两层的尺度因子比例系数为 k。
+                    </p>
+                  </FlowNode>
+                </FlowColumn>
+              </FlowColumns>
+            </ProcessRail>
+          </div>
         );
 
       case 'dog-detection':
@@ -448,55 +520,58 @@ export default function SiftSurfScaleFeaturesPage() {
 
       case 'orientation':
         return (
-          <ProcessRail>
-            <FlowColumns>
-              <FlowColumn align="start">
-                <FlowNode tone="red">
-                  <div className="mb-2 text-[11px] font-semibold text-red-700">关键点邻域梯度</div>
-                  {stepData.gradientMagnitudes && (
-                    <ImageCanvas image={stepData.gradientMagnitudes} maxDisplaySize={120} showGrid={false} />
-                  )}
-                  <p className="mt-2 text-xs leading-5 text-slate-600">
-                    以关键点为中心，计算 17x17 邻域的梯度幅值。
-                  </p>
-                </FlowNode>
-              </FlowColumn>
-              <FlowColumn align="center">
-                <FlowNode tone="sky">
-                  <div className="mb-2 text-[11px] font-semibold text-sky-700">方向直方图</div>
-                  {stepData.orientationHistogram ? (
-                    <OrientationHistogramGraph
-                      hist={stepData.orientationHistogram}
-                      highlightBin={(() => {
-                        const h = stepData.orientationHistogram ?? [];
-                        let mb = 0;
-                        for (let i = 1; i < h.length; i++) if (h[i] > h[mb]) mb = i;
-                        return mb;
-                      })()}
-                    />
-                  ) : (
-                    <div className="text-xs text-slate-400">无数据</div>
-                  )}
-                </FlowNode>
-              </FlowColumn>
-              <FlowColumn align="end">
-                <FlowNode tone="emerald">
-                  <div className="mb-2 text-[11px] font-semibold text-emerald-700">方向分配结果</div>
-                  {stepData.currentKeypoint && (
-                    <div className="rounded-xl border border-emerald-200 bg-white px-4 py-3 text-center">
-                      <div className="text-lg font-bold text-emerald-700">
-                        {(stepData.currentKeypoint.orientation * 180 / Math.PI).toFixed(0)}&deg;
+          <div className="space-y-4">
+            {currentKeypointRail}
+            <ProcessRail>
+              <FlowColumns>
+                <FlowColumn align="start">
+                  <FlowNode tone="red">
+                    <div className="mb-2 text-[11px] font-semibold text-red-700">关键点邻域梯度</div>
+                    {stepData.gradientMagnitudes && (
+                      <ImageCanvas image={stepData.gradientMagnitudes} maxDisplaySize={120} showGrid={false} />
+                    )}
+                    <p className="mt-2 text-xs leading-5 text-slate-600">
+                      以关键点为中心，计算 17x17 邻域的梯度幅值。
+                    </p>
+                  </FlowNode>
+                </FlowColumn>
+                <FlowColumn align="center">
+                  <FlowNode tone="sky">
+                    <div className="mb-2 text-[11px] font-semibold text-sky-700">方向直方图</div>
+                    {stepData.orientationHistogram ? (
+                      <OrientationHistogramGraph
+                        hist={stepData.orientationHistogram}
+                        highlightBin={(() => {
+                          const h = stepData.orientationHistogram ?? [];
+                          let mb = 0;
+                          for (let i = 1; i < h.length; i++) if (h[i] > h[mb]) mb = i;
+                          return mb;
+                        })()}
+                      />
+                    ) : (
+                      <div className="text-xs text-slate-400">无数据</div>
+                    )}
+                  </FlowNode>
+                </FlowColumn>
+                <FlowColumn align="end">
+                  <FlowNode tone="emerald">
+                    <div className="mb-2 text-[11px] font-semibold text-emerald-700">方向分配结果</div>
+                    {stepData.currentKeypoint && (
+                      <div className="rounded-xl border border-emerald-200 bg-white px-4 py-3 text-center">
+                        <div className="text-lg font-bold text-emerald-700">
+                          {(stepData.currentKeypoint.orientation * 180 / Math.PI).toFixed(0)}&deg;
+                        </div>
+                        <div className="mt-1 text-xs text-slate-500">关键点主方向</div>
                       </div>
-                      <div className="mt-1 text-xs text-slate-500">关键点主方向</div>
-                    </div>
-                  )}
-                  <p className="mt-2 text-xs leading-5 text-slate-600">
-                    直方图峰值方向为关键点主方向，使描述子具有旋转不变性。
-                  </p>
-                </FlowNode>
-              </FlowColumn>
-            </FlowColumns>
-          </ProcessRail>
+                    )}
+                    <p className="mt-2 text-xs leading-5 text-slate-600">
+                      直方图峰值方向为关键点主方向，使描述子具有旋转不变性。
+                    </p>
+                  </FlowNode>
+                </FlowColumn>
+              </FlowColumns>
+            </ProcessRail>
+          </div>
         );
 
       case 'descriptor':
@@ -537,34 +612,37 @@ export default function SiftSurfScaleFeaturesPage() {
 
       case 'surf':
         return (
-          <ProcessRail>
-            <FlowColumns>
-              <FlowColumn align="start">
-                <FlowNode tone="red">
-                  <div className="mb-2 text-[11px] font-semibold text-red-700">积分图加速</div>
-                  <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center text-xs text-red-700">
-                    任意矩形区域像素和只需 4 次查表
-                  </div>
-                </FlowNode>
-              </FlowColumn>
-              <FlowColumn align="center">
-                <FlowNode tone="amber">
-                  <div className="mb-2 text-[11px] font-semibold text-amber-700">Hessian 行列式</div>
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-xs text-amber-800">
-                    用盒子滤波器近似高斯二阶偏导
-                  </div>
-                </FlowNode>
-              </FlowColumn>
-              <FlowColumn align="end">
-                <FlowNode tone="emerald">
-                  <div className="mb-2 text-[11px] font-semibold text-emerald-700">描述子</div>
-                  {stepData.surfDescriptorGrid && (
-                    <DescriptorGrid grid={stepData.surfDescriptorGrid} label="Haar 小波响应" />
-                  )}
-                </FlowNode>
-              </FlowColumn>
-            </FlowColumns>
-          </ProcessRail>
+          <div className="space-y-4">
+            {currentKeypointRail}
+            <ProcessRail>
+              <FlowColumns>
+                <FlowColumn align="start">
+                  <FlowNode tone="red">
+                    <div className="mb-2 text-[11px] font-semibold text-red-700">积分图加速</div>
+                    <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center text-xs text-red-700">
+                      任意矩形区域像素和只需 4 次查表
+                    </div>
+                  </FlowNode>
+                </FlowColumn>
+                <FlowColumn align="center">
+                  <FlowNode tone="amber">
+                    <div className="mb-2 text-[11px] font-semibold text-amber-700">Hessian 行列式</div>
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-xs text-amber-800">
+                      用盒子滤波器近似高斯二阶偏导
+                    </div>
+                  </FlowNode>
+                </FlowColumn>
+                <FlowColumn align="end">
+                  <FlowNode tone="emerald">
+                    <div className="mb-2 text-[11px] font-semibold text-emerald-700">描述子</div>
+                    {stepData.surfDescriptorGrid && (
+                      <DescriptorGrid grid={stepData.surfDescriptorGrid} label="Haar 小波响应" />
+                    )}
+                  </FlowNode>
+                </FlowColumn>
+              </FlowColumns>
+            </ProcessRail>
+          </div>
         );
 
       case 'matching':
@@ -624,46 +702,48 @@ export default function SiftSurfScaleFeaturesPage() {
 
       default: // overview
         return (
-          <ProcessRail>
-            <FlowColumns>
-              <FlowColumn align="start">
-                <FlowNode tone="red">
-                  <div className="mb-2 text-[11px] font-semibold text-red-700">待检测图像</div>
-                  <ImageCanvas image={sourceImage} maxDisplaySize={110} showGrid={false} />
-                </FlowNode>
-              </FlowColumn>
-              <FlowColumn align="center">
-                <FlowNode tone="amber">
-                  <div className="mb-2 text-[11px] font-semibold text-amber-700">SIFT 四步流程</div>
-                  <div className="space-y-2">
-                    <div className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-[10px] text-slate-700">
-                      1. 尺度空间极值检测
+          <div className="space-y-4">
+            {currentKeypointRail}
+            <ProcessRail>
+              <FlowColumns>
+                <FlowColumn align="start">
+                  <FlowNode tone="red">
+                    <div className="mb-2 text-[11px] font-semibold text-red-700">待检测图像</div>
+                    <ImageCanvas image={sourceImage} maxDisplaySize={110} showGrid={false} />
+                  </FlowNode>
+                </FlowColumn>
+                <FlowColumn align="center">
+                  <FlowNode tone="amber">
+                    <div className="mb-2 text-[11px] font-semibold text-amber-700">SIFT 四步流程</div>
+                    <div className="space-y-2">
+                      <div className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-[10px] text-slate-700">
+                        1. 尺度空间极值检测
+                      </div>
+                      <div className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-[10px] text-slate-700">
+                        2. 关键点定位
+                      </div>
+                      <div className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-[10px] text-slate-700">
+                        3. 方向分配
+                      </div>
+                      <div className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-[10px] text-slate-700">
+                        4. 描述子生成
+                      </div>
                     </div>
-                    <div className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-[10px] text-slate-700">
-                      2. 关键点定位
-                    </div>
-                    <div className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-[10px] text-slate-700">
-                      3. 方向分配
-                    </div>
-                    <div className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-[10px] text-slate-700">
-                      4. 描述子生成
-                    </div>
-                  </div>
-                </FlowNode>
-              </FlowColumn>
-              <FlowColumn align="end">
-                <FlowNode tone="emerald">
-                  <div className="mb-2 text-[11px] font-semibold text-emerald-700">检测结果</div>
-                  <ImageCanvas image={keypointImage} maxDisplaySize={110} showGrid={false} />
-                  <p className="mt-2 text-[10px] text-slate-500">共 {keypoints.length} 个关键点</p>
-                </FlowNode>
-              </FlowColumn>
-            </FlowColumns>
-          </ProcessRail>
+                  </FlowNode>
+                </FlowColumn>
+                <FlowColumn align="end">
+                  <FlowNode tone="emerald">
+                    <div className="mb-2 text-[11px] font-semibold text-emerald-700">检测结果</div>
+                    <ImageCanvas image={keypointImage} maxDisplaySize={110} showGrid={false} />
+                    <p className="mt-2 text-[10px] text-slate-500">共 {keypoints.length} 个关键点</p>
+                  </FlowNode>
+                </FlowColumn>
+              </FlowColumns>
+            </ProcessRail>
+          </div>
         );
     }
-  }, [step, sourceImage, gaussianScales, dogScales, keypointImage, keypoints,
-      stepData, selectedKpIdx]);
+  }, [currentKeypointRail, dogScales, gaussianScales, keypointImage, keypoints, sourceImage, step, stepData]);
 
   // ==================== Step Details ====================
 
@@ -678,6 +758,13 @@ export default function SiftSurfScaleFeaturesPage() {
                 尺度空间的核心思想是：通过高斯卷积核在不同尺度下对图像进行平滑，
                 模拟人眼或相机在不同距离观察目标的效果。尺度越大，图像越模糊，细节被抑制。
               </p>
+              {currentTermHints.length > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
+                  {currentTermHints.map(item => (
+                    <TeachingTerm key={item.term} term={item.term} explanation={item.explanation} />
+                  ))}
+                </div>
+              ) : null}
             </TeachingCard>
 
             <FormulaCard label="高斯函数" mathML={GAUSSIAN_FUNC} />
@@ -729,6 +816,13 @@ export default function SiftSurfScaleFeaturesPage() {
                 DoG（Difference of Gaussian）是尺度归一化高斯拉普拉斯的近似，
                 通过相邻高斯尺度空间的图像相减得到。
               </p>
+              {currentTermHints.length > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
+                  {currentTermHints.map(item => (
+                    <TeachingTerm key={item.term} term={item.term} explanation={item.explanation} />
+                  ))}
+                </div>
+              ) : null}
             </TeachingCard>
 
             <FormulaCard label="DoG 尺度空间" mathML={DOG_FORMULA} />
@@ -794,6 +888,13 @@ export default function SiftSurfScaleFeaturesPage() {
                 为使描述子具有旋转不变性，需要为每个关键点分配基准方向。
                 基于关键点邻域像素的梯度方向直方图确定主方向。
               </p>
+              {currentTermHints.length > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
+                  {currentTermHints.map(item => (
+                    <TeachingTerm key={item.term} term={item.term} explanation={item.explanation} />
+                  ))}
+                </div>
+              ) : null}
             </TeachingCard>
 
             <FormulaCard label="梯度幅值" mathML={GRADIENT_MAG_FORMULA} />
@@ -936,6 +1037,13 @@ export default function SiftSurfScaleFeaturesPage() {
                 SURF 在 SIFT 基础上引入积分图、近似 Hessian 矩阵和 Haar 小波响应，
                 大幅提高计算速度，同时保持较好的鲁棒性。
               </p>
+              {currentTermHints.length > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
+                  {currentTermHints.map(item => (
+                    <TeachingTerm key={item.term} term={item.term} explanation={item.explanation} />
+                  ))}
+                </div>
+              ) : null}
             </TeachingCard>
 
             <TeachingCard>

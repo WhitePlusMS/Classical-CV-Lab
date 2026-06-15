@@ -15,6 +15,7 @@ import {
   SelectParam,
   SliderParam,
   TeachingCard,
+  TeachingTerm,
   buildInlineMathML,
 } from '@/components';
 import {
@@ -372,6 +373,8 @@ export default function BackgroundModelingSubtractionPage() {
     : `|${currentGray} - ${backgroundGray}| = ${diffGray}，T = ${threshold}`;
   const decisionText = maskValue > 0 ? '前景运动目标（D=1）' : '背景（D=0）';
   const decisionClassName = maskValue > 0 ? 'font-semibold text-red-600' : 'font-semibold text-emerald-600';
+  const trainingWindowEnd = Math.min(7, Math.max(0, currentFrameIndex - 1));
+  const trainingWindowStart = Math.max(0, trainingWindowEnd - 4);
   const mainVisual = (
     <div className="space-y-4">
       <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
@@ -399,6 +402,8 @@ export default function BackgroundModelingSubtractionPage() {
               className={`shrink-0 rounded-xl border px-1.5 py-1.5 transition ${
                 index === currentFrameIndex
                   ? 'border-red-300 bg-red-50 shadow-sm'
+                  : index >= trainingWindowStart && index <= trainingWindowEnd
+                    ? 'border-amber-300 bg-amber-50'
                   : 'border-slate-200 bg-white hover:border-slate-300'
               }`}
             >
@@ -412,6 +417,9 @@ export default function BackgroundModelingSubtractionPage() {
               </div>
             </button>
           ))}
+        </div>
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+          琥珀色缩略图表示当前像素参与背景建模的历史窗口，红色缩略图表示当前正在判定的第 {currentFrameIndex + 1} 帧。
         </div>
       </div>
 
@@ -555,7 +563,16 @@ export default function BackgroundModelingSubtractionPage() {
                 <div className="mt-1 font-mono text-lg font-bold text-sky-700">{diffGray}</div>
               </div>
             </div>
-            <p className="mt-3 text-xs leading-5 text-slate-600">{modelDescription(model)}</p>
+            <p className="mt-3 text-xs leading-5 text-slate-600">
+              {modelDescription(model)}
+              {model === 'adaptive' ? (
+                <TeachingTerm term="学习率 α" explanation="学习率 α 决定新帧写入背景模型的速度，越大表示背景更新越快。" className="mx-1" />
+              ) : model === 'singleGaussian' ? (
+                <TeachingTerm term="单高斯" explanation="单高斯假设同一个像素的背景灰度围绕一个均值上下波动，用 μ 和 δ 描述。" className="mx-1" />
+              ) : model === 'mixtureGaussian' ? (
+                <TeachingTerm term="混合高斯" explanation="混合高斯允许一个像素在时间上有多个常见背景值，适合动态背景。" className="mx-1" />
+              ) : null}
+            </p>
           </FlowNode>
 
           <FlowNode tone="sky" className="bg-anchor-calculation-node max-w-sm">
@@ -642,6 +659,9 @@ export default function BackgroundModelingSubtractionPage() {
           <div className="rounded-xl bg-slate-50 px-3 py-2">
             下方圆点：红色表示该帧判为前景，绿色表示背景。
           </div>
+        </div>
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+          其中琥珀色高亮时间窗口表示当前像素参与背景建模的历史帧，红色边框表示当前正在判定的帧。
         </div>
       </TeachingCard>
     </div>
@@ -1160,7 +1180,9 @@ export default function BackgroundModelingSubtractionPage() {
           <SliderParam label="前景阈值 T" value={threshold} onChange={setThreshold} min={10} max={120} step={1} />
           <SliderParam label="学习率 α" value={learningRate} onChange={setLearningRate} min={1} max={40} step={1} unit="%" />
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-xs leading-5 text-emerald-800">
-            混合高斯教学版按连续帧更新背景分量；T 控制掩膜，α 控制分量吸收新像素的速度。
+            混合高斯教学版按连续帧更新背景分量；T 控制掩膜，α 控制分量吸收新像素的速度。当前匹配到的
+            <TeachingTerm term="匹配分量" explanation="匹配分量就是当前像素落入阈值范围内的那一个高斯分布，它会优先被更新。" className="mx-1" />
+            会在下方动态流程中直接显示。
           </div>
           <div className="space-y-2">
             {result.mixtureComponents.map((component, index) => (

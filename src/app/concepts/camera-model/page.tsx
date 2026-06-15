@@ -14,6 +14,7 @@ import {
   SelectParam,
   SliderParam,
   TeachingCard,
+  TeachingTerm,
   buildInlineMathML,
 } from '@/components';
 import { useGridNavigation } from '@/hooks/useGridNavigation';
@@ -76,6 +77,19 @@ const CORNER_OPTIONS = [
 ];
 
 type FocusMode = (typeof FOCUS_OPTIONS)[number]['value'];
+type CameraParameterKey =
+  | 'pointHeight'
+  | 'alpha'
+  | 'beta'
+  | 'gamma'
+  | 'u0'
+  | 'v0'
+  | 'yaw'
+  | 'pitch'
+  | 'roll'
+  | 'tx'
+  | 'ty'
+  | 'tz';
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -109,12 +123,72 @@ function buildIntrinsicMatrixMath(intrinsics: CalibrationIntrinsics): string {
   ]);
 }
 
+function parameterImpact(key: CameraParameterKey): {
+  focusMode: FocusMode;
+  title: string;
+  summary: string;
+  formulaLabel: string;
+  formulaMath: string;
+} {
+  switch (key) {
+    case 'yaw':
+    case 'pitch':
+    case 'roll':
+      return {
+        focusMode: 'extrinsics',
+        title: '当前参数正在改变相机姿态',
+        summary: 'yaw / pitch / roll 改的是旋转矩阵 R，也就是世界坐标系如何转到相机坐标系。',
+        formulaLabel: '当前观察链路',
+        formulaMath: math('<msub><mi>X</mi><mi>c</mi></msub><mo>=</mo><mi>R</mi><msub><mi>X</mi><mi>w</mi></msub><mo>+</mo><mi>T</mi>'),
+      };
+    case 'tx':
+    case 'ty':
+    case 'tz':
+      return {
+        focusMode: key === 'tz' ? 'depth' : 'extrinsics',
+        title: '当前参数正在改变相机平移',
+        summary: 'tx / ty / tz 改的是平移向量 T。tz 还会直接改变深度 Zc，所以投影缩放最明显。',
+        formulaLabel: '当前观察链路',
+        formulaMath: math('<msub><mi>X</mi><mi>c</mi></msub><mo>=</mo><mi>R</mi><msub><mi>X</mi><mi>w</mi></msub><mo>+</mo><mi>T</mi>'),
+      };
+    case 'alpha':
+    case 'beta':
+    case 'gamma':
+      return {
+        focusMode: 'intrinsics',
+        title: '当前参数正在改变内参矩阵 K',
+        summary: 'alpha / beta 决定横纵缩放，gamma 是 skew，会让 x 坐标额外受到 y 坐标影响。',
+        formulaLabel: '当前观察链路',
+        formulaMath: math('<mi>u</mi><mo>=</mo><mi>&alpha;</mi><mi>x</mi><mo>+</mo><mi>&gamma;</mi><mi>y</mi><mo>+</mo><msub><mi>u</mi><mn>0</mn></msub><mo>,</mo><mi>v</mi><mo>=</mo><mi>&beta;</mi><mi>y</mi><mo>+</mo><msub><mi>v</mi><mn>0</mn></msub>'),
+      };
+    case 'u0':
+    case 'v0':
+      return {
+        focusMode: 'intrinsics',
+        title: '当前参数正在改变主点位置',
+        summary: 'u0 / v0 决定主点，也就是光轴落到像素平面上的位置，会整体平移投影结果。',
+        formulaLabel: '当前观察链路',
+        formulaMath: math('<mi>u</mi><mo>=</mo><mi>&alpha;</mi><mi>x</mi><mo>+</mo><mi>&gamma;</mi><mi>y</mi><mo>+</mo><msub><mi>u</mi><mn>0</mn></msub><mo>,</mo><mi>v</mi><mo>=</mo><mi>&beta;</mi><mi>y</mi><mo>+</mo><msub><mi>v</mi><mn>0</mn></msub>'),
+      };
+    case 'pointHeight':
+    default:
+      return {
+        focusMode: 'depth',
+        title: '当前参数正在改变归一化平面上的位置',
+        summary: '点高度 Zw 会先影响相机坐标中的深度 Zc，再通过透视除法改变归一化平面坐标。',
+        formulaLabel: '当前观察链路',
+        formulaMath: math('<mi>x</mi><mo>=</mo><msub><mi>X</mi><mi>c</mi></msub><mo>/</mo><msub><mi>Z</mi><mi>c</mi></msub><mo>,</mo><mi>y</mi><mo>=</mo><msub><mi>Y</mi><mi>c</mi></msub><mo>/</mo><msub><mi>Z</mi><mi>c</mi></msub>'),
+      };
+  }
+}
+
 export default function CameraModelPage() {
   const [focusMode, setFocusMode] = useState<FocusMode>('chain');
   const [selectedCornerIndex, setSelectedCornerIndex] = useState(20);
   const [pointHeight, setPointHeight] = useState(0);
   const [intrinsics, setIntrinsics] = useState<CalibrationIntrinsics>(DEFAULT_INTRINSICS);
   const [extrinsics, setExtrinsics] = useState<CalibrationExtrinsics>(DEFAULT_EXTRINSICS);
+  const [activeParameterKey, setActiveParameterKey] = useState<CameraParameterKey>('pointHeight');
 
   const boardSpec = DEFAULT_BOARD_SPEC;
   const boardCorners = useMemo(() => createBoardCorners(boardSpec), [boardSpec]);
@@ -207,6 +281,7 @@ export default function CameraModelPage() {
 
   const updateIntrinsics = useCallback(
     <K extends keyof CalibrationIntrinsics>(key: K, value: CalibrationIntrinsics[K]) => {
+      setActiveParameterKey(key);
       setIntrinsics(prev => ({ ...prev, [key]: value }));
     },
     []
@@ -214,10 +289,14 @@ export default function CameraModelPage() {
 
   const updateExtrinsics = useCallback(
     <K extends keyof CalibrationExtrinsics>(key: K, value: CalibrationExtrinsics[K]) => {
+      setActiveParameterKey(key);
       setExtrinsics(prev => ({ ...prev, [key]: value }));
     },
     []
   );
+
+  const activeImpact = useMemo(() => parameterImpact(activeParameterKey), [activeParameterKey]);
+  const effectiveFocusMode = focusMode === 'chain' ? activeImpact.focusMode : focusMode;
 
   const nearDepth = Math.max(1, projection.depth - 2.5);
   const farDepth = projection.depth + 2.5;
@@ -250,7 +329,9 @@ export default function CameraModelPage() {
             <p className="mt-2 text-xs leading-5 text-slate-600">
               第一步是刚体变换：
               <MathText className="mx-1" mathML={math('<msub><mi>X</mi><mi>c</mi></msub><mo>=</mo><mi>R</mi><msub><mi>X</mi><mi>w</mi></msub><mo>+</mo><mi>T</mi>')} />
-              。它说明当前世界点在这台相机坐标系下的位置。
+              。它说明当前世界点在这台相机坐标系下的位置，这一段就是
+              <TeachingTerm term="外参" explanation="外参描述这张照片里相机相对世界的姿态和位置，每换一个拍摄姿态就会变。" className="mx-1" />
+              的作用范围。
             </p>
             <div className="mt-3 grid gap-2 text-xs">
               <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-red-800">
@@ -269,7 +350,9 @@ export default function CameraModelPage() {
             <p className="mt-2 text-xs leading-5 text-slate-600">
               针孔模型的关键动作是
               <MathText className="mx-1" mathML={math('<mi>x</mi><mo>=</mo><msub><mi>X</mi><mi>c</mi></msub><mo>/</mo><msub><mi>Z</mi><mi>c</mi></msub><mo>,</mo><mi>y</mi><mo>=</mo><msub><mi>Y</mi><mi>c</mi></msub><mo>/</mo><msub><mi>Z</mi><mi>c</mi></msub>')} />
-              。这一步解释了“远处物体成像更小”。
+              。这一步把点落到
+              <TeachingTerm term="归一化平面" explanation="归一化平面就是先把相机坐标除以深度 Zc 后得到的无单位平面坐标，还没变成像素。" className="mx-1" />
+              上，也解释了“远处物体成像更小”。
             </p>
             <div className="mt-3 grid gap-2 text-xs">
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">
@@ -286,9 +369,12 @@ export default function CameraModelPage() {
           <FlowNode tone="emerald">
             <div className="text-[11px] font-semibold uppercase text-emerald-700">3. 内参：回答落在图像数组哪个像素</div>
             <p className="mt-2 text-xs leading-5 text-slate-600">
-              内参矩阵把归一化坐标变成图像数组中的
+              <TeachingTerm term="内参" explanation="内参描述同一台相机自身的成像尺度、倾斜和主点位置，通常不随拍摄姿态变化。" className="mr-1" />
+              矩阵把归一化坐标变成图像数组中的
               <MathText className="mx-1" mathML={math('<mi>u</mi><mo>,</mo><mi>v</mi>')} />
-              。同一台相机的 K 通常固定，而每张照片的 [R,T] 会随拍摄姿态变化。
+              。其中
+              <TeachingTerm term="主点" explanation="主点是光轴落到像素平面上的位置，u0 和 v0 控制它在图像中的坐标。" className="mx-1" />
+              由 u0、v0 表示。
             </p>
             <div className="mt-3 grid gap-2 text-xs">
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-800">
@@ -348,6 +434,23 @@ export default function CameraModelPage() {
             mathML={math(`<mi>u</mi><mo>=</mo><mi>&alpha;</mi><mi>x</mi><mo>+</mo><mi>&gamma;</mi><mi>y</mi><mo>+</mo><msub><mi>u</mi><mn>0</mn></msub><mo>=</mo><mn>${formatMatrixValue(projection.pixel.x, 2)}</mn><mo>,</mo><mi>v</mi><mo>=</mo><mi>&beta;</mi><mi>y</mi><mo>+</mo><msub><mi>v</mi><mn>0</mn></msub><mo>=</mo><mn>${formatMatrixValue(projection.pixel.y, 2)}</mn>`)}
             note="这一步得到图像数组中的像素坐标。"
           />
+        </div>
+      </TeachingCard>
+
+      <TeachingCard tone="amber">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-amber-900">{activeImpact.title}</div>
+            <p className="mt-2 text-sm leading-6 text-slate-700">{activeImpact.summary}</p>
+          </div>
+          <div className="rounded-2xl border border-amber-200 bg-white px-4 py-3">
+            <FormulaCard
+              label={activeImpact.formulaLabel}
+              mathML={activeImpact.formulaMath}
+              formulaClassName="rounded-xl px-3 py-3 shadow-none"
+              note={`最近调整参数：${activeParameterKey}`}
+            />
+          </div>
         </div>
       </TeachingCard>
 
@@ -414,7 +517,17 @@ export default function CameraModelPage() {
         options={CORNER_OPTIONS}
       />
 
-      <SliderParam label="点高度 Zw" value={pointHeight} onChange={setPointHeight} min={0} max={6} step={0.5} />
+      <SliderParam
+        label="点高度 Zw"
+        value={pointHeight}
+        onChange={value => {
+          setActiveParameterKey('pointHeight');
+          setPointHeight(value);
+        }}
+        min={0}
+        max={6}
+        step={0.5}
+      />
 
       <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-5 text-slate-600">
         当前点先按外参进入相机坐标系，再除以深度，最后由 K 映射到像素坐标。
@@ -445,7 +558,7 @@ export default function CameraModelPage() {
 
       <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-800">
         当前像素约为 ({formatMatrixValue(projection.pixel.x, 2)}, {formatMatrixValue(projection.pixel.y, 2)})，
-        深度 Zc={formatMatrixValue(projection.depth, 2)}。
+        深度 Zc={formatMatrixValue(projection.depth, 2)}。最近调整参数：{activeParameterKey}，主视觉会自动强调它影响的链路段。
       </div>
     </div>
   );
@@ -455,7 +568,7 @@ export default function CameraModelPage() {
       extrinsics={extrinsics}
       intrinsics={intrinsics}
       mode="camera-model"
-      focusMode={focusMode}
+      focusMode={effectiveFocusMode}
       imageSize={{ width: IMAGE_WIDTH, height: IMAGE_HEIGHT }}
       selectedPoint={{ ...selectedCorner, world: worldPoint }}
       title="成像模型的三维关系"

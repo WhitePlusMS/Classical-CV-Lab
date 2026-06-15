@@ -16,6 +16,7 @@ import {
   SelectParam,
   SliderParam,
   TeachingCard,
+  TeachingTerm,
   buildInlineMathML,
 } from '@/components';
 import {
@@ -329,7 +330,9 @@ export default function ImageRegistrationPage() {
             <div className="text-[11px] font-semibold uppercase text-amber-800">2. 用对应点估计变换矩阵</div>
             <p className="mt-2 text-xs leading-5 text-slate-600">
               当前选择的是 {scenario.modelInfo.label}，至少需要 {scenario.modelInfo.minimumPairs} 对点。
-              如果误匹配混入估计，矩阵中每个参数都会被错误拉动。
+              如果误匹配混入估计，矩阵中每个参数都会被错误拉动。选择稳健策略时，会先用
+              <TeachingTerm term="RANSAC" explanation="RANSAC 会反复抽少量点先估一个模型，再统计谁和这个模型一致，用来排掉误匹配。" className="mx-1" />
+              找到几何上一致的内点集合。
             </p>
             <FormulaCard
               className="mt-3"
@@ -356,7 +359,9 @@ export default function ImageRegistrationPage() {
                 叠加强度误差：{formatRegistrationValue(scenario.activeEstimate.meanIntensityError, 3)}
               </div>
               <div className={`rounded-xl border px-3 py-2 ${residualTone(activeMatch)}`}>
-                当前点残差：{formatRegistrationValue(activeMatch.residual, 2)} px
+                当前点
+                <TeachingTerm term="残差" explanation="残差就是观测点和模型预测点之间的距离，越小表示这对匹配越支持当前矩阵。" className="mx-1" />
+                ：{formatRegistrationValue(activeMatch.residual, 2)} px
               </div>
             </div>
           </FlowNode>
@@ -368,23 +373,38 @@ export default function ImageRegistrationPage() {
   const stepDetails = activeMatch ? (
     <div className="space-y-4">
       <TeachingCard>
+        <div className="text-sm font-semibold text-slate-800">当前匹配对的三点关系</div>
+        <div className="mt-4 grid gap-4 xl:grid-cols-3">
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-800">
+            左图参考点：{formatPoint(activeMatch.source)}
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-700">
+            右图真实点：{formatPoint(activeMatch.observedTarget)}
+          </div>
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-800">
+            模型预测点：{formatPoint(activeMatch.predictedTarget)}
+          </div>
+        </div>
+      </TeachingCard>
+
+      <TeachingCard>
         <div className="text-sm font-semibold text-slate-800">从特征匹配到图像对齐</div>
         <p className="mt-1 text-xs leading-5 text-slate-500">
           第四章强调“提取关键点、构造描述子、建立匹配关系”；第三章强调“选对几何模型并对整幅图做坐标变换”。图像配准正是这两部分内容的连接点。
         </p>
         <div className="mt-4 grid gap-4">
-          <FormulaCard
-            label="特征距离"
-            mathML={math('<msub><mi>Dis</mi><mi>ij</mi></msub><mo>=</mo><msqrt><munderover><mo>&Sigma;</mo><mi>k</mi><mi>n</mi></munderover><msup><mrow><mo>(</mo><msub><mi>X</mi><mi>ik</mi></msub><mo>-</mo><msub><mi>X</mi><mi>jk</mi></msub><mo>)</mo></mrow><mn>2</mn></msup></msqrt>')}
-            note="描述子之间的欧氏距离是常见相似性度量。距离小，只说明“像”，不保证几何上一定正确。"
-          />
-          <FormulaCard
-            label={model === 'affine' ? '仿射坐标变换' : '透视坐标变换'}
-            mathML={buildTransformMath(model, activeMatrixRows, activeMatch.source, activeMatch.predictedTarget)}
-            note={scenario.modelInfo.propertyNote}
-          />
-        </div>
-      </TeachingCard>
+            <FormulaCard
+              label="特征距离"
+              mathML={math('<msub><mi>Dis</mi><mi>ij</mi></msub><mo>=</mo><msqrt><munderover><mo>&Sigma;</mo><mi>k</mi><mi>n</mi></munderover><msup><mrow><mo>(</mo><msub><mi>X</mi><mi>ik</mi></msub><mo>-</mo><msub><mi>X</mi><mi>jk</mi></msub><mo>)</mo></mrow><mn>2</mn></msup></msqrt>')}
+              note="描述子之间的欧氏距离是常见相似性度量。距离小，只说明“像”，不保证几何上一定正确。"
+            />
+            <FormulaCard
+              label={model === 'affine' ? '仿射坐标变换' : '透视坐标变换'}
+              mathML={buildTransformMath(model, activeMatrixRows, activeMatch.source, activeMatch.predictedTarget)}
+              note={scenario.modelInfo.propertyNote}
+            />
+          </div>
+        </TeachingCard>
 
       <TeachingCard>
         <div className="text-sm font-semibold text-slate-800">当前矩阵与真实矩阵对比</div>
@@ -420,6 +440,9 @@ export default function ImageRegistrationPage() {
               <MathText className="mx-1" mathML={math('<mi>e</mi><mo>=</mo><mroot><mrow><msup><mrow><mo>(</mo><msup><mi>x</mi><mo>&prime;</mo></msup><mo>-</mo><msup><mover><mi>x</mi><mo>^</mo></mover><mo>&prime;</mo></msup><mo>)</mo></mrow><mn>2</mn></msup><mo>+</mo><msup><mrow><mo>(</mo><msup><mi>y</mi><mo>&prime;</mo></msup><mo>-</mo><msup><mover><mi>y</mi><mo>^</mo></mover><mo>&prime;</mo></msup><mo>)</mo></mrow><mn>2</mn></msup></mrow><mn>2</mn></mroot>')} />
               ，当前值为 {formatRegistrationValue(activeMatch.residual, 2)} px。
             </div>
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+              当前误差向量：({formatRegistrationValue(activeMatch.observedTarget.x - activeMatch.predictedTarget.x, 2)}, {formatRegistrationValue(activeMatch.observedTarget.y - activeMatch.predictedTarget.y, 2)}) px
+            </div>
             <div className={`rounded-2xl border px-4 py-3 text-sm leading-6 ${activeMatch.isOutlier ? 'border-red-200 bg-red-50 text-red-700' : activeMatch.inlier ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
               {activeMatch.isOutlier
                 ? '该匹配是故意注入的误匹配。即使描述子阶段把它当成候选，如果不做几何筛选，也会直接扰动矩阵估计。'
@@ -442,7 +465,9 @@ export default function ImageRegistrationPage() {
               叠加强度误差 {formatRegistrationValue(scenario.robustEstimate.meanIntensityError, 3)}。
             </div>
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
-              当误匹配数量增加时，重点观察”矩阵偏差”和”叠加后重影”是否同步恶化。前者说明参数被拉偏，后者说明全图像素已经无法对齐。
+              当误匹配数量增加时，重点观察”矩阵偏差”和”叠加后重影”是否同步恶化。稳健估计的最后一步通常会对内点做一次
+              <TeachingTerm term="最小二乘" explanation="最小二乘会在已经选出的内点上，寻找让整体残差平方和最小的矩阵参数。" className="mx-1" />
+              拟合，进一步减小整体误差。
             </div>
           </div>
         </TeachingCard>

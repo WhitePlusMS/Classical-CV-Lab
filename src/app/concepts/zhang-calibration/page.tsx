@@ -14,6 +14,7 @@ import {
   SelectParam,
   SliderParam,
   TeachingCard,
+  TeachingTerm,
   buildInlineMathML,
 } from '@/components';
 import { useGridNavigation } from '@/hooks/useGridNavigation';
@@ -206,6 +207,10 @@ export default function ZhangCalibrationPage() {
 
   const currentError = selectedImageCorner?.reprojectionError ?? 0;
   const viewError = activeView?.meanReprojectionError ?? 0;
+  const observedCornerPoint = selectedImageCorner?.subPixel ?? null;
+  const projectedCornerPoint = selectedImageCorner?.projected ?? null;
+  const residualDx = observedCornerPoint && projectedCornerPoint ? observedCornerPoint.x - projectedCornerPoint.x : 0;
+  const residualDy = observedCornerPoint && projectedCornerPoint ? observedCornerPoint.y - projectedCornerPoint.y : 0;
 
   const contentHeader = (
     <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
@@ -214,7 +219,11 @@ export default function ZhangCalibrationPage() {
         <p className="mt-1 text-sm leading-6 text-slate-600">
           成像模型给出
           <MathText className="mx-1" mathML={math('<mi>s</mi><mover><mi>m</mi><mo>~</mo></mover><mo>=</mo><mi>K</mi><mo>[</mo><mi>R</mi><mo>,</mo><mi>t</mi><mo>]</mo><msub><mover><mi>X</mi><mo>~</mo></mover><mi>w</mi></msub>')} />
-          ，标定板提供同一批角点的世界坐标和像素坐标。张正友法把这些点对转化为 H，再求 K 和每张图的 [R,t]。
+          ，标定板提供同一批角点的世界坐标和像素坐标。张正友法把这些点对转化为
+          <TeachingTerm term="单应矩阵 H" explanation="单应矩阵 H 是同一张平面标定板从世界平面到图像平面的 3×3 投影映射。" className="mx-1" />
+          ，再求 K 和每张图的
+          <TeachingTerm term="R/t" explanation="R 和 t 是这张图独有的外参，表示标定板相对相机的姿态和位置。" className="mx-1" />
+          。
         </p>
       </div>
       <div className={`rounded-2xl border px-4 py-3 text-sm ${enoughEquations ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-red-200 bg-red-50 text-red-800'}`}>
@@ -234,7 +243,7 @@ export default function ZhangCalibrationPage() {
               <MathText className="mx-1" mathML={math('<msub><mi>X</mi><mi>w</mi></msub><mo>=</mo><mo>(</mo><mi>X</mi><mo>,</mo><mi>Y</mi><mo>,</mo><mn>0</mn><mo>)</mo>')} />
               ；`imagePoints` 是同一角点在照片中的
               <MathText className="mx-1" mathML={math('<msub><mi>M</mi><mi>i</mi></msub><mo>&#8596;</mo><msub><mi>m</mi><mi>i</mi></msub>')} />
-              。
+              。这一页默认锁定一组当前角点对，不再同时平铺整批角点。
             </p>
             <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
               M=({selectedBoardCorner.world.x.toFixed(1)}, {selectedBoardCorner.world.y.toFixed(1)}, 0)
@@ -258,7 +267,9 @@ export default function ZhangCalibrationPage() {
             <p className="mt-2 text-xs leading-5 text-slate-600">
               棋盘点都在
               <MathText className="mx-1" mathML={math('<mi>Z</mi><mo>=</mo><mn>0</mn>')} />
-              平面上，因此一张标定图可先估计一个单应性 H。
+              平面上，因此一张标定图可先估计一个
+              <TeachingTerm term="单应矩阵 H" explanation="H 把平面点直接映射到图像点，所以先不必一上来就展开完整三维投影链。" className="mx-1" />
+              。
             </p>
             <FormulaCard
               className="mt-3"
@@ -281,6 +292,9 @@ export default function ZhangCalibrationPage() {
               </div>
               <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
                 当前角点误差：{currentError.toFixed(3)} px
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                Δu={residualDx.toFixed(2)}，Δv={residualDy.toFixed(2)}
               </div>
             </div>
           </FlowNode>
@@ -307,6 +321,24 @@ export default function ZhangCalibrationPage() {
             mathML={math('<mi>m</mi><mo>=</mo><mo>(</mo><mi>u</mi><mo>,</mo><mi>v</mi><mo>,</mo><mn>1</mn><mo>)</mo>')}
             note="由角点检测和亚像素细化得到。"
           />
+        </div>
+      </TeachingCard>
+
+      <TeachingCard>
+        <div className="text-sm font-semibold text-slate-800">当前角点对的三类点</div>
+        <p className="mt-1 text-xs leading-5 text-slate-500">
+          当前角点会同时看到世界平面角点、检测到的图像角点、模型重投影点。真正需要盯住的是“检测点到重投影点”的偏差方向和长度。
+        </p>
+        <div className="mt-4 grid gap-4 xl:grid-cols-3">
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-800">
+            世界角点 M=({selectedBoardCorner.world.x.toFixed(1)}, {selectedBoardCorner.world.y.toFixed(1)}, 0)
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-700">
+            检测角点 m=({selectedImageCorner.subPixel.x.toFixed(2)}, {selectedImageCorner.subPixel.y.toFixed(2)})
+          </div>
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-800">
+            重投影点 m^=({selectedImageCorner.projected.x.toFixed(2)}, {selectedImageCorner.projected.y.toFixed(2)})
+          </div>
         </div>
       </TeachingCard>
 
@@ -383,7 +415,9 @@ export default function ZhangCalibrationPage() {
       <TeachingCard>
         <div className="text-sm font-semibold text-slate-800">重投影误差：标定结果是否可信</div>
         <p className="mt-1 text-xs leading-5 text-slate-500">
-          求出的参数必须能把棋盘世界点重新投回接近检测角点的位置。偏差越小，说明模型越能解释观测数据。
+          求出的参数必须能把棋盘世界点重新投回接近检测角点的位置。这里的
+          <TeachingTerm term="重投影误差" explanation="重投影误差就是检测角点和模型投影点之间的像素距离，越小表示模型越能解释观测数据。" className="mx-1" />
+          越小，说明模型越能解释观测数据。
         </p>
         <div className="mt-4 grid gap-4 xl:grid-cols-2">
           <FormulaCard
@@ -396,6 +430,9 @@ export default function ZhangCalibrationPage() {
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
               模型投影：({formatMatrixValue(selectedImageCorner.projected.x, 2)}, {formatMatrixValue(selectedImageCorner.projected.y, 2)})
+            </div>
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+              误差箭头：({residualDx.toFixed(2)}, {residualDy.toFixed(2)}) px
             </div>
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
               当前角点误差：{currentError.toFixed(3)} px
