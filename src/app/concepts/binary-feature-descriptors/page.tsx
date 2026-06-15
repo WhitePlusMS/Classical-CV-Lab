@@ -1,38 +1,47 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
- import {
-   CodeViewer,
-   ConceptLayout,
-   FlowColumn,
-   FlowColumns,
-   FlowNode,
-   FormulaCard,
-   ImageCanvas,
-   ProcessRail,
-   SelectParam,
-   SliderParam,
-   TeachingCard,
-   TeachingTerm,
-   buildInlineMathML,
- } from '@/components';
-import { useLenaGrayscaleImage } from '@/hooks/useLenaGrayscaleImage';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  CodeViewer,
+  ConceptLayout,
+  FlowColumn,
+  FlowColumns,
+  FlowNode,
+  FormulaCard,
+  ImageCanvas,
+  InlineMath,
+  ProcessRail,
+  SelectParam,
+  SliderParam,
+  TeachingCard,
+  TeachingTerm,
+  buildInlineMathML,
+} from '@/components';
 import { GrayscaleImage } from '@/lib/algorithms/types';
 import { loadImageAsGrayscale, resizeGrayscaleImage } from '@/lib/utils/imageProcessing';
 
-/// ============================================================
-/// 二进制特征描述子页面常量与工具
-/// ============================================================
-
+type AlgorithmMode = 'brief' | 'orb' | 'brisk';
 type SamplingMethod = 'GI' | 'GII' | 'GIII' | 'GIV' | 'GV';
-type PatchSource = 'synthetic' | 'lenaPatch';
+type PatchSource = 'synthetic' | 'image';
+type Pair = [number, number, number, number];
+type Point = { x: number; y: number };
+
+const PATCH_SIZE = 9;
+const PATCH_HALF = Math.floor(PATCH_SIZE / 2);
+const DEFAULT_CENTER: Point = { x: 32, y: 28 };
+
+const ALGORITHM_OPTIONS: { value: AlgorithmMode; label: string }[] = [
+  { value: 'brief', label: 'BRIEF：点对比较' },
+  { value: 'orb', label: 'ORB：带方向的 BRIEF' },
+  { value: 'brisk', label: 'BRISK：长短点对' },
+];
 
 const SAMPLING_OPTIONS: { value: SamplingMethod; label: string; desc: string }[] = [
-  { value: 'GI',   label: 'GI - 均匀分布',           desc: 'X、Y 在 Patch 内均匀分布' },
-  { value: 'GII',  label: 'GII - 高斯分布',          desc: 'X、Y 均服从高斯分布（中心密集）' },
-  { value: 'GIII', label: 'GIII - X 中心取 Y',       desc: '先随机取 X，再以 X 为中心取 Y' },
-  { value: 'GIV',  label: 'GIV - 极坐标量化',        desc: '空间量化极坐标系下随机取 2N 个点' },
-  { value: 'GV',   label: 'GV - 中心固定极坐标遍历', desc: 'X 固定在中心，Y 在极坐标系取所有可能值' },
+  { value: 'GI', label: 'GI - 均匀分布', desc: 'X、Y 在 Patch 内均匀分布，适合观察最直接的随机点对比较。' },
+  { value: 'GII', label: 'GII - 高斯分布', desc: 'X、Y 更集中在 Patch 中心，常用于让描述子更关注关键点附近结构。' },
+  { value: 'GIII', label: 'GIII - X 中心取 Y', desc: '先取 X，再在 X 附近取 Y，点对更偏向局部纹理关系。' },
+  { value: 'GIV', label: 'GIV - 极坐标量化', desc: '按极坐标半径和角度取点，便于理解方向归一化。' },
+  { value: 'GV', label: 'GV - 中心固定极坐标遍历', desc: 'X 固定在中心，Y 沿周围采样，适合观察中心与邻域的亮暗关系。' },
 ];
 
 const PAIR_OPTIONS: { value: number; label: string }[] = [
@@ -41,20 +50,57 @@ const PAIR_OPTIONS: { value: number; label: string }[] = [
   { value: 512, label: '512 bit' },
 ];
 
-/// 合成 9×9 Patch（模拟一个弱角点区域的灰度值，范围 0~255）
 const SYNTHETIC_PATCH: number[][] = [
   [180, 178, 175, 170, 165, 160, 158, 155, 152],
   [176, 172, 168, 162, 155, 148, 142, 138, 135],
   [170, 165, 158, 150, 140, 130, 122, 118, 115],
-  [162, 155, 145, 132, 118, 105,  95,  90,  88],
-  [158, 148, 135, 118, 100,  82,  70,  65,  62],
-  [152, 140, 125, 105,  82,  60,  48,  42,  40],
-  [148, 135, 118,  95,  70,  48,  35,  30,  28],
-  [145, 132, 115,  90,  65,  42,  30,  25,  22],
-  [142, 130, 112,  88,  62,  40,  28,  22,  20],
+  [162, 155, 145, 132, 118, 105, 95, 90, 88],
+  [158, 148, 135, 118, 100, 82, 70, 65, 62],
+  [152, 140, 125, 105, 82, 60, 48, 42, 40],
+  [148, 135, 118, 95, 70, 48, 35, 30, 28],
+  [145, 132, 115, 90, 65, 42, 30, 25, 22],
+  [142, 130, 112, 88, 62, 40, 28, 22, 20],
 ];
 
-const PATCH_SIZE = 9;
+const TAU_FORMULA = buildInlineMathML(
+  '<mrow><mi>τ</mi><mo>(</mo><mi>p</mi><mo>;</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>:=</mo>' +
+  '<mrow><mo>{</mo><mtable>' +
+  '<mtr><mtd><mn>1</mn></mtd><mtd><mtext>当 </mtext><mi>p</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>&lt;</mo><mi>p</mi><mo>(</mo><mi>y</mi><mo>)</mo></mtd></mtr>' +
+  '<mtr><mtd><mn>0</mn></mtd><mtd><mtext>其他</mtext></mtd></mtr>' +
+  '</mtable></mrow></mrow>'
+);
+
+const BRIEF_DESCRIPTOR_FORMULA = buildInlineMathML(
+  '<mrow><msub><mi>f</mi><msub><mi>n</mi><mi>d</mi></msub></msub><mo>(</mo><mi>p</mi><mo>)</mo>' +
+  '<mo>:=</mo><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><msub><mi>n</mi><mi>d</mi></msub></munderover>' +
+  '<msup><mn>2</mn><mrow><mi>i</mi><mo>-</mo><mn>1</mn></mrow></msup>' +
+  '<mi>τ</mi><mo>(</mo><mi>p</mi><mo>;</mo><msub><mi>x</mi><mi>i</mi></msub><mo>,</mo><msub><mi>y</mi><mi>i</mi></msub><mo>)</mo></mrow>'
+);
+
+const HAMMING_FORMULA = buildInlineMathML(
+  '<mrow><mi>d</mi><mo>(</mo><msub><mi>f</mi><mn>1</mn></msub><mo>,</mo><msub><mi>f</mi><mn>2</mn></msub><mo>)</mo>' +
+  '<mo>=</mo><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover>' +
+  '<mo>(</mo><msub><mi>f</mi><mn>1</mn></msub><mo>[</mo><mi>i</mi><mo>]</mo><mo>⊕</mo><msub><mi>f</mi><mn>2</mn></msub><mo>[</mo><mi>i</mi><mo>]</mo><mo>)</mo></mrow>'
+);
+
+const ORB_CENTROID_FORMULA = buildInlineMathML(
+  '<mrow><msub><mi>m</mi><mn>10</mn></msub><mo>=</mo><munderover><mo>∑</mo><mi>x</mi><mi>y</mi></munderover><mi>x</mi><mi>I</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo>' +
+  '<mo>,</mo><msub><mi>m</mi><mn>01</mn></msub><mo>=</mo><munderover><mo>∑</mo><mi>x</mi><mi>y</mi></munderover><mi>y</mi><mi>I</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo>' +
+  '<mo>,</mo><mi>θ</mi><mo>=</mo><mi>atan2</mi><mo>(</mo><msub><mi>m</mi><mn>01</mn></msub><mo>,</mo><msub><mi>m</mi><mn>10</mn></msub><mo>)</mo></mrow>'
+);
+
+const BRISK_DIRECTION_FORMULA = buildInlineMathML(
+  '<mrow><mi>g</mi><mo>=</mo><mfenced open="(" close=")"><mtable><mtr><mtd><munder><mo>∑</mo><mi>L</mi></munder><msub><mi>g</mi><mi>x</mi></msub></mtd></mtr><mtr><mtd><munder><mo>∑</mo><mi>L</mi></munder><msub><mi>g</mi><mi>y</mi></msub></mtd></mtr></mtable></mfenced>' +
+  '<mo>,</mo><mi>θ</mi><mo>=</mo><mi>atan2</mi><mo>(</mo><msub><mi>g</mi><mi>y</mi></msub><mo>,</mo><msub><mi>g</mi><mi>x</mi></msub><mo>)</mo></mrow>'
+);
+
+function inlineMath(body: string): string {
+  return buildInlineMathML(`<mrow>${body}</mrow>`);
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
 
 function createPatchPreviewImage(): GrayscaleImage {
   const size = 64;
@@ -69,102 +115,73 @@ function createPatchPreviewImage(): GrayscaleImage {
 
 const FALLBACK_PATCH_IMAGE = createPatchPreviewImage();
 
-/** 从 Lena 灰度图中提取 9x9 区域作为真实 Patch */
-function extractLenaPatch(lenaImage: GrayscaleImage): number[][] {
-  const h = lenaImage.length;
-  const w = lenaImage[0]?.length ?? 1;
-  const cx = Math.floor(w * 0.58);
-  const cy = Math.floor(h * 0.42);
-  const half = Math.floor(PATCH_SIZE / 2);
-  const x0 = Math.max(0, Math.min(cx - half, w - PATCH_SIZE));
-  const y0 = Math.max(0, Math.min(cy - half, h - PATCH_SIZE));
-  return lenaImage.slice(y0, y0 + PATCH_SIZE).map(row => row.slice(x0, x0 + PATCH_SIZE).map(v => Math.round(v * 255)));
+function extractPatchFromImage(image: GrayscaleImage, center: Point): number[][] {
+  const h = image.length;
+  const w = image[0]?.length ?? 1;
+  const centerX = clamp(center.x, PATCH_HALF, Math.max(PATCH_HALF, w - PATCH_HALF - 1));
+  const centerY = clamp(center.y, PATCH_HALF, Math.max(PATCH_HALF, h - PATCH_HALF - 1));
+
+  return Array.from({ length: PATCH_SIZE }, (_, y) => (
+    Array.from({ length: PATCH_SIZE }, (_, x) => {
+      const sourceX = clamp(centerX + x - PATCH_HALF, 0, w - 1);
+      const sourceY = clamp(centerY + y - PATCH_HALF, 0, h - 1);
+      return Math.round((image[sourceY]?.[sourceX] ?? 0) * 255);
+    })
+  ));
 }
 
-/// 根据采样方式生成随机点对坐标
-function generatePairs(method: SamplingMethod, count: number, seed: number = 42): [number, number, number, number][] {
-  const half = Math.floor(PATCH_SIZE / 2);
-  const pairs: [number, number, number, number][] = [];
-
-  // 简单随机数生成器（固定种子保证可复现）
+function generatePairs(method: SamplingMethod, count: number, seed = 42): Pair[] {
+  const pairs: Pair[] = [];
   let s = seed;
   const rand = () => {
-    s = (s * 16807 + 0) % 2147483647;
+    s = (s * 16807) % 2147483647;
     return (s - 1) / 2147483646;
   };
 
   for (let i = 0; i < count; i++) {
-    let x1: number, y1: number, x2: number, y2: number;
+    let x1 = 0;
+    let y1 = 0;
+    let x2 = 0;
+    let y2 = 0;
 
-    switch (method) {
-      case 'GI': {
-        // X、Y 均匀分布
-        x1 = Math.floor(rand() * PATCH_SIZE);
-        y1 = Math.floor(rand() * PATCH_SIZE);
-        x2 = Math.floor(rand() * PATCH_SIZE);
-        y2 = Math.floor(rand() * PATCH_SIZE);
-        break;
-      }
-      case 'GII': {
-        // X、Y 均服从高斯分布（Box-Muller 变体）
-        const sampleGauss = (): number => {
-          const u1 = rand();
-          const u2 = rand();
-          const r = Math.sqrt(-2 * Math.log(u1 + 0.0001));
-          const theta = 2 * Math.PI * u2;
-          const z = r * Math.cos(theta);
-          // 映射到 [0, PATCH_SIZE)，中心在 half
-          return Math.round(Math.min(PATCH_SIZE - 1, Math.max(0, z * 1.2 + half)));
-        };
-        x1 = sampleGauss();
-        y1 = sampleGauss();
-        x2 = sampleGauss();
-        y2 = sampleGauss();
-        break;
-      }
-      case 'GIII': {
-        // 先随机取 X，再以 X 为中心取 Y（高斯偏移）
-        x1 = Math.floor(rand() * PATCH_SIZE);
-        y1 = Math.floor(rand() * PATCH_SIZE);
-        const u = rand();
-        const v = rand();
-        const offX = Math.round((u * 2 - 1) * 2);
-        const offY = Math.round((v * 2 - 1) * 2);
-        x2 = Math.min(PATCH_SIZE - 1, Math.max(0, x1 + offX));
-        y2 = Math.min(PATCH_SIZE - 1, Math.max(0, y1 + offY));
-        break;
-      }
-      case 'GIV': {
-        // 极坐标量化下取 2N 个点，两两配对
-        const r1 = rand() * half;
-        const theta1 = rand() * 2 * Math.PI;
-        const r2 = rand() * half;
-        const theta2 = rand() * 2 * Math.PI;
-        x1 = Math.round(half + r1 * Math.cos(theta1));
-        y1 = Math.round(half + r1 * Math.sin(theta1));
-        x2 = Math.round(half + r2 * Math.cos(theta2));
-        y2 = Math.round(half + r2 * Math.sin(theta2));
-        x1 = Math.min(PATCH_SIZE - 1, Math.max(0, x1));
-        y1 = Math.min(PATCH_SIZE - 1, Math.max(0, y1));
-        x2 = Math.min(PATCH_SIZE - 1, Math.max(0, x2));
-        y2 = Math.min(PATCH_SIZE - 1, Math.max(0, y2));
-        break;
-      }
-      case 'GV': {
-        // X 固定在中心，Y 在极坐标系取尽可能多的值
-        x1 = half;
-        y1 = half;
-        const r = rand() * half;
-        const theta = rand() * 2 * Math.PI;
-        x2 = Math.round(half + r * Math.cos(theta));
-        y2 = Math.round(half + r * Math.sin(theta));
-        x2 = Math.min(PATCH_SIZE - 1, Math.max(0, x2));
-        y2 = Math.min(PATCH_SIZE - 1, Math.max(0, y2));
-        break;
-      }
-      default: {
-        x1 = 0; y1 = 0; x2 = 0; y2 = 0;
-      }
+    if (method === 'GI') {
+      x1 = Math.floor(rand() * PATCH_SIZE);
+      y1 = Math.floor(rand() * PATCH_SIZE);
+      x2 = Math.floor(rand() * PATCH_SIZE);
+      y2 = Math.floor(rand() * PATCH_SIZE);
+    } else if (method === 'GII') {
+      const sampleGauss = (): number => {
+        const u1 = rand();
+        const u2 = rand();
+        const r = Math.sqrt(-2 * Math.log(u1 + 0.0001));
+        const theta = 2 * Math.PI * u2;
+        return clamp(Math.round(r * Math.cos(theta) * 1.2 + PATCH_HALF), 0, PATCH_SIZE - 1);
+      };
+      x1 = sampleGauss();
+      y1 = sampleGauss();
+      x2 = sampleGauss();
+      y2 = sampleGauss();
+    } else if (method === 'GIII') {
+      x1 = Math.floor(rand() * PATCH_SIZE);
+      y1 = Math.floor(rand() * PATCH_SIZE);
+      x2 = clamp(x1 + Math.round((rand() * 2 - 1) * 2), 0, PATCH_SIZE - 1);
+      y2 = clamp(y1 + Math.round((rand() * 2 - 1) * 2), 0, PATCH_SIZE - 1);
+    } else if (method === 'GIV') {
+      const r1 = rand() * PATCH_HALF;
+      const theta1 = rand() * 2 * Math.PI;
+      const r2 = rand() * PATCH_HALF;
+      const theta2 = rand() * 2 * Math.PI;
+      x1 = clamp(Math.round(PATCH_HALF + r1 * Math.cos(theta1)), 0, PATCH_SIZE - 1);
+      y1 = clamp(Math.round(PATCH_HALF + r1 * Math.sin(theta1)), 0, PATCH_SIZE - 1);
+      x2 = clamp(Math.round(PATCH_HALF + r2 * Math.cos(theta2)), 0, PATCH_SIZE - 1);
+      y2 = clamp(Math.round(PATCH_HALF + r2 * Math.sin(theta2)), 0, PATCH_SIZE - 1);
+    } else {
+      const r = rand() * PATCH_HALF;
+      const theta = rand() * 2 * Math.PI;
+      x1 = PATCH_HALF;
+      y1 = PATCH_HALF;
+      x2 = clamp(Math.round(PATCH_HALF + r * Math.cos(theta)), 0, PATCH_SIZE - 1);
+      y2 = clamp(Math.round(PATCH_HALF + r * Math.sin(theta)), 0, PATCH_SIZE - 1);
     }
 
     pairs.push([x1, y1, x2, y2]);
@@ -173,13 +190,48 @@ function generatePairs(method: SamplingMethod, count: number, seed: number = 42)
   return pairs;
 }
 
-/// τ 测试：比较两点灰度
-function tauTest(patch: number[][], x1: number, y1: number, x2: number, y2: number): number {
-  return patch[y1][x1] < patch[y2][x2] ? 1 : 0;
+function generateBriskPairs(count: number, kind: 'short' | 'long'): Pair[] {
+  const points = [
+    { x: 4, y: 1 }, { x: 6, y: 2 }, { x: 7, y: 4 }, { x: 6, y: 6 },
+    { x: 4, y: 7 }, { x: 2, y: 6 }, { x: 1, y: 4 }, { x: 2, y: 2 },
+    { x: 4, y: 3 }, { x: 5, y: 4 }, { x: 4, y: 5 }, { x: 3, y: 4 },
+  ];
+  const pairs: Pair[] = [];
+
+  for (let i = 0; i < count; i++) {
+    const a = points[i % points.length];
+    const b = points[(i + (kind === 'long' ? 4 : 1)) % points.length];
+    pairs.push([a.x, a.y, b.x, b.y]);
+  }
+
+  return pairs;
 }
 
-/// 构建描述子二进制串
-function buildDescriptor(patch: number[][], pairs: [number, number, number, number][], upTo: number): string {
+function rotatePair(pair: Pair, theta: number): Pair {
+  const rotate = (x: number, y: number): Point => {
+    const dx = x - PATCH_HALF;
+    const dy = y - PATCH_HALF;
+    const rx = Math.round(PATCH_HALF + dx * Math.cos(theta) - dy * Math.sin(theta));
+    const ry = Math.round(PATCH_HALF + dx * Math.sin(theta) + dy * Math.cos(theta));
+    return {
+      x: clamp(rx, 0, PATCH_SIZE - 1),
+      y: clamp(ry, 0, PATCH_SIZE - 1),
+    };
+  };
+  const p1 = rotate(pair[0], pair[1]);
+  const p2 = rotate(pair[2], pair[3]);
+  return [p1.x, p1.y, p2.x, p2.y];
+}
+
+function rotatePairs(pairs: Pair[], theta: number): Pair[] {
+  return pairs.map(pair => rotatePair(pair, theta));
+}
+
+function tauTest(patch: number[][], x1: number, y1: number, x2: number, y2: number): number {
+  return patch[y1]?.[x1] < patch[y2]?.[x2] ? 1 : 0;
+}
+
+function buildDescriptor(patch: number[][], pairs: Pair[], upTo: number): string {
   let bits = '';
   for (let i = 0; i < Math.min(upTo, pairs.length); i++) {
     const [x1, y1, x2, y2] = pairs[i];
@@ -188,477 +240,444 @@ function buildDescriptor(patch: number[][], pairs: [number, number, number, numb
   return bits;
 }
 
-/// ============================================================
-/// 公式 MathML
-/// ============================================================
+function hammingDistance(a: string, b: string): number {
+  let dist = 0;
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    if (a[i] !== b[i]) dist++;
+  }
+  return dist;
+}
 
-/* τ 测试分段函数 */
-const TAU_FORMULA = buildInlineMathML(
-  '<mrow><mi>τ</mi><mo>(</mo><mi>p</mi><mo>;</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>:=</mo>' +
-  '<mrow><mo>{</mo><mtable>' +
-  '<mtr><mtd><mn>1</mn></mtd><mtd><mtext>当 </mtext><mi>p</mi><mo>(</mo><mi>x</mi><mo>)</mo><mo>&lt;</mo><mi>p</mi><mo>(</mo><mi>y</mi><mo>)</mo></mtd></mtr>' +
-  '<mtr><mtd><mn>0</mn></mtd><mtd><mtext>其他</mtext></mtd></mtr>' +
-  '</mtable></mrow></mrow>'
-);
+function calculateCentroidDirection(patch: number[][]): { m10: number; m01: number; theta: number; degrees: number } {
+  let m10 = 0;
+  let m01 = 0;
+  for (let y = 0; y < PATCH_SIZE; y++) {
+    for (let x = 0; x < PATCH_SIZE; x++) {
+      const centeredX = x - PATCH_HALF;
+      const centeredY = y - PATCH_HALF;
+      const intensity = patch[y][x];
+      m10 += centeredX * intensity;
+      m01 += centeredY * intensity;
+    }
+  }
+  const theta = Math.atan2(m01, m10);
+  return { m10, m01, theta, degrees: Math.round(theta * 180 / Math.PI) };
+}
 
-/* BRIEF 描述子：f_nd(p) = Σ 2^(i-1) τ(p; x_i, y_i) */
-const BRIEF_DESCRIPTOR_FORMULA = buildInlineMathML(
-  '<mrow><msub><mi>f</mi><msub><mi>n</mi><mi>d</mi></msub></msub><mo>(</mo><mi>p</mi><mo>)</mo>' +
-  '<mo>:=</mo><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><msub><mi>n</mi><mi>d</mi></msub></munderover>' +
-  '<msup><mn>2</mn><mrow><mi>i</mi><mo>-</mo><mn>1</mn></mrow></msup>' +
-  '<mi>τ</mi><mo>(</mo><mi>p</mi><mo>;</mo><msub><mi>x</mi><mi>i</mi></msub><mo>,</mo><msub><mi>y</mi><mi>i</mi></msub><mo>)</mo></mrow>'
-);
+function calculateBriskDirection(patch: number[][], longPairs: Pair[]): { gx: number; gy: number; theta: number; degrees: number } {
+  let gx = 0;
+  let gy = 0;
+  for (const [x1, y1, x2, y2] of longPairs) {
+    const diff = (patch[y2]?.[x2] ?? 0) - (patch[y1]?.[x1] ?? 0);
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const norm = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+    gx += diff * dx / norm;
+    gy += diff * dy / norm;
+  }
+  const theta = Math.atan2(gy, gx);
+  return { gx: Math.round(gx), gy: Math.round(gy), theta, degrees: Math.round(theta * 180 / Math.PI) };
+}
 
-/* 汉明距离定义 */
-const HAMMING_FORMULA = buildInlineMathML(
-  '<mrow><mi>d</mi><mo>(</mo><msub><mi>f</mi><mn>1</mn></msub><mo>,</mo><msub><mi>f</mi><mn>2</mn></msub><mo>)</mo>' +
-  '<mo>=</mo><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover>' +
-  '<mo>(</mo><msub><mi>f</mi><mn>1</mn></msub><mo>[</mo><mi>i</mi><mo>]</mo><mo>⊕</mo><msub><mi>f</mi><mn>2</mn></msub><mo>[</mo><mi>i</mi><mo>]</mo><mo>)</mo></mrow>'
-);
+function createDescriptorImage(bits: string, compareBits: string, currentIndex: number, totalBits: number): GrayscaleImage {
+  const size = 64;
+  const cols = totalBits <= 128 ? 16 : 32;
+  const rows = Math.ceil(totalBits / cols);
+  const cellW = size / cols;
+  const cellH = size / rows;
 
-/* 方向分配：Intensity Centroid */
-const CENTROID_FORMULA = buildInlineMathML(
-  '<mrow><mi>m</mi><mo>(</mo><msub><mi>p</mi><mn>10</mn></msub><mo>,</mo><msub><mi>p</mi><mn>01</mn></msub><mo>)</mo>' +
-  '<mo>=</mo><mfenced open="[" close="]">' +
-  '<mtable><mtr><mtd><msub><mi>m</mi><mn>10</mn></msub></mtd></mtr><mtr><mtd><msub><mi>m</mi><mn>01</mn></msub></mtd></mtr></mtable>' +
-  '</mfenced>' +
-  '<mo>,</mo><mi>θ</mi><mo>=</mo><mi>atan2</mi><mo>(</mo><msub><mi>m</mi><mn>01</mn></msub><mo>,</mo><msub><mi>m</mi><mn>10</mn></msub><mo>)</mo></mrow>'
-);
+  return Array.from({ length: size }, (_, y) => (
+    Array.from({ length: size }, (_, x) => {
+      const col = Math.min(cols - 1, Math.floor(x / cellW));
+      const row = Math.min(rows - 1, Math.floor(y / cellH));
+      const index = row * cols + col;
+      if (index >= totalBits) return 0.96;
+      if (index === currentIndex) return 0.3;
+      if (index >= bits.length) return 0.9;
+      if (bits[index] !== compareBits[index]) return 0.58;
+      return bits[index] === '1' ? 0.16 : 0.82;
+    })
+  ));
+}
 
-/// ============================================================
-/// OpenCV 代码
-/// ============================================================
+function PatchPairView({ patch, pair, longPairs = [], theta }: { patch: number[][]; pair: Pair; longPairs?: Pair[]; theta?: number }) {
+  const [x1, y1, x2, y2] = pair;
+  const arrowStyle = theta === undefined
+    ? null
+    : {
+        transform: `rotate(${theta}rad)`,
+      };
+
+  return (
+    <div className="space-y-2">
+      <div className="relative mx-auto grid w-44 grid-cols-9 gap-0.5 rounded-xl border border-slate-200 bg-slate-100 p-1">
+        {patch.flatMap((row, y) => row.map((value, x) => {
+          const isX = x === x1 && y === y1;
+          const isY = x === x2 && y === y2;
+          const isLong = longPairs.some(([lx1, ly1, lx2, ly2]) => (x === lx1 && y === ly1) || (x === lx2 && y === ly2));
+          const background = `rgb(${value}, ${value}, ${value})`;
+          return (
+            <div
+              key={`${x}-${y}`}
+              className={`flex aspect-square items-center justify-center rounded-[0.28rem] text-[9px] font-bold ${
+                isX || isY ? 'ring-2 ring-white' : ''
+              } ${isLong ? 'outline outline-1 outline-sky-300' : ''}`}
+              style={{ background }}
+              title={`p(${x},${y})=${value}`}
+            >
+              {isX ? <span className="rounded bg-red-600 px-1 text-white">x</span> : null}
+              {isY ? <span className="rounded bg-emerald-600 px-1 text-white">y</span> : null}
+            </div>
+          );
+        }))}
+        {arrowStyle && (
+          <div className="pointer-events-none absolute left-1/2 top-1/2 h-0.5 w-16 origin-left rounded-full bg-sky-500" style={arrowStyle}>
+            <span className="absolute -right-1 -top-1 h-2 w-2 rotate-45 border-r-2 border-t-2 border-sky-500" />
+          </div>
+        )}
+      </div>
+      <div className="text-center text-[11px] leading-5 text-slate-500">
+        红色 x 与绿色 y 组成当前点对；蓝色轮廓表示 BRISK 用来估方向的长点对采样位置。
+      </div>
+    </div>
+  );
+}
 
 const ORB_CODE_TS = `// OpenCV ORB 特征提取与匹配
 Ptr<ORB> orb = ORB::create();
 vector<KeyPoint> keypoints1, keypoints2;
 Mat descriptors1, descriptors2;
 
-// 检测关键点
 orb->detect(img1, keypoints1);
 orb->detect(img2, keypoints2);
 
-// 计算特征描述子
 orb->compute(img1, keypoints1, descriptors1);
 orb->compute(img2, keypoints2, descriptors2);
 
-// 汉明距离匹配
 BFMatcher matcher(NORM_HAMMING, true);
 vector<DMatch> matches;
 matcher.match(descriptors1, descriptors2, matches);`;
 
 const BRISK_CODE_TS = `// OpenCV BRISK 特征提取与匹配
-Ptr<BRISK> detector = BRISK::create();
+Ptr<BRISK> brisk = BRISK::create();
 vector<KeyPoint> kp1, kp2;
 Mat des1, des2;
 
-// 检测关键点
-detector->detect(src1, kp1);
-detector->detect(src2, kp2);
+brisk->detect(src1, kp1);
+brisk->detect(src2, kp2);
 
-// 计算特征描述子
-detector->compute(src1, kp1, des1);
-detector->compute(src2, kp2, des2);
+brisk->compute(src1, kp1, des1);
+brisk->compute(src2, kp2, des2);
 
-// 汉明距离匹配
 BFMatcher matcher(NORM_HAMMING, true);
 vector<DMatch> matches;
 matcher.match(des1, des2, matches);`;
 
-/// ============================================================
-/// 页面组件
-/// ============================================================
+const BRIEF_CODE_TS = `function tauTest(patch, x, y) {
+  return patch[x] < patch[y] ? 1 : 0;
+}
+
+function buildBriefDescriptor(patch, pairs) {
+  return pairs.map(([x, y]) => tauTest(patch, x, y)).join('');
+}
+
+function hammingDistance(a, b) {
+  return [...a].filter((bit, i) => bit !== b[i]).length;
+}`;
 
 export default function BinaryFeatureDescriptorsPage() {
+  const [algorithm, setAlgorithm] = useState<AlgorithmMode>('brief');
   const [samplingMethod, setSamplingMethod] = useState<SamplingMethod>('GI');
   const [numPairs, setNumPairs] = useState(256);
- const [currentPairIndex, setCurrentPairIndex] = useState(0);
- const [patchSource, setPatchSource] = useState<PatchSource>("synthetic");
-  const lenaImage = useLenaGrayscaleImage(64);
+  const [currentPairIndex, setCurrentPairIndex] = useState(0);
+  const [patchSource, setPatchSource] = useState<PatchSource>('image');
+  const [patchCenter, setPatchCenter] = useState<Point>(DEFAULT_CENTER);
   const [loadedImage, setLoadedImage] = useState<GrayscaleImage>(FALLBACK_PATCH_IMAGE);
- /// 异步加载课件中的真实图像作为原图展示
- useEffect(() => {
-   let cancelled = false;
-   loadImageAsGrayscale('/assets/binary-feature-descriptors/0611a984f7a384894e8779c0c84166142a64673d53ccbdac68d1da6bba77e06d.jpg')
-     .then((img) => {
-       if (!cancelled) {
-         const resized = resizeGrayscaleImage(img, 64);
-         setLoadedImage(resized);
-       }
-     })
-     .catch(() => {
-       if (!cancelled) {
-         console.warn('加载参考图像失败');
-         setLoadedImage(FALLBACK_PATCH_IMAGE);
-       }
-     });
-   return () => { cancelled = true; };
- }, []);
 
-  const totalPairs = numPairs;
+  useEffect(() => {
+    let cancelled = false;
+    loadImageAsGrayscale('/assets/binary-feature-descriptors/0611a984f7a384894e8779c0c84166142a64673d53ccbdac68d1da6bba77e06d.jpg')
+      .then((img) => {
+        if (!cancelled) {
+          setLoadedImage(resizeGrayscaleImage(img, 64));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          console.warn('加载二进制描述子参考图失败，使用教学 Patch 兜底。');
+          setLoadedImage(FALLBACK_PATCH_IMAGE);
+        }
+      });
+    return () => { cancelled = true; };
+  }, []);
 
-  /// 生成点对（使用种子保证重现性）
-  const activePatch = useMemo(() => patchSource === "lenaPatch" && lenaImage ? extractLenaPatch(lenaImage) : SYNTHETIC_PATCH, [patchSource, lenaImage]);
-
-  const pairs = useMemo(
-    () => generatePairs(samplingMethod, totalPairs, 42),
-    [samplingMethod, totalPairs]
+  const activePatch = useMemo(
+    () => patchSource === 'image' ? extractPatchFromImage(loadedImage, patchCenter) : SYNTHETIC_PATCH,
+    [loadedImage, patchCenter, patchSource]
   );
 
-  /// 前 currentPairIndex 对对应的二进制串
+  const centroid = useMemo(() => calculateCentroidDirection(activePatch), [activePatch]);
+  const briskLongPairs = useMemo(() => generateBriskPairs(16, 'long'), []);
+  const briskDirection = useMemo(() => calculateBriskDirection(activePatch, briskLongPairs), [activePatch, briskLongPairs]);
+
+  const basePairs = useMemo(() => {
+    if (algorithm === 'brisk') return generateBriskPairs(numPairs, 'short');
+    return generatePairs(algorithm === 'orb' ? 'GII' : samplingMethod, numPairs, 42);
+  }, [algorithm, numPairs, samplingMethod]);
+
+  const pairs = useMemo(() => {
+    if (algorithm === 'orb') return rotatePairs(basePairs, centroid.theta);
+    if (algorithm === 'brisk') return rotatePairs(basePairs, briskDirection.theta);
+    return basePairs;
+  }, [algorithm, basePairs, briskDirection.theta, centroid.theta]);
+
+  const comparePairs = useMemo(() => {
+    if (algorithm === 'brisk') return rotatePairs(generateBriskPairs(numPairs, 'short'), briskDirection.theta + 0.22);
+    if (algorithm === 'orb') return rotatePairs(generatePairs('GII', numPairs, 137), centroid.theta + 0.18);
+    return generatePairs(samplingMethod, numPairs, 137);
+  }, [algorithm, briskDirection.theta, centroid.theta, numPairs, samplingMethod]);
+
   const binaryString = useMemo(
     () => buildDescriptor(activePatch, pairs, currentPairIndex + 1),
-    [pairs, currentPairIndex]
+    [activePatch, currentPairIndex, pairs]
   );
 
-  /// 当前点对
+  const binaryString2 = useMemo(
+    () => buildDescriptor(activePatch, comparePairs, currentPairIndex + 1),
+    [activePatch, comparePairs, currentPairIndex]
+  );
+
+  const hammingDist = useMemo(() => hammingDistance(binaryString, binaryString2), [binaryString, binaryString2]);
+  const resultImage = useMemo(
+    () => createDescriptorImage(binaryString, binaryString2, currentPairIndex, numPairs),
+    [binaryString, binaryString2, currentPairIndex, numPairs]
+  );
+
   const currentPair = pairs[currentPairIndex] ?? [0, 0, 0, 0];
   const [cx1, cy1, cx2, cy2] = currentPair;
   const v1 = activePatch[cy1]?.[cx1] ?? 0;
   const v2 = activePatch[cy2]?.[cx2] ?? 0;
   const tauResult = tauTest(activePatch, cx1, cy1, cx2, cy2);
+  const samplingInfo = SAMPLING_OPTIONS.find(option => option.value === samplingMethod);
+  const algorithmLabel = ALGORITHM_OPTIONS.find(option => option.value === algorithm)?.label ?? 'BRIEF';
+  const directionInfo = algorithm === 'orb'
+    ? `灰度质心方向 θ=${centroid.degrees}°`
+    : algorithm === 'brisk'
+      ? `长点对方向 θ=${briskDirection.degrees}°`
+      : '原始 BRIEF 不估计主方向';
 
-  /// 汉明距离（对比一个偏移后的描述子）
-  const offsetPairs = useMemo(
-    () => generatePairs(samplingMethod, totalPairs, 137),
-    [samplingMethod, totalPairs]
-  );
-  const binaryString2 = useMemo(
-    () => buildDescriptor(activePatch, offsetPairs, currentPairIndex + 1),
-    [offsetPairs, currentPairIndex]
-  );
+  const chainSubstitution = useMemo(() => {
+    let sum = 0;
+    return pairs.slice(0, Math.min(8, pairs.length)).map((pair, index) => {
+      const [x1, y1, x2, y2] = pair;
+      const tau = tauTest(activePatch, x1, y1, x2, y2);
+      const weight = Math.pow(2, index);
+      const contrib = weight * tau;
+      sum += contrib;
+      return { i: index + 1, tau, weight, contrib, sum };
+    });
+  }, [activePatch, pairs]);
 
-  const hammingDist = useMemo(() => {
-    let dist = 0;
-    for (let i = 0; i < binaryString.length; i++) {
-      if (binaryString[i] !== binaryString2[i]) dist++;
-    }
-    return dist;
- }, [binaryString, binaryString2]);
- 
- /// 链式代入：逐位展示 BRIEF 描述子的数值计算过程（前 8 位）
- const chainSubstitution = useMemo(() => {
-   let sum = 0;
-   const rows: { i: number; tau: number; weight: number; contrib: number; sum: number }[] = [];
-   const bits = 8;
-   for (let i = 0; i < Math.min(bits, pairs.length); i++) {
-     const [x1, y1, x2, y2] = pairs[i];
-     const v1 = activePatch[y1][x1];
-     const v2 = activePatch[y2][x2];
-     const tau = v1 < v2 ? 1 : 0;
-     const weight = Math.pow(2, i);
-     const contrib = weight * tau;
-     sum += contrib;
-     rows.push({ i: i + 1, tau, weight, contrib, sum });
-   }
-   return rows;
- }, [activePatch, pairs]);
+  const handleInputRegionSelect = (x: number, y: number) => {
+    setPatchCenter({
+      x: clamp(x, PATCH_HALF, 63 - PATCH_HALF),
+      y: clamp(y, PATCH_HALF, 63 - PATCH_HALF),
+    });
+    setPatchSource('image');
+    setCurrentPairIndex(0);
+  };
 
-  /// 采样方式说明文案
-  const samplingInfo = SAMPLING_OPTIONS.find(o => o.value === samplingMethod);
+  const handleDirectionMove = (direction: 'up' | 'down' | 'left' | 'right') => {
+    setPatchSource('image');
+    setPatchCenter(prev => {
+      const dx = direction === 'left' ? -1 : direction === 'right' ? 1 : 0;
+      const dy = direction === 'up' ? -1 : direction === 'down' ? 1 : 0;
+      return {
+        x: clamp(prev.x + dx, PATCH_HALF, 63 - PATCH_HALF),
+        y: clamp(prev.y + dy, PATCH_HALF, 63 - PATCH_HALF),
+      };
+    });
+    setCurrentPairIndex(0);
+  };
 
   const stepDetails = (
     <div className="space-y-6">
-
-      {/* ===== 1. BRIEF 概述 ===== */}
       <TeachingCard>
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">BRIEF 描述子概述</h2>
+        <h2 className="mb-3 text-sm font-semibold text-slate-800">从像素块到二进制描述子</h2>
         <p className="text-xs leading-6 text-slate-600">
-          BRIEF（Binary Robust Independent Elementary Features）是一种二进制
-          <TeachingTerm term="描述子" explanation="描述子把关键点附近的局部结构编码成可比较的数据；这里的编码是一串 0/1 bit。" className="mx-1" />
-          。它通过在特征点邻域
-          <TeachingTerm term="Patch" explanation="以关键点为中心截取的小块图像区域，点对比较只在这块局部区域内进行。" className="mx-1" />
-          内随机选取 N 对像素点，比较
-          <TeachingTerm term="点对" explanation="一次比较中的两个采样位置 x 和 y，它们的灰度大小关系会生成一个 bit。" className="mx-1" />
-          间的灰度值大小来生成二进制编码，
-          从而避免使用梯度直方图这类高开销计算方法。
+          局部特征匹配不直接保存整块原始像素，而是把关键点附近的
+          <TeachingTerm term="Patch" explanation="围绕关键点截取的小图像块，描述子只编码这个局部区域的结构。" className="mx-1" />
+          转成更稳定、更容易比较的
+          <TeachingTerm term="描述子" explanation="描述子是局部图像结构的编码。二进制描述子使用 0/1 串，适合用位运算快速匹配。" className="mx-1" />
+          。BRIEF、ORB、BRISK 都利用像素点对的亮暗关系生成 bit；这样同一局部结构在距离、旋转或亮度略有变化时，仍然有机会被识别为相同目标的一部分。
         </p>
       </TeachingCard>
 
-      {/* ===== 2. τ 测试函数 ===== */}
       <TeachingCard>
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">（1）τ 测试函数</h2>
-        <p className="mb-3 text-xs leading-6 text-slate-600">
-          对于以特征点 p 为中心取出的 S×S 邻域（Patch），定义
-          <TeachingTerm term="τ 测试" explanation="一次 τ 测试只判断 p(x) 是否小于 p(y)，输出 1 或 0。" className="mx-1" />
-          来比较任意两点 x、y 的灰度大小。
-        </p>
-        <FormulaCard
-          label="τ 测试（点对比较）"
-          mathML={TAU_FORMULA}
-          tone="embedded"
-          note={'当前点对 p(' + cx1 + ',' + cy1 + ')=' + v1 + '，p(' + cx2 + ',' + cy2 + ')=' + v2 +
-                '，比较结果 τ = ' + tauResult + '。'}
-        />
-        <p className="mt-3 text-xs leading-6 text-slate-600">
-          在计算前，通常对 2N 个采样点分别做高斯平滑，以抑制噪声干扰。
-        </p>
-      </TeachingCard>
-
-      {/* ===== 3. BRIEF 描述子公式 ===== */}
-      <TeachingCard>
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">（2）BRIEF 描述子编码</h2>
-        <p className="mb-3 text-xs leading-6 text-slate-600">
-          对 N 个点对依次执行 τ 测试，将得到的
-          <TeachingTerm term="bit" explanation="bit 是二进制位，只能是 0 或 1；很多 bit 串起来就是 BRIEF 描述子。" className="mx-1" />
-          按权重 2ⁱ⁻¹ 加权求和，得到一个 N 维二进制向量（通常 N = 128、256、512）。
-        </p>
-        <FormulaCard
-          label="BRIEF 描述子"
-          mathML={BRIEF_DESCRIPTOR_FORMULA}
-          tone="embedded"
-         note={'当前二进制串的前 ' + (currentPairIndex + 1) + ' 位：' + binaryString}
-       />
-       {/* 链式代入展示：前 8 位的逐位计算过程 */}
-       <p className="mb-2 mt-4 text-xs font-semibold text-slate-700">
-         链式代入过程（前 8 bit）
-       </p>
-       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50">
-         <table className="w-full text-left text-[11px] tabular-nums">
-           <thead>
-             <tr className="bg-slate-100">
-               <th className="px-2 py-1.5 font-semibold text-slate-600">i</th>
-               <th className="px-2 py-1.5 font-semibold text-slate-600">τ(p; xᵢ, yᵢ)</th>
-               <th className="px-2 py-1.5 font-semibold text-slate-600">2^(i-1)</th>
-               <th className="px-2 py-1.5 font-semibold text-slate-600">2^(i-1)·τ</th>
-               <th className="px-2 py-1.5 font-semibold text-slate-600">累计和</th>
-             </tr>
-           </thead>
-           <tbody className="divide-y divide-slate-200">
-             {chainSubstitution.map(r => (
-               <tr key={r.i} className={r.i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                 <td className="px-2 py-1.5 font-mono text-slate-800">{r.i}</td>
-                 <td className="px-2 py-1.5 font-mono text-slate-700">
-                   {r.tau}
-                   <span className="ml-1 text-[10px] text-slate-500">
-                     {r.tau === 1
-                       ? '（p(x) < p(y)）'
-                       : '（p(x) ≥ p(y)）'}
-                   </span>
-                 </td>
-                 <td className="px-2 py-1.5 font-mono text-slate-700">{r.weight}</td>
-                 <td className="px-2 py-1.5 font-mono text-slate-700">
-                   <span className={r.contrib > 0 ? 'font-bold text-amber-700' : 'text-slate-400'}>
-                     {r.contrib}
-                   </span>
-                 </td>
-                 <td className="px-2 py-1.5 font-mono font-semibold text-blue-700">{r.sum}</td>
-               </tr>
-             ))}
-           </tbody>
-         </table>
-       </div>
-      </TeachingCard>
-
-      {/* ===== 4. 五种采样方式 ===== */}
-      <TeachingCard>
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">（3）BRIEF 随机点对采样方式</h2>
-        <p className="mb-3 text-xs leading-6 text-slate-600">
-          BRIEF 定义了一组采样模式（GI-GV），每种模式对特征点邻域中随机点对的选取策略不同。
-        </p>
-        <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <figure>
-            <img
-              src="/assets/binary-feature-descriptors/9ecdb642ab81e6009191cc556d69e00d5a7d282a296d4dcdb882258caad7f0d6.jpg"
-              alt="GI - 均匀分布采样"
-              width={350}
-              height={348}
-              loading="lazy"
-              className="w-full rounded-xl object-cover"
-            />
-            <figcaption className="mt-1 text-xs text-slate-500">GI：X、Y 在 Patch 内均匀分布</figcaption>
-          </figure>
-          <figure>
-            <img
-              src="/assets/binary-feature-descriptors/aabc7266b636397c8fa01bd3cd7f2ad7d807209ff91b763c373fb7c46fb37e90.jpg"
-              alt="GIII - 以 X 为中心取 Y"
-              width={354}
-              height={348}
-              loading="lazy"
-              className="w-full rounded-xl object-cover"
-            />
-            <figcaption className="mt-1 text-xs text-slate-500">GIII：先取 X，再以 X 为中心取 Y</figcaption>
-          </figure>
-          <figure>
-            <img
-              src="/assets/binary-feature-descriptors/f59097a5181c3855561d55f327db5797aac2a035e9fed9986b847855ca29d92c.jpg"
-              alt="GIV - 极坐标量化"
-              width={357}
-              height={351}
-              loading="lazy"
-              className="w-full rounded-xl object-cover"
-            />
-            <figcaption className="mt-1 text-xs text-slate-500">GIV：空间量化极坐标下取点</figcaption>
-          </figure>
-          <figure>
-            <img
-              src="/assets/binary-feature-descriptors/3b4b29ffa5205747141dce2cc7291a3a75969e1d375596a49404dccc25ec2428.jpg"
-              alt="GV - 中心固定极坐标遍历"
-              width={351}
-              height={351}
-              loading="lazy"
-              className="w-full rounded-xl object-cover"
-            />
-            <figcaption className="mt-1 text-xs text-slate-500">GV：X 固定在中心，Y 遍历极坐标</figcaption>
-          </figure>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-          <ul className="list-inside list-disc space-y-1 text-xs leading-5 text-slate-700">
-            <li><span className="font-semibold">GI</span>：X、Y 在 Patch 内均匀分布</li>
-            <li><span className="font-semibold">GII</span>：X、Y 均服从高斯分布（中心区域密集）</li>
-            <li><span className="font-semibold">GIII</span>：先随机取 X 点，再以 X 为中心取 Y 点</li>
-            <li><span className="font-semibold">GIV</span>：在空间量化极坐标系下，随机取 2N 个点</li>
-            <li><span className="font-semibold">GV</span>：X 固定在中心，Y 在极坐标系中取所有可能的值</li>
-          </ul>
-        </div>
-      </TeachingCard>
-
-      {/* ===== 5. BRIEF 优缺点 ===== */}
-      <TeachingCard>
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">（4）BRIEF 特点分析</h2>
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-          <p className="text-xs leading-6 text-slate-700">
-            <span className="font-semibold text-emerald-700">优点：</span>
-          BRIEF 抛弃了传统的梯度直方图描述方法，改用随机像素比较，大大加快了描述子建立速度。
-            生成的二进制描述子便于高速匹配——计算
-            <TeachingTerm term="汉明距离" explanation="两个二进制串异或后，统计不同 bit 的数量；数量越少越像同一个局部结构。" className="mx-1" />
-            只需通过异或操作加上统计二进制编码中 "1" 的个数，
-            通过底层位运算即可实现，且便于在硬件上实现。
-          </p>
-          <p className="mt-3 text-xs leading-6 text-slate-700">
-            <span className="font-semibold text-red-600">缺点：</span>
-            不具备旋转不变性，不具备尺度不变性，容易受噪声影响。
-          </p>
-        </div>
-      </TeachingCard>
-
-      {/* ===== 6. BRISK ===== */}
-      <TeachingCard>
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">（5）BRISK 描述子</h2>
-        <p className="mb-3 text-xs leading-6 text-slate-600">
-          BRISK（Binary Robust Invariant Scalable Keypoints）是 BRIEF 的改进算法，
-          也是一种基于二进制编码的特征描述子，具备尺度不变性和旋转不变性，同时对噪声鲁棒。
-        </p>
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-          <div className="space-y-2 text-xs leading-5 text-slate-700">
-            <p><span className="font-semibold">特征点检测：</span>
-              使用 FAST 或 AGAST 算法检测特征点。为满足尺度不变性，
-              BRISK 构造图像金字塔，在多尺度空间中检测特征点。</p>
-            <p><span className="font-semibold">特征点描述：</span>
-              通过比较邻域 Patch 内像素点对的灰度值进行二进制编码。
-              为满足旋转不变性，使用远点对梯度确定主方向。</p>
-            <p><span className="font-semibold">特征点匹配：</span>
-              与 BRIEF 相同，通过计算汉明距离实现。</p>
+        <h2 className="mb-3 text-sm font-semibold text-slate-800">当前算法：{algorithmLabel}</h2>
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+            <div className="text-xs font-semibold text-slate-700">检测位置</div>
+            <p className="mt-2 text-xs leading-5 text-slate-600">
+              {algorithm === 'brief'
+                ? 'BRIEF 通常接收外部关键点，只负责把当前 Patch 编码成二进制串。'
+                : algorithm === 'orb'
+                  ? 'ORB 用 FAST 快速找角点，再用 Harris 响应保留更可靠的候选点。'
+                  : 'BRISK 在尺度空间中找稳定关键点，让远近变化后的同一结构更容易被再次定位。'}
+            </p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+            <div className="text-xs font-semibold text-slate-700">方向与尺度</div>
+            <p className="mt-2 text-xs leading-5 text-slate-600">
+              {algorithm === 'brief'
+                ? '原始 BRIEF 不估计方向和尺度，所以目标旋转或变大变小时会更敏感。'
+                : algorithm === 'orb'
+                  ? 'ORB 用灰度质心估计主方向，再旋转 BRIEF 点对，减少旋转带来的 bit 翻转。'
+                  : 'BRISK 先用长距离点对估计整体方向，再用短距离点对描述局部细节。'}
+            </p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+            <div className="text-xs font-semibold text-slate-700">匹配方式</div>
+            <p className="mt-2 text-xs leading-5 text-slate-600">
+              最终比较的是二进制描述子，不是逐像素相减。汉明距离只统计不同 bit 的数量，能快速判断两个局部结构是否相似。
+            </p>
           </div>
         </div>
-        <p className="mt-3 text-xs leading-6 text-slate-600">
-          BRISK 具有较好的尺度不变性、旋转不变性和抗噪性能，计算速度优于 SIFT 和 SURF，但次于 ORB。
-        </p>
       </TeachingCard>
 
-      {/* ===== 7. ORB ===== */}
       <TeachingCard>
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">（6）ORB 描述子</h2>
-        <p className="mb-3 text-xs leading-6 text-slate-600">
-          ORB（Oriented FAST and Rotated BRIEF）结合了 FAST 关键点检测与 BRIEF 描述子，
-          并为其增加了方向信息。它兼顾了速度与旋转不变性。
-        </p>
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-          <div className="space-y-2 text-xs leading-5 text-slate-700">
-            <p><span className="font-semibold">关键点检测：</span>
-              使用 FAST 提取候选关键点，再利用 Harris 角点响应函数去除非角点，
-              保留响应最强的前 N 个点。</p>
-            <p><span className="font-semibold">方向分配：</span>
-              使用 <TeachingTerm term="Intensity Centroid" explanation="用 patch 内灰度质心相对中心的位置估计主方向，让 BRIEF 点对随方向旋转。" /> 方法计算质心方向。
-              质心 m = (m₁₀, m₀₁)，方向 θ = atan2(m₀₁, m₁₀)。</p>
-            <p><span className="font-semibold">描述子：</span>
-              通过贪心方法选取符合正态分布的随机点对，并按照方向 θ 旋转坐标后执行 BRIEF 编码，
-              得到旋转不变的描述子。</p>
+        <h2 className="mb-3 text-sm font-semibold text-slate-800">（1）点对比较与 τ 测试</h2>
+        <div className="grid gap-4 lg:grid-cols-[auto_1fr]">
+          <PatchPairView
+            patch={activePatch}
+            pair={currentPair}
+            longPairs={algorithm === 'brisk' ? briskLongPairs : []}
+            theta={algorithm === 'orb' ? centroid.theta : algorithm === 'brisk' ? briskDirection.theta : undefined}
+          />
+          <div className="space-y-3">
+            <p className="text-xs leading-6 text-slate-600">
+              当前第 {currentPairIndex + 1} 对采样点为 x=({cx1},{cy1})、y=({cx2},{cy2})。
+              比较两个位置的灰度值即可得到一个
+              <TeachingTerm term="bit" explanation="一次点对比较只输出 0 或 1；很多 bit 顺序排列后就是描述子。" className="mx-1" />
+              。
+            </p>
+            <FormulaCard
+              label="τ 测试"
+              mathML={TAU_FORMULA}
+              tone="embedded"
+              note={`当前 p(x)=${v1}，p(y)=${v2}，因此 τ=${tauResult}。`}
+            />
           </div>
         </div>
-        <div className="mt-3">
+      </TeachingCard>
+
+      <TeachingCard>
+        <h2 className="mb-3 text-sm font-semibold text-slate-800">（2）描述子编码与汉明距离</h2>
+        <p className="mb-3 text-xs leading-6 text-slate-600">
+          当前页面把前 {currentPairIndex + 1} 次点对比较串成二进制描述子。输出图中深色表示 bit=1，浅色表示 bit=0，中灰色表示两条描述子在该位不同，当前位用更深色标出。
+        </p>
+        <div className="grid gap-3 lg:grid-cols-2">
           <FormulaCard
-            label="Intensity Centroid 方向分配"
-            mathML={CENTROID_FORMULA}
+            label="BRIEF 描述子"
+            mathML={BRIEF_DESCRIPTOR_FORMULA}
             tone="embedded"
-            note="m₁₀、m₀₁ 为图像块的一阶矩，用于计算质心方向 θ。"
+            note={`当前描述子前 ${Math.min(binaryString.length, 24)} 位：${binaryString.slice(0, 24)}${binaryString.length > 24 ? '...' : ''}`}
+          />
+          <FormulaCard
+            label="汉明距离"
+            mathML={HAMMING_FORMULA}
+            tone="embedded"
+            note={`当前两条描述子已比较 ${binaryString.length} 位，差异 bit 数为 ${hammingDist}。`}
           />
         </div>
-      </TeachingCard>
-
-      {/* ===== 8. 汉明距离匹配 ===== */}
-      <TeachingCard>
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">（7）汉明距离匹配</h2>
-        <p className="mb-3 text-xs leading-6 text-slate-600">
-          二进制描述子的匹配通过
-          <TeachingTerm term="汉明距离" explanation="汉明距离只看两个 bit 串有多少位不一样，不直接比较灰度值。" className="mx-1" />
-          实现。汉明距离定义为两个等长二进制串在对应位置上的不同比特数。
-          计算时仅需一次异或操作（XOR）加一个 popcount（统计 "1" 的个数），因此速度极快。
-        </p>
-        <FormulaCard
-          label="汉明距离"
-          mathML={HAMMING_FORMULA}
-          tone="embedded"
-          note={'当前二进制描述子 1 为 ' + binaryString + '，' +
-                '描述子 2 为 ' + binaryString2.slice(0, Math.min(16, binaryString.length)) + '…，' +
-                '汉明距离 = ' + hammingDist + '。'}
-        />
-      </TeachingCard>
-
-      {/* ===== 9. 算法对比汇总 ===== */}
-      <TeachingCard>
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">（8）算法对比</h2>
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50">
-          <table className="w-full text-left text-xs">
+        <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50">
+          <table className="w-full text-left text-[11px] tabular-nums">
             <thead>
               <tr className="bg-slate-100">
-                <th className="px-3 py-2 font-semibold text-slate-700"></th>
-                <th className="px-3 py-2 font-semibold text-slate-700">BRIEF</th>
-                <th className="px-3 py-2 font-semibold text-slate-700">ORB</th>
-                <th className="px-3 py-2 font-semibold text-slate-700">BRISK</th>
+                <th className="px-2 py-1.5 font-semibold text-slate-600">i</th>
+                <th className="px-2 py-1.5 font-semibold text-slate-600">τ</th>
+                <th className="px-2 py-1.5 font-semibold text-slate-600">权重</th>
+                <th className="px-2 py-1.5 font-semibold text-slate-600">贡献</th>
+                <th className="px-2 py-1.5 font-semibold text-slate-600">累计</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
-              <tr>
-                <td className="px-3 py-2 font-medium text-slate-700">提点方法</td>
-                <td className="px-3 py-2 text-slate-600">无</td>
-                <td className="px-3 py-2 text-slate-600">FAST + Harris</td>
-                <td className="px-3 py-2 text-slate-600">FAST / AGAST</td>
-              </tr>
-              <tr>
-                <td className="px-3 py-2 font-medium text-slate-700">方向</td>
-                <td className="px-3 py-2 text-slate-600">无</td>
-                <td className="px-3 py-2 text-slate-600">Intensity Centroid</td>
-                <td className="px-3 py-2 text-slate-600">远点对梯度</td>
-              </tr>
-              <tr>
-                <td className="px-3 py-2 font-medium text-slate-700">尺度</td>
-                <td className="px-3 py-2 text-slate-600">无</td>
-                <td className="px-3 py-2 text-slate-600">无</td>
-                <td className="px-3 py-2 text-slate-600">尺度空间</td>
-              </tr>
-              <tr>
-                <td className="px-3 py-2 font-medium text-slate-700">描述子</td>
-                <td className="px-3 py-2 text-slate-600">256 位二进制</td>
-                <td className="px-3 py-2 text-slate-600">改进 BRIEF</td>
-                <td className="px-3 py-2 text-slate-600">512 位二进制</td>
-              </tr>
-              <tr>
-                <td className="px-3 py-2 font-medium text-slate-700">匹配</td>
-                <td className="px-3 py-2 text-slate-600" colSpan={3}>汉明距离（NORM_HAMMING）</td>
-              </tr>
+              {chainSubstitution.map(row => (
+                <tr key={row.i}>
+                  <td className="px-2 py-1.5 font-mono text-slate-800">{row.i}</td>
+                  <td className="px-2 py-1.5 font-mono text-slate-700">{row.tau}</td>
+                  <td className="px-2 py-1.5 font-mono text-slate-700">{row.weight}</td>
+                  <td className="px-2 py-1.5 font-mono text-slate-700">{row.contrib}</td>
+                  <td className="px-2 py-1.5 font-mono font-semibold text-blue-700">{row.sum}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
       </TeachingCard>
 
-      {/* ===== 10. OpenCV 调用流程 ===== */}
       <TeachingCard>
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">（9）OpenCV 调用流程</h2>
+        <h2 className="mb-3 text-sm font-semibold text-slate-800">（3）ORB：方向让 BRIEF 更稳定</h2>
         <p className="mb-3 text-xs leading-6 text-slate-600">
-          OpenCV 中 ORB 和 BRISK 的调用遵循"检测→计算→匹配"的经典三步流程，
-          匹配时统一使用 NORM_HAMMING 作为距离度量。
+          ORB 不是另起炉灶，而是把 FAST 角点、Harris 筛选和旋转 BRIEF 串起来。当前 Patch 中亮暗分布的重心给出方向
+          <InlineMath mathML={inlineMath('<mi>θ</mi>')} className="mx-1" />
+          ，点对按这个方向旋转后再比较；这样图像发生旋转时，描述子的采样关系仍尽量对齐同一局部结构。
         </p>
+        <FormulaCard
+          label="Intensity Centroid 方向"
+          mathML={ORB_CENTROID_FORMULA}
+          tone="embedded"
+          note={`当前 m10=${centroid.m10}，m01=${centroid.m01}，θ≈${centroid.degrees}°。`}
+        />
+      </TeachingCard>
+
+      <TeachingCard>
+        <h2 className="mb-3 text-sm font-semibold text-slate-800">（4）BRISK：长点对定方向，短点对做编码</h2>
+        <p className="mb-3 text-xs leading-6 text-slate-600">
+          BRISK 的教学模型把采样点对分成两类：距离较远的点对更能反映局部结构的整体朝向，距离较近的点对更适合记录细节。它还会在尺度空间中寻找稳定位置，避免只在原图上找到的角点在目标变远或变近后消失。
+        </p>
+        <FormulaCard
+          label="BRISK 主方向"
+          mathML={BRISK_DIRECTION_FORMULA}
+          tone="embedded"
+          note={`当前长点对累计 gx=${briskDirection.gx}，gy=${briskDirection.gy}，θ≈${briskDirection.degrees}°。`}
+        />
+      </TeachingCard>
+
+      <TeachingCard>
+        <h2 className="mb-3 text-sm font-semibold text-slate-800">（5）三种二进制描述子的差异</h2>
+        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="bg-slate-100">
+                <th className="px-3 py-2 font-semibold text-slate-700">算法</th>
+                <th className="px-3 py-2 font-semibold text-slate-700">关键动作</th>
+                <th className="px-3 py-2 font-semibold text-slate-700">优势</th>
+                <th className="px-3 py-2 font-semibold text-slate-700">仍需注意</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              <tr className={algorithm === 'brief' ? 'bg-amber-50' : ''}>
+                <td className="px-3 py-2 font-semibold text-slate-700">BRIEF</td>
+                <td className="px-3 py-2 text-slate-600">直接比较 Patch 点对</td>
+                <td className="px-3 py-2 text-slate-600">极快、存储小</td>
+                <td className="px-3 py-2 text-slate-600">旋转和尺度变化下更敏感</td>
+              </tr>
+              <tr className={algorithm === 'orb' ? 'bg-amber-50' : ''}>
+                <td className="px-3 py-2 font-semibold text-slate-700">ORB</td>
+                <td className="px-3 py-2 text-slate-600">FAST/Harris + 灰度质心 + 旋转 BRIEF</td>
+                <td className="px-3 py-2 text-slate-600">速度快，旋转适应性更好</td>
+                <td className="px-3 py-2 text-slate-600">大尺度变化和重复纹理仍可能不稳</td>
+              </tr>
+              <tr className={algorithm === 'brisk' ? 'bg-amber-50' : ''}>
+                <td className="px-3 py-2 font-semibold text-slate-700">BRISK</td>
+                <td className="px-3 py-2 text-slate-600">尺度空间 + 长点对方向 + 短点对编码</td>
+                <td className="px-3 py-2 text-slate-600">兼顾尺度、方向和二进制匹配速度</td>
+                <td className="px-3 py-2 text-slate-600">512 位常更重，复杂场景仍需几何筛选</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </TeachingCard>
     </div>
   );
@@ -668,28 +687,30 @@ export default function BinaryFeatureDescriptorsPage() {
       <FlowColumns>
         <FlowColumn align="start">
           <FlowNode tone="red" className="max-w-xs">
-            <div className="mb-3 text-xs font-semibold text-red-600">特征点邻域 Patch</div>
-            <div className="flex justify-center">
-              <ImageCanvas
-                image={activePatch}
-                maxDisplaySize={160}
-                showGrid
-                highlightPixel={{ x: cx1, y: cy1 }}
-              />
-            </div>
+            <div className="mb-3 text-xs font-semibold text-red-600">当前 Patch</div>
+            <PatchPairView
+              patch={activePatch}
+              pair={currentPair}
+              longPairs={algorithm === 'brisk' ? briskLongPairs : []}
+              theta={algorithm === 'orb' ? centroid.theta : algorithm === 'brisk' ? briskDirection.theta : undefined}
+            />
             <p className="mt-3 text-xs leading-5 text-slate-600">
-              9×9 合成 Patch，模拟一个弱角点区域。红点标记当前点对中的 x 点 ({cx1},{cy1})。
+              Patch 中保留的是局部结构，不是整张原图；描述子会把这些亮暗关系压缩成 bit 串。
             </p>
           </FlowNode>
         </FlowColumn>
 
         <FlowColumn align="center">
           <FlowNode tone="amber" className="max-w-xs">
-            <div className="mb-3 text-xs font-semibold text-amber-700">点对采样与 τ 测试</div>
+            <div className="mb-3 text-xs font-semibold text-amber-700">点对采样与方向</div>
             <div className="grid gap-2">
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
-                <div className="text-[10px] text-amber-700">采样方式</div>
-                <div className="font-semibold text-amber-900">{samplingInfo?.label ?? 'GI'}</div>
+                <div className="text-[10px] text-amber-700">当前算法</div>
+                <div className="font-semibold text-amber-900">{algorithmLabel}</div>
+              </div>
+              <div className="rounded-xl border border-amber-200 bg-white px-3 py-2">
+                <div className="text-[10px] text-amber-600">方向处理</div>
+                <div className="text-xs font-semibold text-amber-800">{directionInfo}</div>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="rounded-xl border border-amber-200 bg-white px-3 py-2">
@@ -702,19 +723,19 @@ export default function BinaryFeatureDescriptorsPage() {
                 </div>
               </div>
               <div className="rounded-xl bg-amber-100 px-3 py-2 text-center text-xs font-semibold text-amber-800">
-                p(x)={v1} {v1 < v2 ? '<' : '≥'} p(y)={v2} → τ = {tauResult}
+                p(x)={v1} {v1 < v2 ? '<' : '≥'} p(y)={v2}，τ={tauResult}
               </div>
             </div>
           </FlowNode>
 
           <FlowNode tone="sky" className="max-w-xs">
-            <div className="mb-3 text-xs font-semibold text-sky-700">二进制编码（前 {Math.min(currentPairIndex + 1, 16)} bit）</div>
+            <div className="mb-3 text-xs font-semibold text-sky-700">二进制编码</div>
             <div className="rounded-xl border border-sky-200 bg-sky-50 p-3">
               <div className="font-mono text-xs font-semibold text-sky-800 break-all">
-                {binaryString.slice(0, Math.min(16, binaryString.length))}
+                {binaryString.slice(0, Math.min(32, binaryString.length))}
               </div>
               <div className="mt-2 text-xs text-sky-600">
-                共 {binaryString.length} bit，{'当前步第 ' + (currentPairIndex + 1) + ' 位'}
+                已生成 {binaryString.length} bit，当前位为 {tauResult}
               </div>
             </div>
           </FlowNode>
@@ -724,22 +745,11 @@ export default function BinaryFeatureDescriptorsPage() {
           <FlowNode tone="emerald" className="max-w-xs">
             <div className="mb-3 text-xs font-semibold text-emerald-700">汉明距离匹配</div>
             <div className="grid gap-2">
-              <div className="rounded-xl border border-emerald-200 bg-white px-3 py-2">
-                <div className="text-[10px] text-emerald-600">描述子 1</div>
-                <div className="font-mono text-xs font-semibold text-emerald-800 break-all">
-                  {binaryString.slice(0, Math.min(8, binaryString.length))}…
-                </div>
-              </div>
-              <div className="rounded-xl border border-emerald-200 bg-white px-3 py-2">
-                <div className="text-[10px] text-emerald-600">描述子 2</div>
-                <div className="font-mono text-xs font-semibold text-emerald-800 break-all">
-                  {binaryString2.slice(0, Math.min(8, binaryString2.length))}…
-                </div>
-              </div>
+              <ImageCanvas image={resultImage} maxDisplaySize={150} showGrid />
               <div className="rounded-xl bg-emerald-100 px-3 py-2 text-center">
-                <div className="text-[10px] text-emerald-700">汉明距离</div>
+                <div className="text-[10px] text-emerald-700">差异 bit 数</div>
                 <div className="font-mono text-sm font-bold text-emerald-800">{hammingDist}</div>
-                <div className="text-[10px] text-emerald-600">（差异比特数 / {binaryString.length}）</div>
+                <div className="text-[10px] text-emerald-600">已比较 {binaryString.length} / {numPairs} 位</div>
               </div>
             </div>
           </FlowNode>
@@ -751,10 +761,24 @@ export default function BinaryFeatureDescriptorsPage() {
   const parameters = (
     <div className="space-y-4">
       <SelectParam
+        label="算法模式"
+        value={algorithm}
+        onChange={value => {
+          const nextAlgorithm = value as AlgorithmMode;
+          setAlgorithm(nextAlgorithm);
+          setCurrentPairIndex(0);
+          if (nextAlgorithm === 'brisk') setNumPairs(512);
+        }}
+        options={ALGORITHM_OPTIONS}
+      />
+      <SelectParam
         label="采样方式"
         value={samplingMethod}
-        onChange={value => { setSamplingMethod(value as SamplingMethod); setCurrentPairIndex(0); }}
-        options={SAMPLING_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
+        onChange={value => {
+          setSamplingMethod(value as SamplingMethod);
+          setCurrentPairIndex(0);
+        }}
+        options={SAMPLING_OPTIONS.map(option => ({ value: option.value, label: option.label }))}
       />
       {samplingInfo && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3">
@@ -769,32 +793,30 @@ export default function BinaryFeatureDescriptorsPage() {
           setCurrentPairIndex(0);
         }}
         options={[
+          { value: 'image', label: '点击主图选 Patch' },
           { value: 'synthetic', label: '教学 Patch' },
-          { value: 'lenaPatch', label: 'Lena Patch' },
         ]}
       />
-      <div>
-        <label className="text-xs font-medium text-slate-500 mb-1.5 block">描述子位数</label>
-        <select
-          value={String(numPairs)}
-          onChange={e => { setNumPairs(Number(e.target.value)); setCurrentPairIndex(0); }}
-          className="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg"
-        >
-          <option value="128">128 bit</option>
-          <option value="256">256 bit</option>
-          <option value="512">512 bit</option>
-        </select>
-      </div>
+      <SelectParam
+        label="描述子位数"
+        value={String(numPairs)}
+        onChange={value => {
+          setNumPairs(Number(value));
+          setCurrentPairIndex(0);
+        }}
+        options={PAIR_OPTIONS.map(option => ({ value: String(option.value), label: option.label }))}
+      />
       <SliderParam
         label="当前点对"
         value={currentPairIndex}
         onChange={setCurrentPairIndex}
         min={0}
-        max={Math.max(0, totalPairs - 1)}
+        max={Math.max(0, numPairs - 1)}
         step={1}
       />
       <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-5 text-slate-600">
-        当前第 {currentPairIndex + 1} 对点：p({cx1},{cy1})={v1} 与 p({cx2},{cy2})={v2}，τ={tauResult}。拖动滑杆逐步查看每对点如何构成完整的二进制描述子。
+        当前第 {currentPairIndex + 1} 对：p({cx1},{cy1})={v1} 与 p({cx2},{cy2})={v2}，τ={tauResult}。
+        {patchSource === 'image' ? ` 当前主图中心为 (${patchCenter.x}, ${patchCenter.y})。` : ' 当前使用固定教学 Patch。'}
       </div>
     </div>
   );
@@ -803,24 +825,40 @@ export default function BinaryFeatureDescriptorsPage() {
     <ConceptLayout
       title="二进制特征描述子"
       subtitle="BRIEF / ORB / BRISK - 基于像素比较的快速特征编码"
-      operationLabel="二进制编码"
-      parameterIntro="选择采样方式与描述子位数，拖动点对编号逐步观察 τ 测试结果如何构成二进制描述子。"
+      operationLabel="描述子编码"
+      parameterIntro="切换算法、点击主图选择 Patch，并拖动点对编号观察 bit 如何逐步构成描述子。"
       parameters={parameters}
       analysisPreview={analysisPreview}
       stepDetails={stepDetails}
       codeTab={
         <CodeViewer languages={[
+          { name: 'BRIEF', code: BRIEF_CODE_TS },
           { name: 'ORB', code: ORB_CODE_TS },
           { name: 'BRISK', code: BRISK_CODE_TS },
-       ]} />
-     }
-     originalImage={loadedImage}
-     resultImage={loadedImage}
+        ]} />
+      }
+      originalImage={loadedImage}
+      resultImage={resultImage}
+      currentStep={{
+        x: patchCenter.x,
+        y: patchCenter.y,
+        kernelSize: PATCH_SIZE,
+        regionX: clamp(patchCenter.x - PATCH_HALF, 0, 64 - PATCH_SIZE),
+        regionY: clamp(patchCenter.y - PATCH_HALF, 0, 64 - PATCH_SIZE),
+        regionWidth: PATCH_SIZE,
+        regionHeight: PATCH_SIZE,
+      }}
+      currentStepLabel="Patch 中心"
+      stepInfo={{ current: currentPairIndex, total: numPairs }}
+      onInputRegionSelect={handleInputRegionSelect}
+      onDirectionMove={handleDirectionMove}
+      navigationHintText="点击原图选择 Patch / 方向键微调 Patch 中心"
+      imageLabels={{ input: '可点击原图', output: '描述子 bit 图' }}
+      imageHints={{
+        input: '红框为当前 9×9 Patch，点击可重新选局部结构',
+        output: '深色=1，浅色=0，中灰=两条描述子该位不同',
+      }}
       singlePageScroll
     />
   );
 }
-
-
-
-
