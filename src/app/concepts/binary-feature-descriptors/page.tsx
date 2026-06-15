@@ -105,6 +105,12 @@ const ALGORITHM_OPTIONS: { value: AlgorithmMode; label: string }[] = [
   { value: 'brisk', label: 'BRISK：长短点对' },
 ];
 
+const DEFAULT_PAIR_COUNTS: Record<AlgorithmMode, number> = {
+  brief: 256,
+  orb: 256,
+  brisk: 512,
+};
+
 const SAMPLING_OPTIONS: { value: SamplingMethod; label: string; desc: string }[] = [
   { value: 'GI', label: 'GI - 均匀分布', desc: 'X、Y 在 Patch 内均匀分布，适合观察最直接的随机点对比较。' },
   { value: 'GII', label: 'GII - 高斯分布', desc: 'X、Y 更集中在 Patch 中心，常用于让描述子更关注关键点附近结构。' },
@@ -348,10 +354,19 @@ function calculateBriskDirection(patch: number[][], longPairs: Pair[]): { gx: nu
   return { gx: Math.round(gx), gy: Math.round(gy), theta, degrees: Math.round(theta * 180 / Math.PI) };
 }
 
-function createDescriptorImage(bits: string, compareBits: string, currentIndex: number, totalBits: number): GrayscaleImage {
+function getDescriptorGridCols(visibleBits: number): number {
+  if (visibleBits <= 4) return visibleBits;
+  if (visibleBits <= 16) return 4;
+  if (visibleBits <= 64) return 8;
+  if (visibleBits <= 256) return 16;
+  return 32;
+}
+
+function createDescriptorImage(bits: string, compareBits: string, currentIndex: number, visibleBits: number): GrayscaleImage {
   const size = 64;
-  const cols = totalBits <= 128 ? 16 : 32;
-  const rows = Math.ceil(totalBits / cols);
+  const safeVisibleBits = Math.max(1, visibleBits);
+  const cols = getDescriptorGridCols(safeVisibleBits);
+  const rows = Math.ceil(safeVisibleBits / cols);
   const cellW = size / cols;
   const cellH = size / rows;
 
@@ -360,8 +375,8 @@ function createDescriptorImage(bits: string, compareBits: string, currentIndex: 
       const col = Math.min(cols - 1, Math.floor(x / cellW));
       const row = Math.min(rows - 1, Math.floor(y / cellH));
       const index = row * cols + col;
-      if (index >= totalBits) return 0.96;
-      if (index === currentIndex) return 0.3;
+      if (index >= safeVisibleBits) return 0.96;
+      if (currentIndex >= 0 && index === currentIndex) return 0.3;
       if (index >= bits.length) return 0.9;
       if (bits[index] !== compareBits[index]) return 0.58;
       return bits[index] === '1' ? 0.16 : 0.82;
@@ -413,6 +428,7 @@ function PatchPairView({ patch, pair, longPairs = [], theta }: { patch: number[]
 }
 
 const ORB_CODE_TS = `// OpenCV ORB 特征提取与匹配
+// 这段代码是工程调用示例，不等同于本页逐 bit 教学演示的内部实现。
 Ptr<ORB> orb = ORB::create();
 vector<KeyPoint> keypoints1, keypoints2;
 Mat descriptors1, descriptors2;
@@ -428,6 +444,7 @@ vector<DMatch> matches;
 matcher.match(descriptors1, descriptors2, matches);`;
 
 const BRISK_CODE_TS = `// OpenCV BRISK 特征提取与匹配
+// 这段代码是工程调用示例，不等同于本页长/短点对教学模型的内部实现。
 Ptr<BRISK> brisk = BRISK::create();
 vector<KeyPoint> kp1, kp2;
 Mat des1, des2;
@@ -443,11 +460,13 @@ vector<DMatch> matches;
 matcher.match(des1, des2, matches);`;
 
 const BRIEF_CODE_TS = `function tauTest(patch, x, y) {
-  return patch[x] < patch[y] ? 1 : 0;
+  const [x1, y1] = x;
+  const [x2, y2] = y;
+  return patch[y1][x1] < patch[y2][x2] ? 1 : 0;
 }
 
 function buildBriefDescriptor(patch, pairs) {
-  return pairs.map(([x, y]) => tauTest(patch, x, y)).join('');
+  return pairs.map(([x1, y1, x2, y2]) => tauTest(patch, [x1, y1], [x2, y2])).join('');
 }
 
 function hammingDistance(a, b) {
@@ -464,18 +483,28 @@ export default function BinaryFeatureDescriptorsPage() {
   const [loadedImage, setLoadedImage] = useState<GrayscaleImage>(FALLBACK_PATCH_IMAGE);
 
   const [taskStage, setTaskStage] = useState<TaskStage>('intro');
+  const canInteractWithPatch = taskStage === 'brief' || taskStage === 'orb' || taskStage === 'brisk';
 
   const stageIndex = getStageIndex(taskStage);
 
   const goStage = useCallback((stage: TaskStage) => {
     setTaskStage(stage);
     setCurrentPairIndex(0);
+    setNumPairs((prev) => {
+      if (stage === 'brisk') {
+        return 512;
+      }
+      if (stage === 'orb' && prev === 512) {
+        return DEFAULT_PAIR_COUNTS.orb;
+      }
+      return prev;
+    });
     // 将算法阶段同步到 algorithm 状态，StageStepper 取代旧算法下拉框
     if (stage === 'brief' || stage === 'orb' || stage === 'brisk') {
       setAlgorithm(stage);
     }
-    if (stage === 'brisk') {
-      setNumPairs(512);
+    if (stage === 'compare') {
+      setAlgorithm('brief');
     }
   }, []);
 
@@ -524,10 +553,35 @@ export default function BinaryFeatureDescriptorsPage() {
         ? 'brisk'
         : 'brief';
 
+  const effectiveNumPairs = taskStage === 'compare'
+    ? DEFAULT_PAIR_COUNTS[algorithm]
+    : effectiveAlgorithm === 'brisk'
+      ? 512
+      : numPairs;
+
+  const effectiveSamplingMethod = taskStage === 'compare'
+    ? 'GI'
+    : samplingMethod;
+
+  const effectiveBitCount = taskStage === 'intro' || taskStage === 'compare'
+    ? effectiveNumPairs
+    : currentPairIndex + 1;
+  const visibleDescriptorBits = taskStage === 'compare'
+    ? effectiveNumPairs
+    : effectiveBitCount;
+
+  const highlightedBitIndex = taskStage === 'intro' || taskStage === 'compare'
+    ? -1
+    : currentPairIndex;
+
   const basePairs = useMemo(() => {
-    if (effectiveAlgorithm === 'brisk') return generateBriskPairs(numPairs, 'short');
-    return generatePairs(effectiveAlgorithm === 'orb' ? 'GII' : samplingMethod, numPairs, 42);
-  }, [effectiveAlgorithm, numPairs, samplingMethod]);
+    if (effectiveAlgorithm === 'brisk') return generateBriskPairs(effectiveNumPairs, 'short');
+    return generatePairs(
+      effectiveAlgorithm === 'orb' ? 'GII' : effectiveSamplingMethod,
+      effectiveNumPairs,
+      42
+    );
+  }, [effectiveAlgorithm, effectiveNumPairs, effectiveSamplingMethod]);
 
   const pairs = useMemo(() => {
     if (effectiveAlgorithm === 'orb') return rotatePairs(basePairs, centroid.theta);
@@ -536,25 +590,29 @@ export default function BinaryFeatureDescriptorsPage() {
   }, [effectiveAlgorithm, basePairs, briskDirection.theta, centroid.theta]);
 
   const comparePairs = useMemo(() => {
-    if (effectiveAlgorithm === 'brisk') return rotatePairs(generateBriskPairs(numPairs, 'short'), briskDirection.theta + 0.22);
-    if (effectiveAlgorithm === 'orb') return rotatePairs(generatePairs('GII', numPairs, 137), centroid.theta + 0.18);
-    return generatePairs(samplingMethod, numPairs, 137);
-  }, [effectiveAlgorithm, briskDirection.theta, centroid.theta, numPairs, samplingMethod]);
+    if (effectiveAlgorithm === 'brisk') {
+      return rotatePairs(generateBriskPairs(effectiveNumPairs, 'short'), briskDirection.theta + 0.22);
+    }
+    if (effectiveAlgorithm === 'orb') {
+      return rotatePairs(generatePairs('GII', effectiveNumPairs, 137), centroid.theta + 0.18);
+    }
+    return generatePairs(effectiveSamplingMethod, effectiveNumPairs, 137);
+  }, [effectiveAlgorithm, briskDirection.theta, centroid.theta, effectiveNumPairs, effectiveSamplingMethod]);
 
   const binaryString = useMemo(
-    () => buildDescriptor(activePatch, pairs, currentPairIndex + 1),
-    [activePatch, currentPairIndex, pairs]
+    () => buildDescriptor(activePatch, pairs, effectiveBitCount),
+    [activePatch, effectiveBitCount, pairs]
   );
 
   const binaryString2 = useMemo(
-    () => buildDescriptor(activePatch, comparePairs, currentPairIndex + 1),
-    [activePatch, comparePairs, currentPairIndex]
+    () => buildDescriptor(activePatch, comparePairs, effectiveBitCount),
+    [activePatch, comparePairs, effectiveBitCount]
   );
 
   const hammingDist = useMemo(() => hammingDistance(binaryString, binaryString2), [binaryString, binaryString2]);
   const resultImage = useMemo(
-    () => createDescriptorImage(binaryString, binaryString2, currentPairIndex, numPairs),
-    [binaryString, binaryString2, currentPairIndex, numPairs]
+    () => createDescriptorImage(binaryString, binaryString2, highlightedBitIndex, visibleDescriptorBits),
+    [binaryString, binaryString2, highlightedBitIndex, visibleDescriptorBits]
   );
 
   const currentPair = pairs[currentPairIndex] ?? [0, 0, 0, 0];
@@ -572,7 +630,7 @@ export default function BinaryFeatureDescriptorsPage() {
 
   const chainSubstitution = useMemo(() => {
     let sum = 0;
-    return pairs.slice(0, Math.min(8, pairs.length)).map((pair, index) => {
+    return pairs.slice(0, Math.min(effectiveBitCount, 8, pairs.length)).map((pair, index) => {
       const [x1, y1, x2, y2] = pair;
       const tau = tauTest(activePatch, x1, y1, x2, y2);
       const weight = Math.pow(2, index);
@@ -580,9 +638,11 @@ export default function BinaryFeatureDescriptorsPage() {
       sum += contrib;
       return { i: index + 1, tau, weight, contrib, sum };
     });
-  }, [activePatch, pairs]);
+  }, [activePatch, effectiveBitCount, pairs]);
 
   const handleInputRegionSelect = (x: number, y: number) => {
+    if (!canInteractWithPatch) return;
+
     setPatchCenter({
       x: clamp(x, PATCH_HALF, 63 - PATCH_HALF),
       y: clamp(y, PATCH_HALF, 63 - PATCH_HALF),
@@ -592,6 +652,8 @@ export default function BinaryFeatureDescriptorsPage() {
   };
 
   const handleDirectionMove = (direction: 'up' | 'down' | 'left' | 'right') => {
+    if (!canInteractWithPatch) return;
+
     setPatchSource('image');
     setPatchCenter(prev => {
       const dx = direction === 'left' ? -1 : direction === 'right' ? 1 : 0;
@@ -615,7 +677,7 @@ export default function BinaryFeatureDescriptorsPage() {
               <TeachingTerm term="Patch" explanation="围绕关键点截取的小图像块，描述子只编码这个局部区域的结构。" className="mx-1" />
               转成更稳定、更容易比较的
               <TeachingTerm term="描述子" explanation="描述子是局部图像结构的编码。二进制描述子使用 0/1 串，适合用位运算快速匹配。" className="mx-1" />
-              。BRIEF、ORB、BRISK 都利用像素点对的亮暗关系生成 bit；这样同一局部结构在距离、旋转或亮度略有变化时，仍然有机会被识别为相同目标的一部分。
+              。BRIEF、ORB、BRISK 都利用像素点对的亮暗关系生成 bit；其中 ORB 额外补入方向对齐，BRISK 进一步补入方向与尺度稳定性，因此它们比原始 BRIEF 更适合应对旋转或尺度变化。
             </p>
           </TeachingCard>
           <TeachingCard>
@@ -623,7 +685,7 @@ export default function BinaryFeatureDescriptorsPage() {
             <div className="grid gap-3 md:grid-cols-3">
               <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
                 <div className="text-xs font-semibold text-slate-700">BRIEF</div>
-                <p className="mt-2 text-xs leading-5 text-slate-600">最基础的二进制描述子。直接比较 Patch 内随机点对的灰度大小生成 0/1 串，极快但不具备旋转和尺度不变性。</p>
+                <p className="mt-2 text-xs leading-5 text-slate-600">最基础的二进制描述子。按采样策略选取 Patch 内点对并比较灰度大小生成 0/1 串，极快，但原始形式不具备旋转和尺度不变性。</p>
               </div>
               <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
                 <div className="text-xs font-semibold text-slate-700">ORB</div>
@@ -661,13 +723,13 @@ export default function BinaryFeatureDescriptorsPage() {
             <TeachingCard>
               <h2 className="mb-3 text-sm font-semibold text-slate-800">BRISK：长点对定方向，短点对做编码</h2>
               <p className="mb-3 text-xs leading-6 text-slate-600">
-                BRISK 的教学模型把采样点对分成两类：距离较远的点对更能反映局部结构的整体朝向，距离较近的点对更适合记录细节。它还会在尺度空间中寻找稳定位置，避免只在原图上找到的角点在目标变远或变近后消失。
+                BRISK 的教学模型把采样点对分成两类：距离较远的点对更能反映局部结构的整体朝向，距离较近的点对更适合记录细节。它还会在尺度空间中寻找稳定位置，提升同一局部结构在成像尺度变化时的重复检测稳定性。
               </p>
               <FormulaCard
                 label="BRISK 主方向"
                 mathML={BRISK_DIRECTION_FORMULA}
                 tone="embedded"
-                note={`当前长点对累计 gx=${briskDirection.gx}，gy=${briskDirection.gy}，θ≈${briskDirection.degrees}°。`}
+                note={`当前长点对累计 gx=${briskDirection.gx}，gy=${briskDirection.gy}，θ≈${briskDirection.degrees}°。这里用“灰度差沿点对方向投影后求和”的教学化写法，目的是直观展示长点对如何提供整体方向。`}
               />
             </TeachingCard>
           )}
@@ -701,7 +763,7 @@ export default function BinaryFeatureDescriptorsPage() {
           <TeachingCard>
             <h2 className="mb-3 text-sm font-semibold text-slate-800">描述子编码与汉明距离</h2>
             <p className="mb-3 text-xs leading-6 text-slate-600">
-              当前页面把前 {currentPairIndex + 1} 次点对比较串成二进制描述子。输出图中深色表示 bit=1，浅色表示 bit=0，中灰色表示两条描述子在该位不同，当前位用更深色标出。
+              当前页面把前 {currentPairIndex + 1} 次点对比较串成二进制描述子。数学上也可以把这串 bit 看成按 2 的幂加权得到的整数编码，但本页教学重点是“逐位如何生成”，所以界面始终按 bit 串顺序展示。输出图中深色表示 bit=1，浅色表示 bit=0，中灰色表示两条描述子在该位不同，当前位用更深色标出。
             </p>
             <div className="grid gap-3 lg:grid-cols-2">
               <FormulaCard
@@ -718,6 +780,9 @@ export default function BinaryFeatureDescriptorsPage() {
               />
             </div>
             <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50">
+              <div className="border-b border-slate-200 px-3 py-2 text-[11px] text-slate-500">
+                下表展示当前描述子前 {Math.min(binaryString.length, 8)} 位的链式代入过程。
+              </div>
               <table className="w-full text-left text-[11px] tabular-nums">
                 <thead>
                   <tr className="bg-slate-100">
@@ -748,6 +813,9 @@ export default function BinaryFeatureDescriptorsPage() {
       {taskStage === 'compare' && (
         <TeachingCard>
           <h2 className="mb-3 text-sm font-semibold text-slate-800">三种二进制描述子的差异</h2>
+          <p className="mb-3 text-xs leading-6 text-slate-600">
+            对比阶段使用统一口径避免隐藏参数污染：BRIEF 与 ORB 固定展示 256 bit，BRISK 固定展示 512 bit；BRIEF 采用 GI 采样基线。这里比较的是“描述子编码方式”本身，不额外展开各自的外部检测器差异。
+          </p>
           <div className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50">
             <table className="w-full text-left text-xs">
               <thead>
@@ -872,7 +940,7 @@ export default function BinaryFeatureDescriptorsPage() {
                 {binaryString.slice(0, Math.min(32, binaryString.length))}
               </div>
               <div className="mt-2 text-xs text-sky-600">
-                已生成 {binaryString.length} bit，当前位为 {tauResult}
+                已生成 {binaryString.length} bit{highlightedBitIndex >= 0 ? `，当前位为 ${tauResult}，bit 图会随已生成位逐步展开` : '，当前展示完整描述子总览'}
               </div>
             </div>
           </FlowNode>
@@ -891,7 +959,7 @@ export default function BinaryFeatureDescriptorsPage() {
                 <div className="rounded-xl bg-emerald-100 px-3 py-2 text-center">
                   <div className="text-[10px] text-emerald-700">差异 bit 数</div>
                   <div className="font-mono text-sm font-bold text-emerald-800">{hammingDist}</div>
-                  <div className="text-[10px] text-emerald-600">已比较 {binaryString.length} / {numPairs} 位</div>
+                  <div className="text-[10px] text-emerald-600">已比较 {binaryString.length} / {effectiveNumPairs} 位</div>
                 </div>
               </div>
             )}
@@ -973,15 +1041,24 @@ export default function BinaryFeatureDescriptorsPage() {
             </div>
           )}
 
-          <SelectParam
-            label="描述子位数"
-            value={String(numPairs)}
-            onChange={value => {
-              setNumPairs(Number(value));
-              setCurrentPairIndex(0);
-            }}
-            options={PAIR_OPTIONS.map(option => ({ value: String(option.value), label: option.label }))}
-          />
+          {taskStage === 'brisk' ? (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-5 text-slate-600">
+              BRISK 阶段固定使用 512 bit，保持“长点对定方向 + 短点对编码”的标准教学口径。
+            </div>
+          ) : (
+            <SelectParam
+              label="描述子位数"
+              value={String(numPairs)}
+              onChange={value => {
+                setNumPairs(Number(value));
+                setCurrentPairIndex(0);
+              }}
+              options={PAIR_OPTIONS.filter(option => option.value !== 512 || taskStage === 'brief').map(option => ({
+                value: String(option.value),
+                label: option.label,
+              }))}
+            />
+          )}
 
           <SliderParam
             label="当前点对"
@@ -1018,6 +1095,9 @@ export default function BinaryFeatureDescriptorsPage() {
               </button>
             ))}
           </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-5 text-slate-600">
+            对比阶段固定使用默认计算口径：BRIEF/ORB 为 256 bit，BRISK 为 512 bit；BRIEF 采样固定为 GI。
+          </div>
         </div>
       )}
     </div>
@@ -1028,7 +1108,7 @@ export default function BinaryFeatureDescriptorsPage() {
       title="二进制特征描述子"
       subtitle="BRIEF / ORB / BRISK - 基于像素比较的快速特征编码"
       operationLabel="描述子编码"
-      parameterIntro="切换算法、点击主图选择 Patch，并拖动点对编号观察 bit 如何逐步构成描述子。"
+      parameterIntro="按阶段推进，点击主图选择 Patch，并拖动点对编号观察 bit 如何逐步构成描述子。"
       parameters={parameters}
       analysisPreview={analysisPreview}
       stepDetails={stepDetails}
@@ -1041,7 +1121,7 @@ export default function BinaryFeatureDescriptorsPage() {
       }
       originalImage={loadedImage}
       resultImage={resultImage}
-      currentStep={{
+      currentStep={canInteractWithPatch ? {
         x: patchCenter.x,
         y: patchCenter.y,
         kernelSize: PATCH_SIZE,
@@ -1049,17 +1129,21 @@ export default function BinaryFeatureDescriptorsPage() {
         regionY: clamp(patchCenter.y - PATCH_HALF, 0, 64 - PATCH_SIZE),
         regionWidth: PATCH_SIZE,
         regionHeight: PATCH_SIZE,
-      }}
+      } : null}
       currentStepLabel="Patch 中心"
-      stepInfo={{ current: currentPairIndex, total: numPairs }}
-      onInputRegionSelect={handleInputRegionSelect}
-      onDirectionMove={handleDirectionMove}
-      navigationHintText="点击原图选择 Patch / 方向键微调 Patch 中心"
+      stepInfo={canInteractWithPatch ? { current: currentPairIndex, total: effectiveNumPairs } : null}
+      onInputRegionSelect={canInteractWithPatch ? handleInputRegionSelect : undefined}
+      onDirectionMove={canInteractWithPatch ? handleDirectionMove : undefined}
+      navigationHintText={canInteractWithPatch ? '点击原图选择 Patch / 方向键微调 Patch 中心' : undefined}
       imageLabels={{ input: '可点击原图', output: '描述子 bit 图' }}
       imageHints={{
-        input: '红框为当前 9×9 Patch，点击可重新选局部结构',
-        output: '深色=1，浅色=0，中灰=两条描述子该位不同',
+        input: canInteractWithPatch ? '红框为当前 9×9 Patch，点击可重新选局部结构' : '当前阶段不修改 Patch，专注观察整体流程或算法对比',
+        output: highlightedBitIndex >= 0
+          ? '算法阶段按已生成 bit 数逐步展开：深色=1，浅色=0，中灰=两条描述子该位不同'
+          : '当前展示完整描述子总览：深色=1，浅色=0，中灰=两条描述子该位不同',
       }}
+      showInputSelection={canInteractWithPatch}
+      showNavigationControls={canInteractWithPatch}
       singlePageScroll
     />
   );
