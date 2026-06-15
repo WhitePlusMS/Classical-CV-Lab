@@ -31,6 +31,7 @@ interface FormulaCardProps {
   className?: string;
   formulaClassName?: string;
   mathClassName?: string;
+  tone?: 'default' | 'embedded';
 }
 
 export function FormulaCard({
@@ -40,6 +41,7 @@ export function FormulaCard({
   className,
   formulaClassName,
   mathClassName,
+  tone = 'default',
 }: FormulaCardProps) {
   return (
     <div className={className}>
@@ -50,7 +52,9 @@ export function FormulaCard({
       )}
       <div
         className={classNames(
-          'kernel-formula-block overflow-x-auto rounded-2xl border border-slate-200 bg-[#f8f7f3] px-5 py-5 text-slate-800 shadow-[0_10px_24px_rgba(15,23,42,0.05)]',
+          tone === 'embedded'
+            ? 'kernel-formula-block overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 text-slate-800'
+            : 'kernel-formula-block overflow-x-auto rounded-2xl border border-slate-200 bg-[#f8f7f3] px-5 py-5 text-slate-800 shadow-[0_10px_24px_rgba(15,23,42,0.05)]',
           formulaClassName
         )}
       >

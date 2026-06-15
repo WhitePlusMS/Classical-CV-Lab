@@ -50,7 +50,7 @@ export function TeachingTerm({ term, explanation, className }: TeachingTermProps
     >
       <button
         type="button"
-        className="inline rounded-sm border-b-2 border-dotted border-amber-500/90 px-0.5 text-amber-900 decoration-2 outline-none transition hover:border-amber-700 hover:bg-amber-50/70 focus-visible:border-amber-700 focus-visible:bg-amber-50/80"
+        className="inline rounded-sm border-b-2 border-dotted border-amber-700 bg-amber-50/55 px-0.5 text-amber-950 decoration-2 outline-none transition hover:border-amber-800 hover:bg-amber-100/80 focus-visible:border-amber-800 focus-visible:bg-amber-100/80"
         aria-expanded={open}
         aria-describedby={open ? tooltipId : undefined}
         onFocus={() => setOpen(true)}
@@ -63,7 +63,7 @@ export function TeachingTerm({ term, explanation, className }: TeachingTermProps
         <span
           id={tooltipId}
           role="tooltip"
-          className="absolute left-0 top-[calc(100%+0.45rem)] z-20 w-56 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-950 shadow-[0_10px_24px_rgba(15,23,42,0.12)]"
+          className="absolute left-0 top-[calc(100%+0.45rem)] z-20 w-56 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-950 shadow-[0_10px_24px_rgba(15,23,42,0.16)]"
         >
           {explanation}
         </span>
