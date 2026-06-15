@@ -626,7 +626,7 @@ export default function FrameDifferenceMotionPage() {
       title="帧差法与运动检测"
       subtitle="Frame Difference & Motion - 相邻帧变化检测"
       operationLabel="帧间差分"
-      parameterIntro="播放连续帧小人运动序列，点击像素查看相邻帧差分、阈值判定和运动掩膜。"
+      parameterIntro="播放连续帧运动序列，点击像素后只追踪当前像素的前后帧差分、阈值判定和运动掩膜结果。"
       originalImage={result.current}
       resultImage={result.cleaned}
       parameters={parameters}

@@ -15,6 +15,7 @@ import {
   SelectParam,
   SliderParam,
   TeachingCard,
+  TeachingTerm,
   buildInlineMathML,
 } from '@/components';
 import {
@@ -641,7 +642,8 @@ export default function LBPGaborTexturePage() {
           <TeachingCard>
             <h2 className="mb-3 text-sm font-semibold text-slate-800">LBP 当前窗口计算</h2>
             <p className="text-xs leading-6 text-slate-600">
-              LBP 用中心像素作为阈值，把 3x3 邻域中的 8 个相邻像素编码为二进制模式。当前页面所有矩阵、位权重和结果值都来自主图红框中的真实像素。
+              <TeachingTerm term="LBP" explanation="Local Binary Pattern，用中心像素阈值化周围 8 个邻域像素，得到 0~255 的局部纹理编码。" className="mr-1" />
+              用中心像素作为阈值，把 3x3 邻域中的 8 个相邻像素编码为二进制模式。当前页面所有矩阵、位权重和结果值都来自主图红框中的真实像素。
             </p>
           </TeachingCard>
 
@@ -736,14 +738,15 @@ export default function LBPGaborTexturePage() {
           <TeachingCard>
             <h2 className="mb-3 text-sm font-semibold text-slate-800">Gabor 当前窗口计算</h2>
             <p className="text-xs leading-6 text-slate-600">
-              Gabor 滤波器用带方向和频率的核与局部窗口逐项相乘。当前演示只选核完整覆盖原图的位置，所以公式里的每一项都来自真实图像像素，不使用边界补零。
+              <TeachingTerm term="Gabor 预设" explanation="预设把方向、波长、方差等参数组合成一类纹理探测器；切到自定义后只看当前参数的响应。" className="mr-1" />
+              滤波器用带方向和频率的核与局部窗口逐项相乘。当前演示只选核完整覆盖原图的位置，所以公式里的每一项都来自真实图像像素，不使用边界补零。
             </p>
           </TeachingCard>
 
           <FormulaCard
             label="当前 Gabor 核参数代入"
             mathML={buildGaborKernelFormula(gaborParams)}
-            note={`当前参数：λ=${gaborParams.wavelength}，θ=${gaborParams.orientation}°，σ=${gaborParams.sigma}，γ=${formatFloat(gaborParams.gamma, 1)}，核大小=${gaborParams.kernelSize}x${gaborParams.kernelSize}。`}
+            note={`当前参数：λ=${gaborParams.wavelength} 控制条纹间隔，θ=${gaborParams.orientation}° 控制响应方向，σ=${gaborParams.sigma} 控制核覆盖范围，γ=${formatFloat(gaborParams.gamma, 1)}，核大小=${gaborParams.kernelSize}x${gaborParams.kernelSize}。`}
           />
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)]">
@@ -805,7 +808,13 @@ export default function LBPGaborTexturePage() {
             LBP 关注局部灰度相对大小。整体光照同增同减时，比较关系通常不变，因此编码相对稳定。
           </div>
           <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 text-xs leading-6 text-sky-800">
-            Gabor 关注特定方向和频率的纹理响应。改变 θ 或 λ，会直接改变核对条纹、棋盘和渐变区域的响应强度。
+            Gabor 关注特定
+            <TeachingTerm term="方向 θ" explanation="θ 决定 Gabor 核的朝向，只有与纹理方向匹配时响应才会明显。" className="mx-1" />
+            和
+            <TeachingTerm term="波长 λ" explanation="λ 决定条纹周期，越大越偏向较宽的纹理结构。" className="mx-1" />
+            的纹理响应。
+            <TeachingTerm term="方差 σ" explanation="σ 决定核的空间覆盖范围，越大参考的邻域越宽。" className="mx-1" />
+            改变时，会直接改变核对条纹、棋盘和渐变区域的响应强度。
           </div>
         </div>
       </TeachingCard>

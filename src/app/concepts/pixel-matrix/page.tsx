@@ -827,7 +827,7 @@ export default function PixelMatrixPage() {
       title="像素矩阵与邻域窗口"
       subtitle="Pixel Matrix & Neighborhood - 图像即矩阵：像素坐标、索引、邻域与局部窗口"
       operationLabel="矩阵访问"
-      parameterIntro="左侧切换示例图像、显示模式、窗口大小与邻域类型；右侧展示图像坐标、数组行列、像素值及局部邻域窗口之间的对应关系。"
+      parameterIntro="左侧切换示例图像、显示模式、窗口大小与邻域类型；右侧固定当前像素，逐一对应图像坐标、数组行列、像素值和局部邻域窗口。"
       originalImage={displayImage}
       originalRgbImage={displayMode === 'color' ? colorImage.map(row => row.map(p => [p.r, p.g, p.b] as [number, number, number])) : null}
       resultImage={displayImage}

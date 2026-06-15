@@ -551,7 +551,7 @@ export default function HogFeaturePage() {
       title="HOG 特征"
       subtitle="Histogram of Oriented Gradient - 方向梯度直方图"
       operationLabel="HOG 统计"
-      parameterIntro="点击 Lena 图选择一个 8×8 cell，或用方向键移动；方向数和 block 大小会同步刷新直方图、公式和归一化向量。"
+      parameterIntro="点击 Lena 图选择一个 8×8 cell，或用方向键移动；本页只追踪当前 cell 的梯度幅值、方向 bin、直方图和 block 归一化证据。"
       parameters={parameters}
       stepDetails={stepDetails}
       analysisPreview={analysisPreview}

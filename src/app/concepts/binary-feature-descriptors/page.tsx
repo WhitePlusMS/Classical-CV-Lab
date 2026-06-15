@@ -13,6 +13,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
    SelectParam,
    SliderParam,
    TeachingCard,
+   TeachingTerm,
    buildInlineMathML,
  } from '@/components';
 import { useLenaGrayscaleImage } from '@/hooks/useLenaGrayscaleImage';
@@ -313,8 +314,8 @@ export default function BinaryFeatureDescriptorsPage() {
   /// 当前点对
   const currentPair = pairs[currentPairIndex] ?? [0, 0, 0, 0];
   const [cx1, cy1, cx2, cy2] = currentPair;
-  const v1 = SYNTHETIC_PATCH[cy1]?.[cx1] ?? 0;
-  const v2 = SYNTHETIC_PATCH[cy2]?.[cx2] ?? 0;
+  const v1 = activePatch[cy1]?.[cx1] ?? 0;
+  const v2 = activePatch[cy2]?.[cx2] ?? 0;
   const tauResult = tauTest(activePatch, cx1, cy1, cx2, cy2);
 
   /// 汉明距离（对比一个偏移后的描述子）
@@ -342,8 +343,8 @@ export default function BinaryFeatureDescriptorsPage() {
    const bits = 8;
    for (let i = 0; i < Math.min(bits, pairs.length); i++) {
      const [x1, y1, x2, y2] = pairs[i];
-     const v1 = SYNTHETIC_PATCH[y1][x1];
-     const v2 = SYNTHETIC_PATCH[y2][x2];
+     const v1 = activePatch[y1][x1];
+     const v2 = activePatch[y2][x2];
      const tau = v1 < v2 ? 1 : 0;
      const weight = Math.pow(2, i);
      const contrib = weight * tau;
@@ -351,7 +352,7 @@ export default function BinaryFeatureDescriptorsPage() {
      rows.push({ i: i + 1, tau, weight, contrib, sum });
    }
    return rows;
- }, [pairs]);
+ }, [activePatch, pairs]);
 
   /// 采样方式说明文案
   const samplingInfo = SAMPLING_OPTIONS.find(o => o.value === samplingMethod);
@@ -363,46 +364,56 @@ export default function BinaryFeatureDescriptorsPage() {
       <TeachingCard>
         <h2 className="mb-3 text-sm font-semibold text-slate-800">BRIEF 描述子概述</h2>
         <p className="text-xs leading-6 text-slate-600">
-          BRIEF（Binary Robust Independent Elementary Features）是一种二进制特征描述子。
-          它通过在特征点邻域内随机选取 N 对像素点，比较点对间的灰度值大小来生成二进制编码，
+          BRIEF（Binary Robust Independent Elementary Features）是一种二进制
+          <TeachingTerm term="描述子" explanation="描述子把关键点附近的局部结构编码成可比较的数据；这里的编码是一串 0/1 bit。" className="mx-1" />
+          。它通过在特征点邻域
+          <TeachingTerm term="Patch" explanation="以关键点为中心截取的小块图像区域，点对比较只在这块局部区域内进行。" className="mx-1" />
+          内随机选取 N 对像素点，比较
+          <TeachingTerm term="点对" explanation="一次比较中的两个采样位置 x 和 y，它们的灰度大小关系会生成一个 bit。" className="mx-1" />
+          间的灰度值大小来生成二进制编码，
           从而避免使用梯度直方图这类高开销计算方法。
         </p>
       </TeachingCard>
 
       {/* ===== 2. τ 测试函数 ===== */}
-      <div className="border-t border-slate-200 pt-5">
+      <TeachingCard>
         <h2 className="mb-3 text-sm font-semibold text-slate-800">（1）τ 测试函数</h2>
         <p className="mb-3 text-xs leading-6 text-slate-600">
-          对于以特征点 p 为中心取出的 S×S 邻域（Patch），定义 τ 测试来比较任意两点 x、y 的灰度大小。
+          对于以特征点 p 为中心取出的 S×S 邻域（Patch），定义
+          <TeachingTerm term="τ 测试" explanation="一次 τ 测试只判断 p(x) 是否小于 p(y)，输出 1 或 0。" className="mx-1" />
+          来比较任意两点 x、y 的灰度大小。
         </p>
         <FormulaCard
           label="τ 测试（点对比较）"
           mathML={TAU_FORMULA}
+          tone="embedded"
           note={'当前点对 p(' + cx1 + ',' + cy1 + ')=' + v1 + '，p(' + cx2 + ',' + cy2 + ')=' + v2 +
                 '，比较结果 τ = ' + tauResult + '。'}
         />
         <p className="mt-3 text-xs leading-6 text-slate-600">
           在计算前，通常对 2N 个采样点分别做高斯平滑，以抑制噪声干扰。
         </p>
-      </div>
+      </TeachingCard>
 
       {/* ===== 3. BRIEF 描述子公式 ===== */}
-      <div className="border-t border-slate-200 pt-5">
+      <TeachingCard>
         <h2 className="mb-3 text-sm font-semibold text-slate-800">（2）BRIEF 描述子编码</h2>
         <p className="mb-3 text-xs leading-6 text-slate-600">
-          对 N 个点对依次执行 τ 测试，将得到的二进制码按权重 2ⁱ⁻¹ 加权求和，
-          得到一个 N 维二进制向量（通常 N = 128、256、512）。
+          对 N 个点对依次执行 τ 测试，将得到的
+          <TeachingTerm term="bit" explanation="bit 是二进制位，只能是 0 或 1；很多 bit 串起来就是 BRIEF 描述子。" className="mx-1" />
+          按权重 2ⁱ⁻¹ 加权求和，得到一个 N 维二进制向量（通常 N = 128、256、512）。
         </p>
         <FormulaCard
           label="BRIEF 描述子"
           mathML={BRIEF_DESCRIPTOR_FORMULA}
+          tone="embedded"
          note={'当前二进制串的前 ' + (currentPairIndex + 1) + ' 位：' + binaryString}
        />
        {/* 链式代入展示：前 8 位的逐位计算过程 */}
        <p className="mb-2 mt-4 text-xs font-semibold text-slate-700">
          链式代入过程（前 8 bit）
        </p>
-       <div className="overflow-x-auto rounded-xl border border-slate-200">
+       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50">
          <table className="w-full text-left text-[11px] tabular-nums">
            <thead>
              <tr className="bg-slate-100">
@@ -437,10 +448,10 @@ export default function BinaryFeatureDescriptorsPage() {
            </tbody>
          </table>
        </div>
-      </div>
+      </TeachingCard>
 
       {/* ===== 4. 五种采样方式 ===== */}
-      <div className="border-t border-slate-200 pt-5">
+      <TeachingCard>
         <h2 className="mb-3 text-sm font-semibold text-slate-800">（3）BRIEF 随机点对采样方式</h2>
         <p className="mb-3 text-xs leading-6 text-slate-600">
           BRIEF 定义了一组采样模式（GI-GV），每种模式对特征点邻域中随机点对的选取策略不同。
@@ -491,7 +502,7 @@ export default function BinaryFeatureDescriptorsPage() {
             <figcaption className="mt-1 text-xs text-slate-500">GV：X 固定在中心，Y 遍历极坐标</figcaption>
           </figure>
         </div>
-        <TeachingCard>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
           <ul className="list-inside list-disc space-y-1 text-xs leading-5 text-slate-700">
             <li><span className="font-semibold">GI</span>：X、Y 在 Patch 内均匀分布</li>
             <li><span className="font-semibold">GII</span>：X、Y 均服从高斯分布（中心区域密集）</li>
@@ -499,34 +510,36 @@ export default function BinaryFeatureDescriptorsPage() {
             <li><span className="font-semibold">GIV</span>：在空间量化极坐标系下，随机取 2N 个点</li>
             <li><span className="font-semibold">GV</span>：X 固定在中心，Y 在极坐标系中取所有可能的值</li>
           </ul>
-        </TeachingCard>
-      </div>
+        </div>
+      </TeachingCard>
 
       {/* ===== 5. BRIEF 优缺点 ===== */}
-      <div className="border-t border-slate-200 pt-5">
+      <TeachingCard>
         <h2 className="mb-3 text-sm font-semibold text-slate-800">（4）BRIEF 特点分析</h2>
-        <TeachingCard>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
           <p className="text-xs leading-6 text-slate-700">
             <span className="font-semibold text-emerald-700">优点：</span>
-            BRIEF 抛弃了传统的梯度直方图描述方法，改用随机像素比较，大大加快了描述子建立速度。
-            生成的二进制描述子便于高速匹配——计算汉明距离只需通过异或操作加上统计二进制编码中 "1" 的个数，
+          BRIEF 抛弃了传统的梯度直方图描述方法，改用随机像素比较，大大加快了描述子建立速度。
+            生成的二进制描述子便于高速匹配——计算
+            <TeachingTerm term="汉明距离" explanation="两个二进制串异或后，统计不同 bit 的数量；数量越少越像同一个局部结构。" className="mx-1" />
+            只需通过异或操作加上统计二进制编码中 "1" 的个数，
             通过底层位运算即可实现，且便于在硬件上实现。
           </p>
           <p className="mt-3 text-xs leading-6 text-slate-700">
             <span className="font-semibold text-red-600">缺点：</span>
             不具备旋转不变性，不具备尺度不变性，容易受噪声影响。
           </p>
-        </TeachingCard>
-      </div>
+        </div>
+      </TeachingCard>
 
       {/* ===== 6. BRISK ===== */}
-      <div className="border-t border-slate-200 pt-5">
+      <TeachingCard>
         <h2 className="mb-3 text-sm font-semibold text-slate-800">（5）BRISK 描述子</h2>
         <p className="mb-3 text-xs leading-6 text-slate-600">
           BRISK（Binary Robust Invariant Scalable Keypoints）是 BRIEF 的改进算法，
           也是一种基于二进制编码的特征描述子，具备尺度不变性和旋转不变性，同时对噪声鲁棒。
         </p>
-        <TeachingCard>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
           <div className="space-y-2 text-xs leading-5 text-slate-700">
             <p><span className="font-semibold">特征点检测：</span>
               使用 FAST 或 AGAST 算法检测特征点。为满足尺度不变性，
@@ -537,61 +550,65 @@ export default function BinaryFeatureDescriptorsPage() {
             <p><span className="font-semibold">特征点匹配：</span>
               与 BRIEF 相同，通过计算汉明距离实现。</p>
           </div>
-        </TeachingCard>
+        </div>
         <p className="mt-3 text-xs leading-6 text-slate-600">
           BRISK 具有较好的尺度不变性、旋转不变性和抗噪性能，计算速度优于 SIFT 和 SURF，但次于 ORB。
         </p>
-      </div>
+      </TeachingCard>
 
       {/* ===== 7. ORB ===== */}
-      <div className="border-t border-slate-200 pt-5">
+      <TeachingCard>
         <h2 className="mb-3 text-sm font-semibold text-slate-800">（6）ORB 描述子</h2>
         <p className="mb-3 text-xs leading-6 text-slate-600">
           ORB（Oriented FAST and Rotated BRIEF）结合了 FAST 关键点检测与 BRIEF 描述子，
           并为其增加了方向信息。它兼顾了速度与旋转不变性。
         </p>
-        <TeachingCard>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
           <div className="space-y-2 text-xs leading-5 text-slate-700">
             <p><span className="font-semibold">关键点检测：</span>
               使用 FAST 提取候选关键点，再利用 Harris 角点响应函数去除非角点，
               保留响应最强的前 N 个点。</p>
             <p><span className="font-semibold">方向分配：</span>
-              使用 Intensity Centroid 方法计算质心方向。
+              使用 <TeachingTerm term="Intensity Centroid" explanation="用 patch 内灰度质心相对中心的位置估计主方向，让 BRIEF 点对随方向旋转。" /> 方法计算质心方向。
               质心 m = (m₁₀, m₀₁)，方向 θ = atan2(m₀₁, m₁₀)。</p>
             <p><span className="font-semibold">描述子：</span>
               通过贪心方法选取符合正态分布的随机点对，并按照方向 θ 旋转坐标后执行 BRIEF 编码，
               得到旋转不变的描述子。</p>
           </div>
-        </TeachingCard>
+        </div>
         <div className="mt-3">
           <FormulaCard
             label="Intensity Centroid 方向分配"
             mathML={CENTROID_FORMULA}
+            tone="embedded"
             note="m₁₀、m₀₁ 为图像块的一阶矩，用于计算质心方向 θ。"
           />
         </div>
-      </div>
+      </TeachingCard>
 
       {/* ===== 8. 汉明距离匹配 ===== */}
-      <div className="border-t border-slate-200 pt-5">
+      <TeachingCard>
         <h2 className="mb-3 text-sm font-semibold text-slate-800">（7）汉明距离匹配</h2>
         <p className="mb-3 text-xs leading-6 text-slate-600">
-          二进制描述子的匹配通过汉明距离实现。汉明距离定义为两个等长二进制串在对应位置上的不同比特数。
+          二进制描述子的匹配通过
+          <TeachingTerm term="汉明距离" explanation="汉明距离只看两个 bit 串有多少位不一样，不直接比较灰度值。" className="mx-1" />
+          实现。汉明距离定义为两个等长二进制串在对应位置上的不同比特数。
           计算时仅需一次异或操作（XOR）加一个 popcount（统计 "1" 的个数），因此速度极快。
         </p>
         <FormulaCard
           label="汉明距离"
           mathML={HAMMING_FORMULA}
+          tone="embedded"
           note={'当前二进制描述子 1 为 ' + binaryString + '，' +
                 '描述子 2 为 ' + binaryString2.slice(0, Math.min(16, binaryString.length)) + '…，' +
                 '汉明距离 = ' + hammingDist + '。'}
         />
-      </div>
+      </TeachingCard>
 
       {/* ===== 9. 算法对比汇总 ===== */}
-      <div className="border-t border-slate-200 pt-5">
+      <TeachingCard>
         <h2 className="mb-3 text-sm font-semibold text-slate-800">（8）算法对比</h2>
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50">
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="bg-slate-100">
@@ -633,16 +650,16 @@ export default function BinaryFeatureDescriptorsPage() {
             </tbody>
           </table>
         </div>
-      </div>
+      </TeachingCard>
 
       {/* ===== 10. OpenCV 调用流程 ===== */}
-      <div className="border-t border-slate-200 pt-5">
+      <TeachingCard>
         <h2 className="mb-3 text-sm font-semibold text-slate-800">（9）OpenCV 调用流程</h2>
         <p className="mb-3 text-xs leading-6 text-slate-600">
           OpenCV 中 ORB 和 BRISK 的调用遵循"检测→计算→匹配"的经典三步流程，
           匹配时统一使用 NORM_HAMMING 作为距离度量。
         </p>
-      </div>
+      </TeachingCard>
     </div>
   );
 
@@ -744,6 +761,18 @@ export default function BinaryFeatureDescriptorsPage() {
           <p className="text-xs leading-5 text-amber-800">{samplingInfo.desc}</p>
         </div>
       )}
+      <SelectParam
+        label="Patch 来源"
+        value={patchSource}
+        onChange={value => {
+          setPatchSource(value as PatchSource);
+          setCurrentPairIndex(0);
+        }}
+        options={[
+          { value: 'synthetic', label: '教学 Patch' },
+          { value: 'lenaPatch', label: 'Lena Patch' },
+        ]}
+      />
       <div>
         <label className="text-xs font-medium text-slate-500 mb-1.5 block">描述子位数</label>
         <select
@@ -756,8 +785,16 @@ export default function BinaryFeatureDescriptorsPage() {
           <option value="512">512 bit</option>
         </select>
       </div>
+      <SliderParam
+        label="当前点对"
+        value={currentPairIndex}
+        onChange={setCurrentPairIndex}
+        min={0}
+        max={Math.max(0, totalPairs - 1)}
+        step={1}
+      />
       <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-5 text-slate-600">
-        拖动滑杆逐步查看每对点的 τ 测试结果如何构成完整的二进制描述子。
+        当前第 {currentPairIndex + 1} 对点：p({cx1},{cy1})={v1} 与 p({cx2},{cy2})={v2}，τ={tauResult}。拖动滑杆逐步查看每对点如何构成完整的二进制描述子。
       </div>
     </div>
   );

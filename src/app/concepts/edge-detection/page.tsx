@@ -1813,7 +1813,7 @@ export default function EdgeDetectionPage() {
       title="边缘检测"
       subtitle="Edge Detection - 梯度算子与 Canny 边缘检测算法"
       operationLabel={operationLabel}
-      parameterIntro="切换边缘检测算子，观察不同方法的效果。Canny 支持分阶段可视化每一步输出。"
+      parameterIntro="切换边缘检测算子，观察当前窗口如何形成梯度或 Canny 阶段结果；只突出当前方法的边缘判定证据。"
       originalImage={originalImage}
       resultImage={resultImage}
       parameters={parameters}

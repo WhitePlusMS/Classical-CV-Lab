@@ -585,8 +585,8 @@ export default function MorphologyPage() {
   ), [viewMode]);
 
   const parameterIntro = viewMode === 'theory'
-    ? '原理演示只保留会影响结构元素运动与输出判定的参数，重点观察结构元素如何滑动并决定输出像素。'
-    : '任务场景可切换对应演示配置；固定观察窗口用于展示局部区域与结果的对应关系。';
+    ? '原理演示只保留会影响结构元素运动与输出判定的参数，当前结构元素窗口决定当前输出像素。'
+    : '任务场景可切换对应演示配置；固定观察窗口只展示当前目标、局部区域与形态学结果的对应关系。';
 
   // 使用 useGridNavigation 钩子
   const handleDirectionMove = useGridNavigation({
@@ -1767,6 +1767,7 @@ export default function MorphologyPage() {
         {OPERATION_LABELS[effectiveOperation]}，
         结构元素 {SHAPE_LABELS[seShape as SeShape]}，
         {seSize}&#x00D7;{seSize}。
+        当前判断只看结构元素覆盖区域是否满足该操作的集合规则。
         {isComposite && ' 此操作分两阶段完成，中间结果在下方分析区可见。'}
       </div>
     </div>

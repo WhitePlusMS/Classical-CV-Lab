@@ -572,7 +572,7 @@ export default function HistogramEqualizationPage() {
       title="直方图均衡化"
       subtitle="Histogram Equalization — 基于 CDF 的灰度级重新分布"
       operationLabel="均衡化"
-      parameterIntro="左侧切换不同示例图，观察直方图均衡化的效果对比。悬停或点击原图直方图，查看具体灰度映射关系。"
+      parameterIntro="左侧切换不同示例图；悬停或点击原图直方图后，只追踪当前灰度的计数、CDF 和映射后新灰度。"
       originalImage={originalImage}
       resultImage={eqImage}
       parameters={parameters}

@@ -873,7 +873,7 @@ export default function ImageSharpeningPage() {
       title="图像锐化"
       subtitle="Image Sharpening - 梯度锐化与 Laplace 增强"
       operationLabel="锐化处理"
-      parameterIntro="图像锐化通过增强灰度突变区域来突出边缘和轮廓。选择不同方法观察一阶梯度与二阶 Laplace 的差异。"
+      parameterIntro="图像锐化通过增强灰度突变区域来突出边缘和轮廓；本页只围绕当前窗口比较一阶梯度、二阶 Laplace 与最终增强值。"
       originalImage={originalImage}
       resultImage={resultImage}
       parameters={parameters}

@@ -433,7 +433,7 @@ export default function GrayscalePage() {
       title="图像灰度化"
       subtitle="Grayscale - RGB 三通道与灰度转换"
       operationLabel="灰度转换"
-      parameterIntro="左侧用于切换示例图像、通道显示和灰度化方法；右侧展示当前像素如何由 RGB 转为灰度值。"
+      parameterIntro="左侧切换示例图像、通道显示和灰度化方法；右侧只围绕当前像素，展示 R/G/B 权重如何合成为一个灰度值。"
       originalImage={displayImage}
       originalRgbImage={displayMode === 'color' ? rgbImage : null}
       resultImage={resultImage}

@@ -763,6 +763,7 @@ export default function BackgroundModelingSubtractionPage() {
             <FormulaCard
               label="均值背景估计"
               mathML={buildInlineMathML('<mrow><msub><mi>B</mi><mi>t</mi></msub><mo>=</mo><mfrac><mn>1</mn><mi>K</mi></mfrac><munderover><mo>∑</mo><mrow><mi>j</mi><mo>=</mo><mn>1</mn></mrow><mi>K</mi></munderover><msub><mi>I</mi><mi>j</mi></msub></mrow>')}
+              tone="embedded"
               note={'当前像素训练均值 = ' + trainingMeanGray + '，背景图中 B = ' + backgroundGray + '。'}
             />
             <div className="grid gap-2 text-xs leading-5 text-slate-700 sm:grid-cols-3 lg:grid-cols-1">
@@ -776,16 +777,16 @@ export default function BackgroundModelingSubtractionPage() {
                   多数背景假设。
                 </div>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
                 <div className="font-semibold text-slate-800">历史帧与当前帧分工</div>
                 <div className="mt-1">历史帧只用于估计 B，当前帧 I<sub>t</sub> 只用于和 B 做差分判定。</div>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
                 <div className="font-semibold text-slate-800">课件默认值映射</div>
                 <div className="mt-1">课件示例常用 T=60、K=3；本页 T 可调，K 固定为 {trainingFrames.length} 帧以增强连续序列稳定性。</div>
               </div>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs leading-6 text-slate-700">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-6 text-slate-700">
               <div className="font-semibold text-slate-800">当前帧判定</div>
               <div className="mt-1">
                 |I<sub>t</sub> - B<sub>t</sub>| = |{currentGray} - {backgroundGray}| = {diffGray}，
@@ -814,17 +815,17 @@ export default function BackgroundModelingSubtractionPage() {
           </span>
         </div>
         <div className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-2xl border border-red-200 bg-white px-3 py-3">
+          <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-3">
             <div className="mb-2 text-xs font-semibold text-red-700">当前帧 I<sub>t</sub></div>
             <ImageCanvas image={result.current} maxDisplaySize={150} showGrid={false} highlightPixel={currentPosition} />
             <div className="mt-2 font-mono text-sm font-semibold text-red-700">I = {currentGray}</div>
           </div>
-          <div className="rounded-2xl border border-amber-200 bg-white px-3 py-3">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3">
             <div className="mb-2 text-xs font-semibold text-amber-700">上一背景 B<sub>t-1</sub></div>
             <ImageCanvas image={previousBackgroundImage} maxDisplaySize={150} showGrid={false} highlightPixel={currentPosition} />
             <div className="mt-2 font-mono text-sm font-semibold text-amber-800">B<sub>t-1</sub> = {previousBackgroundGray}</div>
           </div>
-          <div className="rounded-2xl border border-emerald-200 bg-white px-3 py-3">
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3">
             <div className="mb-2 text-xs font-semibold text-emerald-700">更新后背景</div>
             <ImageCanvas image={result.background} maxDisplaySize={150} showGrid={false} highlightPixel={currentPosition} />
             <div className="mt-2 font-mono text-sm font-semibold text-emerald-700">B<sub>t</sub> ≈ {adaptiveUpdatedGray}</div>
@@ -833,10 +834,11 @@ export default function BackgroundModelingSubtractionPage() {
         <FormulaCard
           label="递推代入"
           mathML={ADAPTIVE_BG_FORMULA}
+          tone="embedded"
           note={'代入当前像素：' + alphaValue.toFixed(2) + ' × ' + currentGray + ' + ' + (1 - alphaValue).toFixed(2) + ' × ' + previousBackgroundGray + ' ≈ ' + adaptiveUpdatedGray + '。'}
         />
         <div className="mt-3 grid gap-3 text-xs leading-5 text-slate-700 md:grid-cols-3">
-          <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
             <div className="font-semibold text-slate-800">初始化</div>
             <div className="mt-1">第一帧可直接作为初始背景：B<sub>1</sub>(x,y)=I<sub>1</sub>(x,y)。</div>
           </div>
@@ -868,7 +870,7 @@ export default function BackgroundModelingSubtractionPage() {
           </span>
         </div>
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
-          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
             <div className="mb-3 text-xs font-semibold text-slate-700">像素时间序列与匹配区间</div>
             <div className="flex h-32 items-end gap-1 overflow-x-auto border-b border-slate-200 pb-2">
               {result.pixelTimeline.map(point => (
@@ -898,21 +900,25 @@ export default function BackgroundModelingSubtractionPage() {
             <FormulaCard
               label="像素时间分布"
               mathML={GAUSSIAN_PDF}
+              tone="embedded"
               note="课件强调每个像素的时间灰度值可看作随机过程，背景值集中在高斯分布的均值附近。"
             />
             <FormulaCard
               label="模型初始化"
               mathML={GAUSSIAN_INIT}
+              tone="embedded"
               note="第一帧初始化均值，初始标准差给模型一个可容纳微小波动的范围。"
             />
             <FormulaCard
               label="单高斯前景判定"
               mathML={GAUSSIAN_DETECT}
+              tone="embedded"
               note={'当前 |I-μ| = ' + diffGray + '，2.5δ = ' + gaussianLimit + '，结果：' + decisionText + '。'}
             />
             <FormulaCard
               label="单高斯模型更新"
               mathML={GAUSSIAN_UPDATE}
+              tone="embedded"
               note={'α = ' + alphaValue.toFixed(2) + '，当前 μ = ' + backgroundGray + '，δ = ' + deviationGray + '。'}
             />
           </div>
@@ -946,7 +952,7 @@ export default function BackgroundModelingSubtractionPage() {
           </span>
         </div>
         <div className="grid gap-3 lg:grid-cols-4">
-          <div className="rounded-2xl border border-red-200 bg-white px-3 py-3">
+          <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-3">
             <div className="mb-2 text-xs font-semibold text-red-700">1. 匹配分量</div>
             <div className="space-y-2 text-xs leading-5">
               {sortedMixtureComponents.map((component, index) => {
@@ -969,7 +975,7 @@ export default function BackgroundModelingSubtractionPage() {
               })}
             </div>
           </div>
-          <div className="rounded-2xl border border-amber-200 bg-white px-3 py-3">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3">
             <div className="mb-2 text-xs font-semibold text-amber-700">2. 更新参数</div>
             <div className="space-y-2 text-xs leading-5 text-slate-700">
               <div className="rounded-xl bg-amber-50 px-3 py-2">匹配分量：ω、μ、δ² 按 α 更新</div>
@@ -977,7 +983,7 @@ export default function BackgroundModelingSubtractionPage() {
               <div className="rounded-xl bg-slate-50 px-3 py-2">当前 α = {alphaValue.toFixed(2)}</div>
             </div>
           </div>
-          <div className="rounded-2xl border border-sky-200 bg-white px-3 py-3">
+          <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-3">
             <div className="mb-2 text-xs font-semibold text-sky-700">3. 按 ω/δ 排序</div>
             <div className="space-y-2 text-xs leading-5">
               {sortedMixtureComponents.map((component, index) => (
@@ -990,7 +996,7 @@ export default function BackgroundModelingSubtractionPage() {
               ))}
             </div>
           </div>
-          <div className="rounded-2xl border border-emerald-200 bg-white px-3 py-3">
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3">
             <div className="mb-2 text-xs font-semibold text-emerald-700">4. 输出判定</div>
             <div className="rounded-xl bg-emerald-50 px-3 py-3 text-xs leading-6 text-slate-700">
               当前像素与背景模型差分为 {diffGray}，阈值 T = {threshold}。
@@ -1019,7 +1025,7 @@ export default function BackgroundModelingSubtractionPage() {
               ))}
             </div>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
             <div className="font-semibold text-slate-800">适合场景</div>
             <div className="mt-2">
               摇动树叶、灌木、旋转风扇、海面波纹等动态背景，单高斯会把正常波动误判为前景，混合高斯用多个背景峰吸收这些重复变化。
@@ -1030,21 +1036,25 @@ export default function BackgroundModelingSubtractionPage() {
           <FormulaCard
             label="混合高斯概率"
             mathML={MIXTURE_FORMULA}
+            tone="embedded"
             note="多个高斯分量共同描述同一个像素在时间上的多模态背景。"
           />
           <FormulaCard
             label="匹配条件"
             mathML={MIXTURE_MATCH}
+            tone="embedded"
             note="新像素先与各分量比较，距离落在 D·δ 范围内才认为匹配。"
           />
           <FormulaCard
             label="匹配后的参数更新"
             mathML={MIXTURE_UPDATE}
+            tone="embedded"
             note={'匹配分量按 α 或 ρ 更新；当前 α = ' + alphaValue.toFixed(2) + '。'}
           />
           <FormulaCard
             label="背景选择与前景检测"
             mathML={MIXTURE_DETECT_ALL}
+            tone="embedded"
             note="按 ω/δ 排序后，累计权重大于阈值的分量视为背景分布。"
           />
         </div>
@@ -1078,18 +1088,18 @@ export default function BackgroundModelingSubtractionPage() {
 
       {activeDerivation}
 
-      <div className="border-t border-slate-200 pt-5">
+      <TeachingCard>
         <h2 className="mb-3 text-sm font-semibold text-slate-800">当前像素总结</h2>
         <p className="mb-4 text-xs leading-6 text-slate-600">
           对当前位置 ({currentPosition.x}, {currentPosition.y}) 和第 {currentFrameIndex + 1} 帧做统一代入。
         </p>
         <div className="space-y-3 text-xs leading-6">
-          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
             <p className="font-semibold text-slate-800">当前帧像素 I(x,y)：</p>
               I({currentPosition.x}, {currentPosition.y}) = {currentGray}
          </div>
           {model === 'singleGaussian' ? (
-            <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
               <p className="font-semibold text-slate-800">标准差 δ(x,y)：</p>
               <p className="text-slate-600">
                 δ({currentPosition.x}, {currentPosition.y}) = {deviationGray}
@@ -1099,13 +1109,13 @@ export default function BackgroundModelingSubtractionPage() {
               </p>
             </div>
           ) : null}
-         <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+         <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
            <p className="font-semibold text-slate-800">背景减除差值：</p>
             <p className="text-slate-600">
               |I – B| = |{currentGray} – {backgroundGray}| = {diffGray}
             </p>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
             <p className="font-semibold text-slate-800">前景判定 D(x,y)：</p>
             <p className="text-slate-600">
               D(x,y) = {'{'} 1 当 {activeRuleText}; 0 其他 {'}'}
@@ -1114,7 +1124,7 @@ export default function BackgroundModelingSubtractionPage() {
             </p>
           </div>
         </div>
-      </div>
+      </TeachingCard>
     </div>
   );
   const parameters = (

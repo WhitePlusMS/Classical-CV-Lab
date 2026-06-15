@@ -745,7 +745,7 @@ export default function PerspectiveTransformPage() {
       subtitle="Perspective Transform"
       contentHeader={contentHeader}
       operationLabel="透视校正"
-      parameterIntro="先拖动左图四个控点，让角点贴合纸张边界；再观察透视结果与仿射结果的差别。"
+      parameterIntro="先拖动左图四个控点贴合纸张边界；当前点对只用于解单应矩阵，再对比透视结果与仿射结果的差别。"
       originalImage={scene.sourceGray}
       resultImage={computation.perspectiveGray}
       originalRgbImage={scene.sourceRgb}

@@ -15,6 +15,7 @@ import {
   ProcessRail,
   SelectParam,
   TeachingCard,
+  TeachingTerm,
   buildInlineMathML,
 } from '@/components';
 import {
@@ -673,53 +674,60 @@ export default function HaarLbpFeatureVectorPage() {
               {mode === 'haar-integral' ? 'Haar 特征与积分图' : 'Haar 模板响应'}
             </h2>
             <p className="text-xs leading-6 text-slate-600">
-              Haar-like 特征把检测窗口切成黑白矩形区域，用黑色区域灰度和减去白色区域灰度和得到一个标量特征。
-              积分图把任意矩形求和转化为四个角点的加减，因此适合大量滑动窗口扫描。
+              <TeachingTerm term="Haar-like 特征" explanation="把窗口划分成黑白矩形区域，只比较区域灰度和的差异，用一个数描述边缘、线或亮斑结构。" className="mr-1" />
+              把检测窗口切成黑白矩形区域，用黑色区域灰度和减去白色区域灰度和得到一个标量特征。
+              <TeachingTerm term="积分图" explanation="每个位置保存左上角累计和，任意矩形区域求和可由四个角点加减得到。" className="mx-1" />
+              把任意矩形求和转化为四个角点的加减，因此适合大量滑动窗口扫描。
             </p>
           </TeachingCard>
 
-          <FormulaCard
-            label="Haar 特征值当前代入"
-            mathML={buildHaarValueFormula(haarStep)}
-            note={`当前模板为 ${HAAR_TEMPLATE_LABELS[haarTemplateType]}，窗口左上角为 (${haarStep.x}, ${haarStep.y})。`}
-          />
-
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-            <TeachingCard>
-              <h3 className="mb-3 text-sm font-semibold text-slate-800">区域求和</h3>
-              <div className="space-y-2">
-                {haarStep.regions.map((region, index) => (
-                  <div
-                    key={`region-sum-${index}`}
-                    className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-xs ${
-                      region.tone === 'black'
-                        ? 'border-slate-700 bg-slate-800 text-white'
-                        : 'border-slate-200 bg-white text-slate-700'
-                    }`}
-                  >
-                    <span>
-                      {region.tone === 'black' ? '黑区' : '白区'} R{index + 1}
-                      {' '}({region.x},{region.y},{region.width}x{region.height})
-                    </span>
-                    <span className="font-mono font-semibold">{region.sum}</span>
-                  </div>
-                ))}
+          <TeachingCard>
+            <h3 className="mb-3 text-sm font-semibold text-slate-800">当前 Haar 响应证据</h3>
+            <FormulaCard
+              label="Haar 特征值当前代入"
+              mathML={buildHaarValueFormula(haarStep)}
+              tone="embedded"
+              note={`当前模板为 ${HAAR_TEMPLATE_LABELS[haarTemplateType]}，窗口左上角为 (${haarStep.x}, ${haarStep.y})。`}
+            />
+            <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
+                <h4 className="mb-3 text-sm font-semibold text-slate-800">区域求和</h4>
+                <div className="space-y-2">
+                  {haarStep.regions.map((region, index) => (
+                    <div
+                      key={`region-sum-${index}`}
+                      className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-xs ${
+                        region.tone === 'black'
+                          ? 'border-slate-700 bg-slate-800 text-white'
+                          : 'border-slate-200 bg-white text-slate-700'
+                      }`}
+                    >
+                      <span>
+                        {region.tone === 'black' ? '黑区' : '白区'} R{index + 1}
+                        {' '}({region.x},{region.y},{region.width}x{region.height})
+                      </span>
+                      <span className="font-mono font-semibold">{region.sum}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </TeachingCard>
 
-            <TeachingCard>
-              <h3 className="mb-3 text-sm font-semibold text-slate-800">当前窗口矩阵</h3>
-              <HaarWindowMatrix step={haarStep} />
-              <p className="mt-3 text-xs leading-5 text-slate-600">
-                矩阵值为 0~255 灰度值。深色格属于黑区，白色格属于白区，所有显示数值都参与当前特征值计算。
-              </p>
-            </TeachingCard>
-          </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
+                <h4 className="mb-3 text-sm font-semibold text-slate-800">当前窗口矩阵</h4>
+                <HaarWindowMatrix step={haarStep} />
+                <p className="mt-3 text-xs leading-5 text-slate-600">
+                  矩阵值为 0~255 灰度值。深色格属于黑区，白色格属于白区，所有显示数值都参与当前特征值计算。
+                </p>
+              </div>
+            </div>
+          </TeachingCard>
 
           {mode === 'haar-integral' && (
-            <div className="space-y-4 border-t border-slate-200 pt-5">
-              <TeachingCard>
-                <h3 className="mb-3 text-sm font-semibold text-slate-800">积分图局部矩阵</h3>
+            <TeachingCard>
+              <h3 className="mb-3 text-sm font-semibold text-slate-800">积分图局部矩阵与区域求和</h3>
+              <div className="space-y-4">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
+                  <h3 className="mb-3 text-sm font-semibold text-slate-800">积分图局部矩阵</h3>
                 <div className="overflow-x-auto">
                   <IntegralMatrix
                     matrix={haarStep.integralImage}
@@ -731,19 +739,21 @@ export default function HaarLbpFeatureVectorPage() {
                 <p className="mt-3 text-xs leading-5 text-slate-600">
                   每个积分值表示从原图左上角到当前位置的矩形灰度和。矩形区域求和只需要四个角点。
                 </p>
-              </TeachingCard>
+                </div>
 
-              <div className="grid gap-4 xl:grid-cols-2">
-                {haarStep.integralRegions.map((region, index) => (
-                  <FormulaCard
-                    key={`integral-formula-${index}`}
-                    label={`R${index + 1} 矩形和`}
-                    mathML={buildIntegralFormula(region)}
-                    note={`${region.rect.tone === 'black' ? '黑区' : '白区'}矩形：局部坐标 (${region.rect.x}, ${region.rect.y})，尺寸 ${region.rect.width}x${region.rect.height}。`}
-                  />
-                ))}
+                <div className="grid gap-4 xl:grid-cols-2">
+                  {haarStep.integralRegions.map((region, index) => (
+                    <FormulaCard
+                      key={`integral-formula-${index}`}
+                      label={`R${index + 1} 矩形和`}
+                      mathML={buildIntegralFormula(region)}
+                      tone="embedded"
+                      note={`${region.rect.tone === 'black' ? '黑区' : '白区'}矩形：局部坐标 (${region.rect.x}, ${region.rect.y})，尺寸 ${region.rect.width}x${region.rect.height}。`}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
+            </TeachingCard>
           )}
         </div>
       );
@@ -755,51 +765,63 @@ export default function HaarLbpFeatureVectorPage() {
           <TeachingCard>
             <h2 className="mb-3 text-sm font-semibold text-slate-800">LBP 特征向量提取</h2>
             <p className="text-xs leading-6 text-slate-600">
-              单个 LBP 编码描述一个像素的 3x3 局部纹理；LBP 特征向量则把检测窗口划分为多个 cell，
+              单个 <TeachingTerm term="LBP 编码" explanation="用中心像素阈值化 8 个邻域像素，得到一个 0~255 的局部纹理模式。" className="mx-1" />
+              描述一个像素的 3x3 局部纹理；LBP 特征向量则把检测窗口划分为多个
+              <TeachingTerm term="cell" explanation="检测窗口中的小网格，每个 cell 单独统计 LBP 直方图，最后按空间顺序串联。" className="mx-1" />
+              ，
               对每个 cell 的 LBP 编码做 256 维直方图统计，再按空间顺序串联成分类器输入。
             </p>
           </TeachingCard>
 
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-            <TeachingCard>
-              <h3 className="mb-3 text-sm font-semibold text-slate-800">当前 3x3 编码</h3>
-              <LBPWindowMatrix step={lbpStep} />
-              <p className="mt-3 text-xs leading-5 text-slate-600">
-                中心像素灰度为 {grayByte(lbpStep.selectedCell.samplePixel.center)}。
-                邻域像素大于等于中心记为 1，否则记为 0。
-              </p>
-            </TeachingCard>
+          <TeachingCard>
+            <h3 className="mb-3 text-sm font-semibold text-slate-800">当前 LBP 编码证据</h3>
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
+                <h4 className="mb-3 text-sm font-semibold text-slate-800">当前 3x3 编码</h4>
+                <LBPWindowMatrix step={lbpStep} />
+                <p className="mt-3 text-xs leading-5 text-slate-600">
+                  中心像素灰度为 {grayByte(lbpStep.selectedCell.samplePixel.center)}。
+                  邻域像素大于等于中心记为 1，否则记为 0。
+                </p>
+              </div>
 
-            <FormulaCard
-              label="当前 LBP 编码代入"
-              mathML={buildLBPCodeFormula(lbpStep)}
-              note="该值只是当前 cell 中一个像素的 LBP 编码，后续还要统计整个 cell 的分布。"
-            />
-          </div>
-
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-            <TeachingCard>
-              <h3 className="mb-3 text-sm font-semibold text-slate-800">当前 cell 非零直方图 bin</h3>
-              <NonZeroHistogram step={lbpStep} />
-              <p className="mt-3 text-xs leading-5 text-slate-600">
-                当前 cell 是第 {lbpStep.selectedCell.index + 1} 个 cell，
-                尺寸为 {lbpStep.cellSize}x{lbpStep.cellSize}，共有 {lbpStep.cellSize * lbpStep.cellSize} 个 LBP 编码参与统计。
-              </p>
-            </TeachingCard>
-
-            <div className="space-y-4">
               <FormulaCard
-                label="cell 直方图归一化"
-                mathML={buildLBPHistogramFormula(lbpStep)}
-                note="这里只展开当前 cell 的一个非零 bin；完整直方图仍为 256 维。"
-              />
-              <FormulaCard
-                label="窗口特征向量维度"
-                mathML={buildVectorFormula(lbpStep)}
-                note="完整向量来自所有 cell 的 256 维直方图串联，而不是单个 LBP 编码。"
+                label="当前 LBP 编码代入"
+                mathML={buildLBPCodeFormula(lbpStep)}
+                tone="embedded"
+                note="该值只是当前 cell 中一个像素的 LBP 编码，后续还要统计整个 cell 的分布。"
               />
             </div>
-          </div>
+          </TeachingCard>
+
+          <TeachingCard>
+            <h3 className="mb-3 text-sm font-semibold text-slate-800">当前 cell 统计证据</h3>
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
+                <h4 className="mb-3 text-sm font-semibold text-slate-800">当前 cell 非零直方图 bin</h4>
+                <NonZeroHistogram step={lbpStep} />
+                <p className="mt-3 text-xs leading-5 text-slate-600">
+                  当前 cell 是第 {lbpStep.selectedCell.index + 1} 个 cell，
+                  尺寸为 {lbpStep.cellSize}x{lbpStep.cellSize}，共有 {lbpStep.cellSize * lbpStep.cellSize} 个 LBP 编码参与统计。
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <FormulaCard
+                  label="cell 直方图归一化"
+                  mathML={buildLBPHistogramFormula(lbpStep)}
+                  tone="embedded"
+                  note="这里只展开当前 cell 的一个非零 bin；完整直方图仍为 256 维。"
+                />
+                <FormulaCard
+                  label="窗口特征向量维度"
+                  mathML={buildVectorFormula(lbpStep)}
+                  tone="embedded"
+                  note="完整向量来自所有 cell 的 256 维直方图串联，而不是单个 LBP 编码。"
+                />
+              </div>
+            </div>
+          </TeachingCard>
 
           <TeachingCard>
             <h3 className="mb-3 text-sm font-semibold text-slate-800">向量摘要</h3>
@@ -871,7 +893,9 @@ export default function HaarLbpFeatureVectorPage() {
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-5 text-slate-600">
-        当前有效窗口数：{validWidth}x{validHeight} = {totalSteps}。
+        当前只解释
+        {mode === 'lbp-vector' ? ' LBP 特征向量的中心 cell 证据' : ` ${HAAR_TEMPLATE_LABELS[haarTemplateType]} 的黑白区域响应`}
+        ；有效窗口数：{validWidth}x{validHeight} = {totalSteps}。
       </div>
     </div>
   );

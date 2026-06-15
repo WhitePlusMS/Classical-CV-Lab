@@ -639,7 +639,7 @@ export default function ThresholdAutoThresholdPage() {
       title="阈值分割与自动阈值"
       subtitle="Threshold & Auto Threshold - 从固定阈值到自动阈值选择"
       operationLabel="阈值判定"
-      parameterIntro="切换示例场景、阈值来源和输出类型，观察阈值线与分割结果之间的关系。"
+      parameterIntro="切换示例场景、阈值来源和输出类型；当前像素只看灰度值、阈值线和二值化结果之间的判断链。"
       originalImage={originalImage}
       resultImage={resultImage}
       parameters={parameters}

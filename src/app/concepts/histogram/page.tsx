@@ -339,7 +339,7 @@ export default function HistogramPage() {
       title="灰度直方图"
       subtitle="Histogram - 图像的灰度分布统计"
       operationLabel="灰度统计"
-      parameterIntro="左侧用于切换直方图示例；右侧展示图像灰度分布以及每个灰度级的像素数量和概率。"
+      parameterIntro="左侧用于切换直方图示例；右侧聚焦当前灰度柱，展示该灰度级的像素数量、概率和它在整幅图分布中的位置。"
       originalImage={originalImage}
       resultImage={originalImage}
       parameters={parameters}

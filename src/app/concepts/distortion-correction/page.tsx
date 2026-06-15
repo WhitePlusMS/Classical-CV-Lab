@@ -296,7 +296,7 @@ export default function DistortionCorrectionPage() {
         onChange={setStrength}
       />
       <div className="border-t border-slate-200 pt-3 text-xs leading-6 text-slate-600">
-        左图显示镜头畸变后的观测图像，右图显示按照当前系数执行坐标校正后的结果。请优先观察直线边界是否恢复。
+        左图显示镜头畸变后的观测图像，右图显示按照当前系数执行坐标校正后的结果。当前解释对象是右图绿色框输出像素如何反向映射回左图采样位置；请优先观察直线边界是否恢复。
       </div>
     </div>
   );

@@ -15,6 +15,7 @@ import {
   ProcessRail,
   SelectParam,
   SliderParam,
+  TeachingTerm,
   buildInlineMathML,
 } from '@/components';
 import { useGridNavigation } from '@/hooks/useGridNavigation';
@@ -1031,7 +1032,14 @@ export default function GeometricTransformPage() {
           {FAMILY_LABELS[activeFamily]}
         </div>
         <p className="mt-2 text-xs leading-5 text-blue-700">
-          正交 ⊂ 刚体 ⊂ 相似 ⊂ 仿射。当前层级会随着缩放是否等比例、是否存在剪切和平移而变化。
+          <TeachingTerm term="正交" explanation="保持长度和夹角，典型情况是纯旋转或翻转。" />
+          {' ⊂ '}
+          <TeachingTerm term="刚体" explanation="在保持形状不变的基础上允许平移，目标只换位置和朝向。" />
+          {' ⊂ '}
+          <TeachingTerm term="相似" explanation="允许整体等比例缩放，角度不变但长度按同一比例变化。" />
+          {' ⊂ '}
+          <TeachingTerm term="仿射" explanation="允许剪切和非等比例缩放，平行关系保留但角度可能改变。" />
+          。当前层级会随着缩放是否等比例、是否存在剪切和平移而变化。
         </p>
       </div>
 
@@ -1116,7 +1124,9 @@ export default function GeometricTransformPage() {
       />
 
       <div className="border-t border-amber-200 pt-3 text-xs leading-5 text-amber-800">
-        点击原图会选中一个教学点，并跳转到它正向映射后的目标像素；点击结果图则反过来查看当前输出像素从原图哪里采样。
+        当前证据链固定为：源点正向映射到目标点，输出像素再通过
+        <TeachingTerm term="反向映射" explanation="生成结果图时，先从输出像素回到原图坐标，再在原图采样，避免正向写回留下空洞。" className="mx-1" />
+        找采样来源。点击原图会选中一个教学点；点击结果图则查看当前输出像素从原图哪里采样。
       </div>
 
       <div className="border-t border-slate-200 pt-3">

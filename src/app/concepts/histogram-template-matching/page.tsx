@@ -13,6 +13,7 @@ import {
   SelectParam,
   SliderParam,
   TeachingCard,
+  TeachingTerm,
   buildInlineMathML,
 } from '@/components';
 import type { GrayscaleImage } from '@/lib/algorithms/types';
@@ -559,7 +560,9 @@ export default function HistogramTemplateMatchingPage() {
           </div>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-          <div className="text-xs text-slate-500">相似度分数</div>
+          <div className="text-xs text-slate-500">
+            <TeachingTerm term="相似度" explanation="这里的分数只比较当前模板区域和候选区域；不同方法的大小方向不同。" />
+          </div>
           <div className="mt-1 font-mono text-lg font-semibold text-slate-800">{formatScore(histogramResult.score)}</div>
         </div>
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
@@ -572,6 +575,7 @@ export default function HistogramTemplateMatchingPage() {
         <div className="text-sm font-semibold text-slate-800">直方图匹配的局限</div>
         <p className="mt-2 text-xs leading-6 text-slate-600">
           直方图只统计灰度值出现的比例，不记录这些灰度在区域内的空间排列。因此两个区域即使纹理结构不同，只要灰度分布接近，也可能得到较高相似度。
+          这也是反向投影类方法常见的前提：先看颜色或灰度分布是否像目标，再交给后续空间约束排除误检。
         </p>
       </TeachingCard>
     </div>
@@ -626,7 +630,7 @@ export default function HistogramTemplateMatchingPage() {
           <FormulaCard
             label={templateMethod === 'ssd' ? 'SSD 平方差匹配' : 'SAD 绝对差匹配'}
             mathML={templateFormula}
-            note={`当前公式只代入模板 T 与当前窗口 Sxy：当前窗口 (${templateResult.currentWindow.x}, ${templateResult.currentWindow.y}) 的分数为 ${formatScore(templateResult.currentScore)}。热力图最优参考分数为 ${formatScore(templateResult.bestScore)}。`}
+            note={`当前公式只代入模板 T 与当前窗口 Sxy：当前窗口 (${templateResult.currentWindow.x}, ${templateResult.currentWindow.y}) 的分数为 ${formatScore(templateResult.currentScore)}。${templateMethod === 'ssd' ? 'SSD' : 'SAD'} 越小表示当前窗口越接近模板；热力图最优参考分数为 ${formatScore(templateResult.bestScore)}。`}
           />
         ) : (
           <FormulaCard
@@ -640,8 +644,20 @@ export default function HistogramTemplateMatchingPage() {
       <TeachingCard>
         <h2 className="mb-3 text-sm font-semibold text-slate-800">概念对比</h2>
         <div className="grid gap-3 text-xs leading-6 text-slate-600 md:grid-cols-2">
-          <p><span className="font-semibold text-red-700">直方图匹配：</span>比较灰度分布，忽略空间布局，适合颜色/灰度统计稳定的目标。</p>
-          <p><span className="font-semibold text-blue-700">模板匹配：</span>逐像素比较局部排列，对形状和纹理位置敏感，旋转或尺度变化会明显影响结果。</p>
+          <p>
+            <span className="font-semibold text-red-700">直方图匹配：</span>
+            比较灰度分布，忽略空间布局，适合颜色/灰度统计稳定的目标；可理解为
+            <TeachingTerm term="反向投影" explanation="把目标直方图作为参考，在图像中寻找灰度或颜色分布相似的位置。" className="mx-1" />
+            的基础证据。
+          </p>
+          <p>
+            <span className="font-semibold text-blue-700">模板匹配：</span>
+            逐像素比较局部排列，
+            <TeachingTerm term="SSD" explanation="平方差求和，差异会被平方放大；分数越小越像模板。" className="mx-1" />
+            /
+            <TeachingTerm term="SAD" explanation="绝对差求和，对单个异常像素没有平方放大；分数越小越像模板。" className="mx-1" />
+            对形状和纹理位置敏感，旋转或尺度变化会明显影响结果。
+          </p>
         </div>
       </TeachingCard>
 

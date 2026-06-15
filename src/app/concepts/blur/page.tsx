@@ -1519,7 +1519,7 @@ export default function BlurPage() {
       title="图像滤波"
       subtitle="Image Filtering - 均值、高斯、中值与边窗滤波的统一入口"
       operationLabel="滤波处理"
-      parameterIntro="选择滤波方法、噪声类型和参数，观察不同滤波策略的效果差异。"
+      parameterIntro="选择滤波方法、噪声类型和参数；每次只解释当前窗口如何被均值、高斯、中值或边窗策略写成一个输出像素。"
       originalImage={originalImage}
       resultImage={resultImage}
       parameters={parameters}

@@ -1165,7 +1165,7 @@ export default function ConvolutionPage() {
       title="卷积运算"
       subtitle="Convolution - 图像处理的核心操作"
       operationLabel="卷积计算"
-      parameterIntro="先观察右侧可视化过程，再结合参数调整，有助于理解卷积窗口、核大小与输出尺寸之间的关系。"
+      parameterIntro="先观察右侧三层链路，再结合参数调整；当前窗口、卷积核权重和输出像素是一条连续证据链。"
       originalImage={originalImage}
       resultImage={resultImage}
       parameters={parameters}

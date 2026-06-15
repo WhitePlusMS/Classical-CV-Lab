@@ -14,6 +14,7 @@ import {
   ProcessRail,
   SelectParam,
   SliderParam,
+  TeachingTerm,
   buildInlineMathML,
 } from '@/components';
 import {
@@ -848,18 +849,34 @@ export default function KeypointMatchingPipelinePage() {
       <div className="border-t border-slate-200 pt-5">
         <h2 className="mb-3 text-sm font-semibold text-slate-800">关键概念：点、尺度、方向、描述子、距离</h2>
         <div className="grid gap-x-6 gap-y-4 md:grid-cols-2">
-          {[
-            ['关键点（KeyPoint）', '关键点是在图像中具有显著性的位置，如角点、边缘交点、纹理突变处等。关键点应具有可重复检测性，即图像发生旋转、缩放或光照变化后，同一物理位置仍有较高概率被检测出来。'],
-            ['尺度（Scale）', '尺度表示关键点对应的局部结构大小。尺度估计使算法能够把“同一目标的放大或缩小”看作同一类局部结构。'],
-            ['方向（Orientation）', '方向用于建立局部坐标系。将描述子对齐到主方向后，目标旋转时描述子变化会减小。'],
-            ['描述子（Descriptor）', '描述子是对关键点周围局部邻域的结构化编码。浮点描述子通常表达梯度统计，二进制描述子通常表达点对灰度比较。'],
-            ['距离（Distance）', '距离函数衡量两个描述子的差异。浮点描述子常用欧氏距离，二进制描述子常用汉明距离。'],
-          ].map(([title, body]) => (
-            <div key={title} className="border-l-2 border-slate-200 pl-3 text-xs leading-6 text-slate-600">
-              <p className="mb-1 font-semibold text-slate-800">{title}</p>
-              <p>{body}</p>
-            </div>
-          ))}
+          <div className="border-l-2 border-slate-200 pl-3 text-xs leading-6 text-slate-600">
+            <p className="mb-1 font-semibold text-slate-800">关键点（KeyPoint）</p>
+            <p>关键点是在图像中具有显著性的位置，如角点、边缘交点、纹理突变处等。关键点应具有可重复检测性，即图像发生旋转、缩放或光照变化后，同一物理位置仍有较高概率被检测出来。</p>
+          </div>
+          <div className="border-l-2 border-slate-200 pl-3 text-xs leading-6 text-slate-600">
+            <p className="mb-1 font-semibold text-slate-800">尺度（Scale）</p>
+            <p>尺度表示关键点对应的局部结构大小。尺度估计使算法能够把“同一目标的放大或缩小”看作同一类局部结构。</p>
+          </div>
+          <div className="border-l-2 border-slate-200 pl-3 text-xs leading-6 text-slate-600">
+            <p className="mb-1 font-semibold text-slate-800">方向（Orientation）</p>
+            <p>方向用于建立局部坐标系。将描述子对齐到主方向后，目标旋转时描述子变化会减小。</p>
+          </div>
+          <div className="border-l-2 border-slate-200 pl-3 text-xs leading-6 text-slate-600">
+            <p className="mb-1 font-semibold text-slate-800">
+              <TeachingTerm term="描述子（Descriptor）" explanation="把关键点周围局部结构编码成向量或二进制串，后续匹配只比较这些编码。" />
+            </p>
+            <p>描述子是对关键点周围局部邻域的结构化编码。浮点描述子通常表达梯度统计，二进制描述子通常表达点对灰度比较。</p>
+          </div>
+          <div className="border-l-2 border-slate-200 pl-3 text-xs leading-6 text-slate-600">
+            <p className="mb-1 font-semibold text-slate-800">距离（Distance）</p>
+            <p>
+              距离函数衡量两个描述子的差异。浮点描述子常用
+              <TeachingTerm term="欧氏距离" explanation="把两个浮点向量每一维的差平方求和再开方，适合 SIFT/SURF 这类梯度统计描述子。" className="mx-1" />
+              ，二进制描述子常用
+              <TeachingTerm term="汉明距离" explanation="统计两个二进制串有多少位不同，适合 ORB/BRIEF/BRISK 的高速匹配。" className="mx-1" />
+              。
+            </p>
+          </div>
         </div>
       </div>
 
@@ -942,7 +959,9 @@ export default function KeypointMatchingPipelinePage() {
           <div>
             <h2 className="text-sm font-semibold text-slate-800">当前匹配为什么成立或被拒绝</h2>
             <p className="mt-1 text-xs leading-5 text-slate-500">
-              对选中关键点，先计算它到目标图所有候选点的描述子距离，再用最近邻和次近邻的距离比过滤模糊匹配。
+              对选中关键点，先计算它到目标图所有候选点的
+              <TeachingTerm term="描述子距离" explanation="先把局部 patch 编成描述子，再用距离度量比较当前点和候选点是否像同一个局部结构。" className="mx-1" />
+              ，再用最近邻和次近邻的距离比过滤模糊匹配。
             </p>
           </div>
           <div className={`rounded-full border px-3 py-1 text-xs font-semibold ${
@@ -957,7 +976,9 @@ export default function KeypointMatchingPipelinePage() {
 
         <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
           <div className="border-l-4 border-red-300 pl-4">
-            <div className="text-sm font-semibold text-slate-800">局部 patch</div>
+            <div className="text-sm font-semibold text-slate-800">
+              局部 <TeachingTerm term="patch" explanation="以关键点为中心截取的一小块邻域图像，描述子只从这块局部区域提取证据。" />
+            </div>
             <p className="mt-1 text-xs leading-5 text-slate-600">
               参考图关键点 {demo.selectedKeypoint.label} 的邻域，与目标图最近邻 {demo.bestMatch.target.label} 的邻域进行比较。
             </p>
@@ -993,7 +1014,7 @@ export default function KeypointMatchingPipelinePage() {
           <FormulaCard
             label="最近邻比值检验"
             mathML={buildRatioFormulaMathML(demo)}
-            note={`次近邻候选点为 ${demo.secondBestMatch.target.label}。阈值越小，保留的匹配越少但更稳定。`}
+            note={`次近邻候选点为 ${demo.secondBestMatch.target.label}。Ratio 阈值越小，保留的匹配越少但更稳定。`}
           />
         </div>
       </div>
@@ -1010,7 +1031,7 @@ export default function KeypointMatchingPipelinePage() {
           </p>
           <ul className="list-inside list-disc space-y-1 pl-2">
             <li>SIFT、SURF 等浮点型描述子：优先选择 NORM_L1 或 NORM_L2（欧氏距离）。</li>
-            <li>ORB、BRIEF、BRISK 等二进制描述子：优先选择 NORM_HAMMING 或 NORM_HAMMING2。</li>
+            <li>ORB、BRIEF、BRISK 等二进制描述子：优先选择 NORM_HAMMING 或 NORM_HAMMING2（汉明距离）。</li>
           </ul>
         </div>
       </div>
@@ -1161,8 +1182,18 @@ export default function KeypointMatchingPipelinePage() {
       <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-5 text-slate-600">
         当前 {METHOD_LABELS[method]} 使用
         {' '}
-        {distanceType === 'euclidean' ? '浮点描述子和欧氏距离' : '二进制描述子和汉明距离'}。
-        已通过 ratio test 的匹配数：{demo.acceptedMatches.length}。
+        {distanceType === 'euclidean' ? (
+          <>
+            浮点<TeachingTerm term="描述子" explanation="当前方法输出的是可逐维比较的浮点向量。" className="mx-1" />和
+            <TeachingTerm term="欧氏距离" explanation="适合比较 SIFT/SURF 这类浮点向量的整体差异。" className="mx-1" />
+          </>
+        ) : (
+          <>
+            二进制<TeachingTerm term="描述子" explanation="当前方法输出的是 0/1 bit 串，适合用位运算快速比较。" className="mx-1" />和
+            <TeachingTerm term="汉明距离" explanation="只统计不同 bit 的数量，数量越少越相似。" className="mx-1" />
+          </>
+        )}
+        。已通过 <TeachingTerm term="ratio test" explanation="最近邻距离除以次近邻距离，只有比值小于阈值时才认为最近邻足够明确。" className="mx-1" /> 的匹配数：{demo.acceptedMatches.length}。
       </div>
 
       <div className={`rounded-2xl border px-3 py-3 text-xs leading-5 ${

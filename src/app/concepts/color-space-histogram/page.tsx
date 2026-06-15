@@ -925,7 +925,7 @@ export default function ColorSpaceHistogramPage() {
       title="颜色空间与颜色直方图"
       subtitle="Color Space & Histogram - 基于颜色特征的目标检测"
       operationLabel={operationLabel(displayMode)}
-      parameterIntro="切换颜色通道或 HSV mask，观察当前像素如何驱动公式代入、直方图 bin 和颜色范围提取。"
+      parameterIntro="切换颜色通道或 HSV mask；当前像素会同步驱动公式代入、当前直方图 bin 和颜色范围提取证据。"
       originalImage={baseImage}
       originalRgbImage={rgbImage}
       resultImage={resultImage}

@@ -3,12 +3,12 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { ConceptIntro, CONCEPT_INTRO_CONTENT, type ConceptIntroProps } from '@/components/teaching';
 const systemChain = [
-  { title: '光源', desc: '提供照明、克服环境光干扰、形成稳定成像条件' },
-  { title: '目标', desc: '被观测的物体或场景' },
-  { title: '镜头', desc: '将目标成像到传感器光敏面，决定视场和清晰度' },
-  { title: '摄像机', desc: '通过 CCD/CMOS 光电转换，输出电信号' },
-  { title: '采集设备', desc: '图像采集卡或嵌入式模块，完成模数转换' },
-  { title: '处理设备', desc: '计算机或嵌入式计算平台，运行视觉算法' },
+  { title: '光源', desc: '提供照明、克服环境光干扰、形成稳定成像条件', impact: '影响后续阈值、边缘和缺陷检测是否稳定。' },
+  { title: '目标', desc: '被观测的物体或场景', impact: '材质、颜色和运动速度决定应选择哪类视觉算法。' },
+  { title: '镜头', desc: '将目标成像到传感器光敏面，决定视场和清晰度', impact: '影响几何测量、畸变校正和小目标可见性。' },
+  { title: '摄像机', desc: '通过 CCD/CMOS 光电转换，输出电信号', impact: '分辨率、帧率和噪声水平决定可提取的图像证据。' },
+  { title: '采集设备', desc: '图像采集卡或嵌入式模块，完成模数转换', impact: '决定图像数据是否完整、同步和实时传入处理端。' },
+  { title: '处理设备', desc: '计算机或嵌入式计算平台，运行视觉算法', impact: '决定预处理、特征提取和目标识别能否按节拍完成。' },
 ] as const;
 
 const lightingRoles = [
@@ -216,6 +216,9 @@ const [conceptIntro, setConceptIntro] = useState<ConceptIntroProps | null>(null)
                       </div>
                       <div className="text-sm font-bold text-slate-900">{item.title}</div>
                       <div className="mt-1 text-xs leading-5 text-slate-500">{item.desc}</div>
+                      <div className="mt-2 rounded-lg border border-indigo-100 bg-white/80 px-2 py-1.5 text-[11px] leading-4 text-indigo-700">
+                        算法影响：{item.impact}
+                      </div>
                     </summary>
                     <div className="mt-2 border-t border-slate-200 pt-2 text-xs leading-5 text-slate-500">
                       {index === 0 && '光源类型包括 LED、卤素灯、激光等，需根据被测物材质、颜色和检测需求选择合适波长与照明方式。'}
