@@ -450,6 +450,9 @@ export default function BinaryFeatureDescriptorsPage() {
             <img
               src="/assets/binary-feature-descriptors/9ecdb642ab81e6009191cc556d69e00d5a7d282a296d4dcdb882258caad7f0d6.jpg"
               alt="GI - 均匀分布采样"
+              width={350}
+              height={348}
+              loading="lazy"
               className="w-full rounded-xl object-cover"
             />
             <figcaption className="mt-1 text-xs text-slate-500">GI：X、Y 在 Patch 内均匀分布</figcaption>
@@ -458,6 +461,9 @@ export default function BinaryFeatureDescriptorsPage() {
             <img
               src="/assets/binary-feature-descriptors/aabc7266b636397c8fa01bd3cd7f2ad7d807209ff91b763c373fb7c46fb37e90.jpg"
               alt="GIII - 以 X 为中心取 Y"
+              width={354}
+              height={348}
+              loading="lazy"
               className="w-full rounded-xl object-cover"
             />
             <figcaption className="mt-1 text-xs text-slate-500">GIII：先取 X，再以 X 为中心取 Y</figcaption>
@@ -466,6 +472,9 @@ export default function BinaryFeatureDescriptorsPage() {
             <img
               src="/assets/binary-feature-descriptors/f59097a5181c3855561d55f327db5797aac2a035e9fed9986b847855ca29d92c.jpg"
               alt="GIV - 极坐标量化"
+              width={357}
+              height={351}
+              loading="lazy"
               className="w-full rounded-xl object-cover"
             />
             <figcaption className="mt-1 text-xs text-slate-500">GIV：空间量化极坐标下取点</figcaption>
@@ -474,6 +483,9 @@ export default function BinaryFeatureDescriptorsPage() {
             <img
               src="/assets/binary-feature-descriptors/3b4b29ffa5205747141dce2cc7291a3a75969e1d375596a49404dccc25ec2428.jpg"
               alt="GV - 中心固定极坐标遍历"
+              width={351}
+              height={351}
+              loading="lazy"
               className="w-full rounded-xl object-cover"
             />
             <figcaption className="mt-1 text-xs text-slate-500">GV：X 固定在中心，Y 遍历极坐标</figcaption>

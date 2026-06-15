@@ -24,6 +24,8 @@ const lightingTypes = [
     desc: '条状均匀照明',
     useCase: '大面积/长条形目标',
     imageUrl: '/assets/acquisition-system/bar-light.jpg',
+    imageWidth: 1200,
+    imageHeight: 1600,
     imageAlt: '条状 LED 光源实物',
   },
   {
@@ -31,6 +33,8 @@ const lightingTypes = [
     desc: '环形漫射光，消除阴影',
     useCase: '微小元件定位、字符识别',
     imageUrl: '/assets/acquisition-system/ring-light.jpg',
+    imageWidth: 768,
+    imageHeight: 1024,
     imageAlt: '相机周围安装的 LED 环形光源',
   },
   {
@@ -38,6 +42,8 @@ const lightingTypes = [
     desc: '垂直同轴照明，消除镜面反射',
     useCase: '反光表面、平整物体检测',
     imageUrl: '/assets/acquisition-system/coaxial-beam-splitter.jpg',
+    imageWidth: 1200,
+    imageHeight: 1200,
     imageAlt: '同轴照明光路中使用的分光棱镜实物',
   },
 ] as const;
@@ -180,6 +186,9 @@ const [conceptIntro, setConceptIntro] = useState<ConceptIntroProps | null>(null)
                   <img
                     src="/assets/acquisition-system/system-vision-scene.jpg"
                     alt="农业分拣视觉设备现场，包含采集、照明和输送结构"
+                    width={960}
+                    height={768}
+                    loading="lazy"
                     className="h-full w-full object-cover"
                   />
                 </div>
@@ -247,6 +256,9 @@ const [conceptIntro, setConceptIntro] = useState<ConceptIntroProps | null>(null)
                         <img
                           src={type.imageUrl}
                           alt={type.imageAlt}
+                          width={type.imageWidth}
+                          height={type.imageHeight}
+                          loading="lazy"
                           className="h-full w-full object-cover"
                         />
                       </div>
@@ -277,6 +289,9 @@ const [conceptIntro, setConceptIntro] = useState<ConceptIntroProps | null>(null)
                     <img
                       src="/assets/acquisition-system/industrial-cameras.jpg"
                       alt="工业机器视觉相机机身与传感器窗口"
+                      width={960}
+                      height={640}
+                      loading="lazy"
                       className="h-full w-full object-contain"
                     />
                   </div>
@@ -349,6 +364,9 @@ const [conceptIntro, setConceptIntro] = useState<ConceptIntroProps | null>(null)
                     <img
                       src="/assets/acquisition-system/c-mount-lens.jpg"
                       alt="C-mount 工业镜头实物"
+                      width={1200}
+                      height={797}
+                      loading="lazy"
                       className="h-full w-full object-cover"
                     />
                   </div>
@@ -431,6 +449,9 @@ const [conceptIntro, setConceptIntro] = useState<ConceptIntroProps | null>(null)
                     <img
                       src="/assets/acquisition-system/jetson-board.jpg"
                       alt="NVIDIA Jetson 嵌入式视觉计算平台"
+                      width={960}
+                      height={540}
+                      loading="lazy"
                       className="h-full w-full object-cover"
                     />
                   </div>

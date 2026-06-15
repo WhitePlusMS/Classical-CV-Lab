@@ -69,6 +69,8 @@ const visualCases = [
     title: '工业外观检测',
     domain: '工业检测',
     imageUrl: '/assets/applications-overview/industrial-vision.jpg',
+    imageWidth: 1028,
+    imageHeight: 720,
     source: 'Wikimedia / Machine vision',
     sourceHref: 'https://en.wikipedia.org/wiki/Machine_vision',
     alt: '工业机器视觉检测系统现场照片',
@@ -80,6 +82,8 @@ const visualCases = [
     title: '道路目标检测',
     domain: '交通监控',
     imageUrl: '/assets/applications-overview/traffic-road-camera.jpg',
+    imageWidth: 997,
+    imageHeight: 1500,
     source: 'Wikimedia / Traffic camera',
     sourceHref: 'https://en.wikipedia.org/wiki/Traffic_camera',
     alt: '道路交通摄像头安装在路口上方',
@@ -91,6 +95,8 @@ const visualCases = [
     title: '自动驾驶感知',
     domain: '无人平台',
     imageUrl: '/assets/applications-overview/autonomous-waymo.jpg',
+    imageWidth: 1024,
+    imageHeight: 600,
     source: 'Supercar Blondie / Waymo',
     sourceHref: 'https://supercarblondie.com/waymo-one-ride-hail-service-ai/',
     alt: '搭载多类传感器的 Waymo 自动驾驶车辆',
@@ -102,6 +108,8 @@ const visualCases = [
     title: '热成像测温',
     domain: '医学/热成像',
     imageUrl: '/assets/applications-overview/thermal-fire.jpg',
+    imageWidth: 1000,
+    imageHeight: 1000,
     source: 'PerfectPrime / Thermal camera',
     sourceHref: 'https://perfectprime.com/blogs/blog/how-a-thermal-camera-can-save-lives',
     alt: '手持热成像相机显示火场温度画面',
@@ -113,6 +121,8 @@ const visualCases = [
     title: '遥感图像处理',
     domain: '遥感军事',
     imageUrl: '/assets/applications-overview/remote-landsat.jpg',
+    imageWidth: 1024,
+    imageHeight: 576,
     source: 'NASA SVS / Landsat 9',
     sourceHref: 'https://svs.gsfc.nasa.gov/13889/',
     alt: '洛杉矶沿海区域的 Landsat 遥感卫星影像',
@@ -145,6 +155,8 @@ const industryTrafficItems = [
   {
     title: '工业检测',
     imageUrl: '/assets/applications-overview/industrial-aoi-pcb.jpg',
+    imageWidth: 800,
+    imageHeight: 450,
     imageAlt: '自动光学检测设备正在检测 PCB 电路板',
     imageLabel: '自动光学检测',
     items: [
@@ -158,6 +170,8 @@ const industryTrafficItems = [
   {
     title: '交通监控',
     imageUrl: '/assets/applications-overview/traffic-speed-camera.jpg',
+    imageWidth: 1400,
+    imageHeight: 859,
     imageAlt: '道路旁的数字交通监控测速设备',
     imageLabel: '交通监控设备',
     items: [
@@ -330,6 +344,8 @@ export default function ApplicationsOverviewPage() {
                       <img
                         src={item.imageUrl}
                         alt={item.alt}
+                        width={item.imageWidth}
+                        height={item.imageHeight}
                         className="h-full w-full object-cover"
                         style={{ objectPosition: item.objectPosition }}
                         loading="lazy"
@@ -415,6 +431,9 @@ export default function ApplicationsOverviewPage() {
                 <img
                   src="/assets/applications-overview/remote-aster-etna.jpg"
                   alt="ASTER 遥感传感器生成的埃特纳火山假彩色三维影像"
+                  width={1152}
+                  height={870}
+                  loading="lazy"
                   className="h-full w-full object-cover"
                 />
                 <div className="absolute left-4 top-4 rounded-full border border-white/70 bg-white/90 px-3 py-1 text-xs font-semibold text-rose-700 shadow-sm">
@@ -441,6 +460,9 @@ export default function ApplicationsOverviewPage() {
                   <img
                     src={group.imageUrl}
                     alt={group.imageAlt}
+                    width={group.imageWidth}
+                    height={group.imageHeight}
+                    loading="lazy"
                     className="h-full w-full object-cover"
                   />
                   <div className={`absolute left-4 top-4 rounded-full border border-white/70 bg-white/90 px-3 py-1 text-xs font-semibold shadow-sm ${index === 0 ? 'text-emerald-700' : 'text-sky-700'}`}>
@@ -460,6 +482,9 @@ export default function ApplicationsOverviewPage() {
                 <img
                   src="/assets/applications-overview/medical-thermal-body.jpg"
                   alt="人体背部热成像图和温度标注"
+                  width={760}
+                  height={480}
+                  loading="lazy"
                   className="h-full w-full object-cover"
                 />
                 <div className="absolute left-4 top-4 rounded-full border border-white/70 bg-white/90 px-3 py-1 text-xs font-semibold text-amber-700 shadow-sm">
@@ -480,6 +505,9 @@ export default function ApplicationsOverviewPage() {
                 <img
                   src="/assets/applications-overview/autonomous-cruise-lidar.optimized.jpg"
                   alt="搭载车顶激光雷达和多传感器的 Cruise 自动驾驶车辆"
+                  width={1400}
+                  height={788}
+                  loading="lazy"
                   className="h-full w-full object-cover"
                 />
                 <div className="absolute left-4 top-4 rounded-full border border-white/70 bg-white/90 px-3 py-1 text-xs font-semibold text-indigo-700 shadow-sm">
