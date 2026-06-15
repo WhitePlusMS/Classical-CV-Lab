@@ -5,6 +5,7 @@ import {
   ConceptLayout,
   CodeViewer,
   FormulaCard,
+  InlineMath,
   ProcessRail,
   SelectParam,
   TeachingCard,
@@ -50,6 +51,10 @@ const HISTOGRAM_FORMULA_MATHML = buildInlineMathML(`
     <mfrac><msub><mi>n</mi><mi>k</mi></msub><mi>n</mi></mfrac>
   </mrow>
 `);
+
+function inlineMath(body: string): string {
+  return buildInlineMathML(`<mrow>${body}</mrow>`);
+}
 
 function HistogramSVG({
   histogram,
@@ -246,8 +251,8 @@ export default function HistogramPage() {
           {probabilityText && (
             <div className="flex items-center gap-4 text-xs text-slate-600">
               <span>灰度值:<span className="font-bold text-red-500 ml-1">{probabilityText.gray}</span></span>
-              <span>像素数 n<sub>k</sub>:<span className="font-bold text-blue-600 ml-1">{probabilityText.count}</span></span>
-              <span>概率 P(s<sub>k</sub>):<span className="font-bold text-blue-600 ml-1">{(probabilityText.prob * 100).toFixed(2)}%</span></span>
+              <span>像素数 <InlineMath mathML={inlineMath('<msub><mi>n</mi><mi>k</mi></msub>')} />:<span className="ml-1 font-bold text-blue-600">{probabilityText.count}</span></span>
+              <span>概率 <InlineMath mathML={inlineMath('<mi>P</mi><mo>(</mo><msub><mi>s</mi><mi>k</mi></msub><mo>)</mo>')} />:<span className="ml-1 font-bold text-blue-600">{(probabilityText.prob * 100).toFixed(2)}%</span></span>
             </div>
           )}
         </div>
@@ -265,10 +270,10 @@ export default function HistogramPage() {
             mathClassName="[&_math]:text-lg"
           />
           <div className="mt-3 text-xs leading-6 text-slate-600 space-y-1">
-            <p><code className="bg-slate-100 px-1 rounded">s_k</code>: 第 k 个灰度级（0-255）</p>
-            <p><code className="bg-slate-100 px-1 rounded">n_k</code>: 灰度级 s_k 的像素个数</p>
-            <p><code className="bg-slate-100 px-1 rounded">n</code>: 图像总像素数（= {totalPixels}）</p>
-            <p><code className="bg-slate-100 px-1 rounded">P(s_k)</code>: 灰度级 s_k 出现的概率</p>
+            <p><InlineMath mathML={inlineMath('<msub><mi>s</mi><mi>k</mi></msub>')} />: 第 k 个灰度级（0-255）</p>
+            <p><InlineMath mathML={inlineMath('<msub><mi>n</mi><mi>k</mi></msub>')} />: 灰度级 <InlineMath mathML={inlineMath('<msub><mi>s</mi><mi>k</mi></msub>')} /> 的像素个数</p>
+            <p><InlineMath mathML={inlineMath('<mi>n</mi>')} />: 图像总像素数（= {totalPixels}）</p>
+            <p><InlineMath mathML={inlineMath('<mi>P</mi><mo>(</mo><msub><mi>s</mi><mi>k</mi></msub><mo>)</mo>')} />: 灰度级 <InlineMath mathML={inlineMath('<msub><mi>s</mi><mi>k</mi></msub>')} /> 出现的概率</p>
           </div>
         </TeachingCard>
 

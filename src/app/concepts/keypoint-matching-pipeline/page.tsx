@@ -14,6 +14,7 @@ import {
   ProcessRail,
   SelectParam,
   SliderParam,
+  TeachingCard,
   TeachingTerm,
   buildInlineMathML,
 } from '@/components';
@@ -740,12 +741,14 @@ export default function KeypointMatchingPipelinePage() {
       label="欧氏距离（Euclidean Distance）"
       mathML={EUCLIDEAN_FORMULA}
       note="式中 X_ik 和 X_jk 分别表示待配准图和参考图中第 i 个和第 j 个特征描述子的第 k 个元素，n 表示特征向量的维数。适用于 SIFT、SURF 等浮点型描述子。"
+      tone="embedded"
     />
   ) : (
     <FormulaCard
       label="汉明距离（Hamming Distance）"
       mathML={HAMMING_FORMULA}
       note="⊕ 表示异或操作。汉明距离计算两个等长二进制串对应位置不同字符的数目。适用于 ORB、BRIEF、BRISK 等二进制描述子。"
+      tone="embedded"
     />
   );
 
@@ -822,7 +825,7 @@ export default function KeypointMatchingPipelinePage() {
 
   const stepDetails = useMemo(() => (
     <div className="space-y-6">
-      <div>
+      <TeachingCard>
         <h2 className="mb-3 text-sm font-semibold text-slate-800">特征点匹配三大步骤</h2>
         <div className="mb-4">
           <PipelineFlowDiagram />
@@ -844,9 +847,9 @@ export default function KeypointMatchingPipelinePage() {
             通过两方特征点（附带上特征向量的关键点）的两两比较，找出相互匹配的若干对特征点，建立图像间的对应关系。
           </li>
         </ol>
-      </div>
+      </TeachingCard>
 
-      <div className="border-t border-slate-200 pt-5">
+      <TeachingCard>
         <h2 className="mb-3 text-sm font-semibold text-slate-800">关键概念：点、尺度、方向、描述子、距离</h2>
         <div className="grid gap-x-6 gap-y-4 md:grid-cols-2">
           <div className="border-l-2 border-slate-200 pl-3 text-xs leading-6 text-slate-600">
@@ -878,9 +881,9 @@ export default function KeypointMatchingPipelinePage() {
             </p>
           </div>
         </div>
-      </div>
+      </TeachingCard>
 
-      <div className="border-t border-slate-200 pt-5">
+      <TeachingCard>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold text-slate-800">当前算法原理：{methodPrinciple.title}</h2>
@@ -934,6 +937,7 @@ export default function KeypointMatchingPipelinePage() {
               label={item.label}
               mathML={item.mathML}
               note={item.note}
+              tone="embedded"
             />
           ))}
         </div>
@@ -952,9 +956,9 @@ export default function KeypointMatchingPipelinePage() {
             </ul>
           </div>
         </div>
-      </div>
+      </TeachingCard>
 
-      <div className="border-t border-slate-200 pt-5">
+      <TeachingCard>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold text-slate-800">当前匹配为什么成立或被拒绝</h2>
@@ -1010,16 +1014,18 @@ export default function KeypointMatchingPipelinePage() {
             label="当前最近邻距离"
             mathML={buildDistanceSubstitutionMathML(distanceType, demo.bestMatch.distance)}
             note={`最近邻候选点为 ${demo.bestMatch.target.label}，距离为 ${formatDistance(demo.bestMatch.distance, distanceType)}。`}
+            tone="embedded"
           />
           <FormulaCard
             label="最近邻比值检验"
             mathML={buildRatioFormulaMathML(demo)}
             note={`次近邻候选点为 ${demo.secondBestMatch.target.label}。Ratio 阈值越小，保留的匹配越少但更稳定。`}
+            tone="embedded"
           />
         </div>
-      </div>
+      </TeachingCard>
 
-      <div className="border-t border-slate-200 pt-5">
+      <TeachingCard>
         <h2 className="mb-3 text-sm font-semibold text-slate-800">匹配距离度量</h2>
         <p className="mb-3 text-xs leading-6 text-slate-600">
           特征描述子之间的相似性通过距离函数来度量。不同的描述子类型适用不同的距离度量方式。
@@ -1034,9 +1040,9 @@ export default function KeypointMatchingPipelinePage() {
             <li>ORB、BRIEF、BRISK 等二进制描述子：优先选择 NORM_HAMMING 或 NORM_HAMMING2（汉明距离）。</li>
           </ul>
         </div>
-      </div>
+      </TeachingCard>
 
-      <div className="border-t border-slate-200 pt-5">
+      <TeachingCard>
         <h2 className="mb-3 text-sm font-semibold text-slate-800">匹配器与错配消除</h2>
         <div className="divide-y divide-slate-200 text-xs leading-6 text-slate-600">
           <div className="py-3">
@@ -1064,9 +1070,9 @@ export default function KeypointMatchingPipelinePage() {
             </p>
           </div>
         </div>
-      </div>
+      </TeachingCard>
 
-      <div className="border-t border-slate-200 pt-5">
+      <TeachingCard>
         <h2 className="mb-3 text-sm font-semibold text-slate-800">特征点方法对比</h2>
         <p className="mb-4 text-xs leading-6 text-slate-600">
           不同特征点方法在提点方式、方向赋值、尺度确定和描述策略上各有特点，决定了各自的应用场景。
@@ -1119,7 +1125,7 @@ export default function KeypointMatchingPipelinePage() {
         <p className="mt-2 text-[11px] leading-5 text-slate-500">
           表格中被高亮的列为当前参数面板选中的方法，方便聚焦对比。
         </p>
-      </div>
+      </TeachingCard>
     </div>
   ), [demo, distanceFormulaCard, distanceType, method, methodPrinciple]);
 

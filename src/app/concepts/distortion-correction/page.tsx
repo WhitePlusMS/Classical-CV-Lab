@@ -12,6 +12,7 @@ import {
   ProcessRail,
   SelectParam,
   SliderParam,
+  TeachingCard,
   buildInlineMathML,
 } from '@/components';
 import { useGridNavigation } from '@/hooks/useGridNavigation';
@@ -183,6 +184,7 @@ export default function DistortionCorrectionPage() {
               mathML={math('<msub><mi>x</mi><mi>d</mi></msub><mo>=</mo><mi>x</mi><mi>s</mi><mo>,</mo><msub><mi>y</mi><mi>d</mi></msub><mo>=</mo><mi>y</mi><mi>s</mi><mo>,</mo><mi>s</mi><mo>=</mo><mn>1</mn><mo>+</mo><msub><mi>k</mi><mn>1</mn></msub><msup><mi>r</mi><mn>2</mn></msup><mo>+</mo><msub><mi>k</mi><mn>2</mn></msub><msup><mi>r</mi><mn>4</mn></msup>')}
               formulaClassName="rounded-xl px-4 py-4 shadow-none"
               note={`当前使用 k1=${coefficients.k1.toFixed(3)}，k2=${coefficients.k2.toFixed(3)}。`}
+              tone="embedded"
             />
           </FlowNode>
         </FlowColumn>
@@ -209,7 +211,7 @@ export default function DistortionCorrectionPage() {
 
   const stepDetails = (
     <div className="space-y-4">
-      <section className="space-y-4">
+      <TeachingCard>
         <div className="text-sm font-semibold text-slate-800">畸变校正链路</div>
         <p className="mt-1 text-xs leading-5 text-slate-500">
           畸变校正不是对像素值做卷积或增强，而是利用内参矩阵和畸变系数，为每个输出像素找到原畸变图中的采样位置。
@@ -219,42 +221,48 @@ export default function DistortionCorrectionPage() {
             label="OpenCV 的两步实现"
             mathML={math('<mi>map</mi><mo>=</mo><mi>initUndistortRectifyMap</mi><mo>(</mo><mi>K</mi><mo>,</mo><mi>distCoeffs</mi><mo>)</mo><mo>,</mo><msup><mi>I</mi><mo>&prime;</mo></msup><mo>=</mo><mi>remap</mi><mo>(</mo><mi>I</mi><mo>,</mo><mi>map</mi><mo>)</mo>')}
             note="第一步算坐标映射，第二步按映射表取样。"
+            tone="embedded"
           />
           <FormulaCard
             label="径向畸变"
             mathML={math('<msub><mi>x</mi><mi>d</mi></msub><mo>=</mo><mi>x</mi><mi>s</mi><mo>,</mo><msub><mi>y</mi><mi>d</mi></msub><mo>=</mo><mi>y</mi><mi>s</mi><mo>,</mo><mi>s</mi><mo>=</mo><mn>1</mn><mo>+</mo><msub><mi>k</mi><mn>1</mn></msub><msup><mi>r</mi><mn>2</mn></msup><mo>+</mo><msub><mi>k</mi><mn>2</mn></msub><msup><mi>r</mi><mn>4</mn></msup>')}
             note="x 和 y 都乘同一个径向比例项；桶形和枕形的差别，主要体现在径向项系数的正负。"
+            tone="embedded"
           />
         </div>
-      </section>
+      </TeachingCard>
 
-      <section className="space-y-4 border-t border-slate-200/80 pt-4">
+      <TeachingCard>
         <div className="text-sm font-semibold text-slate-800">当前像素如何代入映射</div>
         <div className="grid gap-4">
           <FormulaCard
             label="输出像素的归一化坐标"
             mathML={math(`<mi>x</mi><mo>=</mo><mfrac><mrow><mo>(</mo><msup><mi>u</mi><mo>&prime;</mo></msup><mo>-</mo><msub><mi>c</mi><mi>x</mi></msub><mo>)</mo></mrow><msub><mi>f</mi><mi>x</mi></msub></mfrac><mo>=</mo><mfrac><mrow><mo>(</mo><mn>${selectedPixel.x}</mn><mo>-</mo><mn>${(width / 2).toFixed(0)}</mn><mo>)</mo></mrow><mn>${(width / 2).toFixed(0)}</mn></mfrac><mo>=</mo><mn>${normalizedX}</mn><mo>,</mo><mi>y</mi><mo>=</mo><mfrac><mrow><mo>(</mo><msup><mi>v</mi><mo>&prime;</mo></msup><mo>-</mo><msub><mi>c</mi><mi>y</mi></msub><mo>)</mo></mrow><msub><mi>f</mi><mi>y</mi></msub></mfrac><mo>=</mo><mfrac><mrow><mo>(</mo><mn>${selectedPixel.y}</mn><mo>-</mo><mn>${(height / 2).toFixed(0)}</mn><mo>)</mo></mrow><mn>${(height / 2).toFixed(0)}</mn></mfrac><mo>=</mo><mn>${normalizedY}</mn>`)}
             note="将图像中心视为光轴附近的参考点。"
+            tone="embedded"
           />
           <FormulaCard
             label="当前径向比例项"
             mathML={math(`<msup><mi>r</mi><mn>2</mn></msup><mo>=</mo><msup><mi>x</mi><mn>2</mn></msup><mo>+</mo><msup><mi>y</mi><mn>2</mn></msup><mo>=</mo><msup><mn>${normalizedX}</mn><mn>2</mn></msup><mo>+</mo><msup><mn>${normalizedY}</mn><mn>2</mn></msup><mo>=</mo><mn>${radialSquared.toFixed(3)}</mn><mo>,</mo><mi>s</mi><mo>=</mo><mn>1</mn><mo>+</mo><msub><mi>k</mi><mn>1</mn></msub><msup><mi>r</mi><mn>2</mn></msup><mo>+</mo><msub><mi>k</mi><mn>2</mn></msub><msup><mi>r</mi><mn>4</mn></msup><mo>=</mo><mn>1</mn><mo>+</mo><mn>${coefficients.k1.toFixed(3)}</mn><mo>&#x22C5;</mo><mn>${radialSquared.toFixed(3)}</mn><mo>+</mo><mn>${coefficients.k2.toFixed(3)}</mn><mo>&#x22C5;</mo><msup><mn>${radialSquared.toFixed(3)}</mn><mn>2</mn></msup><mo>=</mo><mn>${radialScale.toFixed(3)}</mn>`)}
             note="比例项决定当前点向光轴中心收缩还是向外扩张。"
+            tone="embedded"
           />
           <FormulaCard
             label="mapx / mapy 查询结果"
             mathML={math(`<msub><mi>u</mi><mi>s</mi></msub><mo>=</mo><mi>mapx</mi><mo>(</mo><msup><mi>u</mi><mo>&prime;</mo></msup><mo>,</mo><msup><mi>v</mi><mo>&prime;</mo></msup><mo>)</mo><mo>=</mo><mi>mapx</mi><mo>(</mo><mn>${selectedPixel.x}</mn><mo>,</mo><mn>${selectedPixel.y}</mn><mo>)</mo><mo>=</mo><mn>${currentSource.x.toFixed(2)}</mn><mo>,</mo><msub><mi>v</mi><mi>s</mi></msub><mo>=</mo><mi>mapy</mi><mo>(</mo><msup><mi>u</mi><mo>&prime;</mo></msup><mo>,</mo><msup><mi>v</mi><mo>&prime;</mo></msup><mo>)</mo><mo>=</mo><mi>mapy</mi><mo>(</mo><mn>${selectedPixel.x}</mn><mo>,</mo><mn>${selectedPixel.y}</mn><mo>)</mo><mo>=</mo><mn>${currentSource.y.toFixed(2)}</mn>`)}
             note="这就是 remap 要回到原畸变图中取样的位置。"
+            tone="embedded"
           />
           <FormulaCard
             label="写回后的像素值"
             mathML={math(`<msup><mi>I</mi><mo>&prime;</mo></msup><mo>(</mo><msup><mi>u</mi><mo>&prime;</mo></msup><mo>,</mo><msup><mi>v</mi><mo>&prime;</mo></msup><mo>)</mo><mo>=</mo><mi>I</mi><mo>(</mo><msub><mi>u</mi><mi>s</mi></msub><mo>,</mo><msub><mi>v</mi><mi>s</mi></msub><mo>)</mo><mo>=</mo><mi>I</mi><mo>(</mo><mn>${currentSource.x.toFixed(2)}</mn><mo>,</mo><mn>${currentSource.y.toFixed(2)}</mn><mo>)</mo><mo>=</mo><mn>${correctedValue.toFixed(3)}</mn>`)}
             note="双线性插值会综合附近 4 个源像素，因此结果更平滑。"
+            tone="embedded"
           />
         </div>
-      </section>
+      </TeachingCard>
 
-      <section className="space-y-4 border-t border-slate-200/80 pt-4">
+      <TeachingCard>
         <div className="text-sm font-semibold text-slate-800">如何判断校正是否有效</div>
         <div className="grid gap-4">
           <div className="text-sm leading-7 text-slate-700">
@@ -269,7 +277,7 @@ export default function DistortionCorrectionPage() {
             </div>
           </div>
         </div>
-      </section>
+      </TeachingCard>
     </div>
   );
 

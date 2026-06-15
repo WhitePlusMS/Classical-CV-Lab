@@ -158,22 +158,45 @@ function buildDescriptorExampleFormulaMathML(
   blockVectorLength: number
 ): string {
   return buildInlineMathML(`
-    <mrow>
-      <msub><mi>v</mi><mtext>block</mtext></msub>
-      <mo>=</mo><mi>normalize</mi><mo>(</mo><mo>[</mo><msub><mi>h</mi><mn>1</mn></msub><mo>,</mo><mo>...</mo><mo>,</mo><msub><mi>h</mi><mn>${cellsPerBlock * cellsPerBlock}</mn></msub><mo>]</mo><mo>)</mo>
-      <mo>&#x2208;</mo><msup><mi>R</mi><mn>${blockVectorLength}</mn></msup>
-      <mspace width="1em"/>
-      <mi>dim</mi><mo>(</mo><msub><mi>v</mi><mtext>block</mtext></msub><mo>)</mo>
-      <mo>=</mo><mn>${cellsPerBlock}</mn><mo>&#x00D7;</mo><mn>${cellsPerBlock}</mn><mo>&#x00D7;</mo><mn>${nbins}</mn>
-      <mo>=</mo><mn>${blockVectorLength}</mn>
-      <mspace width="1em"/>
-      <msub><mi>x</mi><mtext>window</mtext></msub>
-      <mo>=</mo><mi>concat</mi><mo>(</mo><msub><mi>v</mi><mn>1</mn></msub><mo>,</mo><mo>...</mo><mo>,</mo><msub><mi>v</mi><mn>${totalBlocks}</mn></msub><mo>)</mo>
-      <mspace width="1em"/>
-      <mi>dim</mi><mo>(</mo><msub><mi>x</mi><mtext>window</mtext></msub><mo>)</mo>
-      <mo>=</mo><mn>${totalBlocks}</mn><mo>&#x00D7;</mo><mn>${cellsPerBlock}</mn><mo>&#x00D7;</mo><mn>${cellsPerBlock}</mn><mo>&#x00D7;</mo><mn>${nbins}</mn>
-      <mo>=</mo><mn>${featureDim}</mn>
-    </mrow>
+    <mtable>
+      <mtr>
+        <mtd columnalign="left">
+          <mrow>
+            <msub><mi>v</mi><mtext>block</mtext></msub>
+            <mo>=</mo>
+            <mi>normalize</mi><mo>(</mo><mo>[</mo><msub><mi>h</mi><mn>1</mn></msub><mo>,</mo><mo>&hellip;</mo><mo>,</mo><msub><mi>h</mi><mn>${cellsPerBlock * cellsPerBlock}</mn></msub><mo>]</mo><mo>)</mo>
+            <mo>&#x2208;</mo><msup><mi>R</mi><mn>${blockVectorLength}</mn></msup>
+          </mrow>
+        </mtd>
+      </mtr>
+      <mtr>
+        <mtd columnalign="left">
+          <mrow>
+            <mi>dim</mi><mo>(</mo><msub><mi>v</mi><mtext>block</mtext></msub><mo>)</mo>
+            <mo>=</mo><mn>${cellsPerBlock}</mn><mo>&#x00D7;</mo><mn>${cellsPerBlock}</mn><mo>&#x00D7;</mo><mn>${nbins}</mn>
+            <mo>=</mo><mn>${blockVectorLength}</mn>
+          </mrow>
+        </mtd>
+      </mtr>
+      <mtr>
+        <mtd columnalign="left">
+          <mrow>
+            <msub><mi>x</mi><mtext>window</mtext></msub>
+            <mo>=</mo>
+            <mi>concat</mi><mo>(</mo><msub><mi>v</mi><mn>1</mn></msub><mo>,</mo><mo>&hellip;</mo><mo>,</mo><msub><mi>v</mi><mn>${totalBlocks}</mn></msub><mo>)</mo>
+          </mrow>
+        </mtd>
+      </mtr>
+      <mtr>
+        <mtd columnalign="left">
+          <mrow>
+            <mi>dim</mi><mo>(</mo><msub><mi>x</mi><mtext>window</mtext></msub><mo>)</mo>
+            <mo>=</mo><mn>${totalBlocks}</mn><mo>&#x00D7;</mo><mn>${cellsPerBlock}</mn><mo>&#x00D7;</mo><mn>${cellsPerBlock}</mn><mo>&#x00D7;</mo><mn>${nbins}</mn>
+            <mo>=</mo><mn>${featureDim}</mn>
+          </mrow>
+        </mtd>
+      </mtr>
+    </mtable>
   `);
 }
 
@@ -432,7 +455,7 @@ export default function HogFeaturePage() {
         </div>
       </TeachingCard>
 
-      <section className="border-t border-slate-200 pt-4">
+      <TeachingCard>
         <h2 className="mb-3 text-sm font-semibold text-slate-800">代表像素代入</h2>
         <p className="mb-3 text-xs leading-6 text-slate-600">
           代表像素选取当前 cell 内梯度幅值最大的像素，便于观察方向投票如何发生。
@@ -442,21 +465,24 @@ export default function HogFeaturePage() {
             label={`像素 (${currentHogStep.sample.x}, ${currentHogStep.sample.y}) 的一阶差分`}
             mathML={buildGradientSubstitutionMathML(currentHogStep, originalImage)}
             note="这里使用 Sobel 梯度场中的水平和垂直响应，数值来自当前 Lena 图。"
+            tone="embedded"
           />
           <FormulaCard
             label="梯度幅值"
             mathML={buildMagnitudeSubstitutionMathML(currentHogStep)}
             note="梯度幅值作为投票权重，边缘越强，对直方图贡献越大。"
+            tone="embedded"
           />
           <FormulaCard
             label="方向落入的 bin"
             mathML={buildBinSubstitutionMathML(currentHogStep)}
             note={`nbins=${nbins} 时，每个方向柱覆盖 ${formatNumber(anglePerBin, 1)}°。`}
+            tone="embedded"
           />
         </div>
-      </section>
+      </TeachingCard>
 
-      <section className="border-t border-slate-200 pt-4">
+      <TeachingCard>
         <h2 className="mb-3 text-sm font-semibold text-slate-800">当前 cell 的矩阵展开</h2>
         <div className="grid gap-4 xl:grid-cols-2">
           <MatrixView title="原始灰度" matrix={currentHogStep.pixelRegion} formatter={value => formatNumber(value, 2)} />
@@ -464,12 +490,12 @@ export default function HogFeaturePage() {
           <MatrixView title="Gy 垂直梯度" matrix={currentHogStep.gyRegion} formatter={value => formatNumber(value, 2)} />
           <MatrixView title="bin 编号" matrix={currentHogStep.binRegion} formatter={value => String(Math.round(value))} />
         </div>
-      </section>
+      </TeachingCard>
 
-      <section className="border-t border-slate-200 pt-4">
+      <TeachingCard>
         <h2 className="mb-3 text-sm font-semibold text-slate-800">block 归一化</h2>
         <div className="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
-          <TeachingCard>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
             <div className="text-xs leading-6 text-slate-600">
               当前 block 从 cell ({currentHogStep.blockX}, {currentHogStep.blockY}) 开始，
               覆盖 {cellsPerBlock}×{cellsPerBlock} 个 cell。先串联这些 cell 的方向直方图，再做 L2 归一化。
@@ -477,8 +503,8 @@ export default function HogFeaturePage() {
             <div className="mt-3">
               <BlockCellsView step={currentHogStep} />
             </div>
-          </TeachingCard>
-          <TeachingCard>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
             <div className="text-xs font-semibold text-slate-800">归一化向量摘要</div>
             <div className="mt-2 text-xs leading-6 text-slate-600">
               向量长度：{currentHogStep.normalizedBlock.length}，
@@ -491,56 +517,55 @@ export default function HogFeaturePage() {
                 </div>
               ))}
             </div>
-          </TeachingCard>
+          </div>
         </div>
-      </section>
+      </TeachingCard>
 
-      <section className="border-t border-slate-200 pt-4">
+      <TeachingCard>
         <h2 className="mb-3 text-sm font-semibold text-slate-800">这个特征向量能做什么</h2>
-        <TeachingCard>
-          <div className="space-y-3 text-xs leading-6 text-slate-600">
-            <p>
-              从当前 Lena 选区看，红框 cell 负责统计一个小区域的边缘方向；灰框 block 负责把相邻 cell 合成更稳定的小向量；
-              整个检测窗口再把所有 block 向量接成一条长描述子。分类器读取的是这条描述子，而不是直接读取原始像素。
-            </p>
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="border-l-2 border-amber-300 pl-3">
-                <div className="font-semibold text-amber-700">当前 cell：局部方向统计</div>
-                <p>
-                  cell ({currentHogStep.cellX}, {currentHogStep.cellY}) 内的每个像素先计算梯度，
-                  再投票到 {nbins} 个方向柱中，形成当前这张方向直方图。
-                </p>
-              </div>
-              <div className="border-l-2 border-sky-300 pl-3">
-                <div className="font-semibold text-sky-700">当前 block：稳定的小向量</div>
-                <p>
-                  灰框 block 覆盖 {cellsPerBlock}×{cellsPerBlock} 个 cell，把这些直方图串联后归一化，
-                  得到长度为 {currentHogStep.normalizedBlock.length} 的 block 向量。
-                </p>
-              </div>
-              <div className="border-l-2 border-emerald-300 pl-3">
-                <div className="font-semibold text-emerald-700">检测窗口：一条长描述子</div>
-                <p>
-                  当前窗口共有 {totalBlocks} 个 block，全部按扫描顺序拼接后，
-                  得到 {featureDim.toLocaleString()} 维窗口描述子，作为分类器输入。
-                </p>
-              </div>
+        <div className="space-y-3 text-xs leading-6 text-slate-600">
+          <p>
+            从当前 Lena 选区看，红框 cell 负责统计一个小区域的边缘方向；灰框 block 负责把相邻 cell 合成更稳定的小向量；
+            整个检测窗口再把所有 block 向量接成一条长描述子。分类器读取的是这条描述子，而不是直接读取原始像素。
+          </p>
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="border-l-2 border-amber-300 pl-3">
+              <div className="font-semibold text-amber-700">当前 cell：局部方向统计</div>
+              <p>
+                cell ({currentHogStep.cellX}, {currentHogStep.cellY}) 内的每个像素先计算梯度，
+                再投票到 {nbins} 个方向柱中，形成当前这张方向直方图。
+              </p>
+            </div>
+            <div className="border-l-2 border-sky-300 pl-3">
+              <div className="font-semibold text-sky-700">当前 block：稳定的小向量</div>
+              <p>
+                灰框 block 覆盖 {cellsPerBlock}×{cellsPerBlock} 个 cell，把这些直方图串联后归一化，
+                得到长度为 {currentHogStep.normalizedBlock.length} 的 block 向量。
+              </p>
+            </div>
+            <div className="border-l-2 border-emerald-300 pl-3">
+              <div className="font-semibold text-emerald-700">检测窗口：一条长描述子</div>
+              <p>
+                当前窗口共有 {totalBlocks} 个 block，全部按扫描顺序拼接后，
+                得到 {featureDim.toLocaleString()} 维窗口描述子，作为分类器输入。
+              </p>
             </div>
           </div>
-          <FormulaCard
-            className="mt-4"
-            label="从当前 block 到窗口描述子"
-            mathML={buildDescriptorExampleFormulaMathML(
-              featureDim,
-              totalBlocks,
-              cellsPerBlock,
-              nbins,
-              currentHogStep.normalizedBlock.length
-            )}
-            note="分类器检测流水线会继续展开滑动窗口、分类器判别和候选框筛选。"
-          />
-        </TeachingCard>
-      </section>
+        </div>
+        <FormulaCard
+          className="mt-4"
+          label="从当前 block 到窗口描述子"
+          mathML={buildDescriptorExampleFormulaMathML(
+            featureDim,
+            totalBlocks,
+            cellsPerBlock,
+            nbins,
+            currentHogStep.normalizedBlock.length
+          )}
+          note="分类器检测流水线会继续展开滑动窗口、分类器判别和候选框筛选。"
+          tone="embedded"
+        />
+      </TeachingCard>
     </div>
   ) : (
     <div className="py-8 text-center text-slate-400">加载 HOG 示例图...</div>

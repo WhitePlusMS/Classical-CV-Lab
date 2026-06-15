@@ -61,13 +61,6 @@ const v = beta * y + v0;
 // Compact form:
 // s * m = K [R, T] Xw`;
 
-const FOCUS_OPTIONS = [
-  { value: 'chain', label: '完整成像链' },
-  { value: 'intrinsics', label: '只观察内参' },
-  { value: 'extrinsics', label: '只观察外参' },
-  { value: 'depth', label: '只观察深度' },
-] as const;
-
 const CORNER_OPTIONS = [
   { value: '0', label: '左上角点' },
   { value: '7', label: '右上角点' },
@@ -76,7 +69,6 @@ const CORNER_OPTIONS = [
   { value: '47', label: '右下角点' },
 ];
 
-type FocusMode = (typeof FOCUS_OPTIONS)[number]['value'];
 type CameraParameterKey =
   | 'pointHeight'
   | 'alpha'
@@ -124,7 +116,7 @@ function buildIntrinsicMatrixMath(intrinsics: CalibrationIntrinsics): string {
 }
 
 function parameterImpact(key: CameraParameterKey): {
-  focusMode: FocusMode;
+  focusMode: 'intrinsics' | 'extrinsics' | 'depth';
   title: string;
   summary: string;
   formulaLabel: string;
@@ -183,7 +175,6 @@ function parameterImpact(key: CameraParameterKey): {
 }
 
 export default function CameraModelPage() {
-  const [focusMode, setFocusMode] = useState<FocusMode>('chain');
   const [selectedCornerIndex, setSelectedCornerIndex] = useState(20);
   const [pointHeight, setPointHeight] = useState(0);
   const [intrinsics, setIntrinsics] = useState<CalibrationIntrinsics>(DEFAULT_INTRINSICS);
@@ -296,7 +287,6 @@ export default function CameraModelPage() {
   );
 
   const activeImpact = useMemo(() => parameterImpact(activeParameterKey), [activeParameterKey]);
-  const effectiveFocusMode = focusMode === 'chain' ? activeImpact.focusMode : focusMode;
 
   const nearDepth = Math.max(1, projection.depth - 2.5);
   const farDepth = projection.depth + 2.5;
@@ -337,7 +327,7 @@ export default function CameraModelPage() {
               <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-red-800">
                 世界点：第 {selectedCorner.row + 1} 行、第 {selectedCorner.col + 1} 列角点
               </div>
-              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 font-mono text-slate-700">
+              <div className="rounded-lg border border-red-100 bg-red-50/70 px-3 py-2 font-mono text-slate-700">
                 Xc=({formatMatrixValue(projection.camera.x, 2)}, {formatMatrixValue(projection.camera.y, 2)}, {formatMatrixValue(projection.camera.z, 2)})
               </div>
             </div>
@@ -358,7 +348,7 @@ export default function CameraModelPage() {
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">
                 当前深度 Zc={formatMatrixValue(projection.depth, 2)}
               </div>
-              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 font-mono text-slate-700">
+              <div className="rounded-lg border border-amber-100 bg-amber-50/70 px-3 py-2 font-mono text-slate-700">
                 (x,y)=({formatMatrixValue(projection.normalized.x, 3)}, {formatMatrixValue(projection.normalized.y, 3)})
               </div>
             </div>
@@ -380,7 +370,7 @@ export default function CameraModelPage() {
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-800">
                 u={formatMatrixValue(projection.pixel.x, 2)}, v={formatMatrixValue(projection.pixel.y, 2)}
               </div>
-              <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-700">
+              <div className="rounded-lg border border-emerald-100 bg-emerald-50/70 px-3 py-2 text-slate-700">
                 K 的 5 个自由参数：α、β、γ、u0、v0
               </div>
             </div>
@@ -401,16 +391,19 @@ export default function CameraModelPage() {
           <FormulaCard
             label="正向成像"
             mathML={math('<mi>s</mi><mover><mi>m</mi><mo>~</mo></mover><mo>=</mo><mi>K</mi><mo>[</mo><mi>R</mi><mo>,</mo><mi>T</mi><mo>]</mo><msub><mover><mi>X</mi><mo>~</mo></mover><mi>w</mi></msub>')}
+            tone="embedded"
             note="已知参数时，世界点可以投影到像素点。"
           />
           <FormulaCard
             label="刚体变换"
             mathML={math('<msub><mi>X</mi><mi>c</mi></msub><mo>=</mo><mi>R</mi><msub><mi>X</mi><mi>w</mi></msub><mo>+</mo><mi>T</mi>')}
+            tone="embedded"
             note="[R,T] 是每张照片对应的外参。"
           />
           <FormulaCard
             label="内参矩阵 K"
             mathML={buildIntrinsicMatrixMath(intrinsics)}
+            tone="embedded"
             note="K 是同一台相机通常保持不变的内部参数。"
           />
         </div>
@@ -422,16 +415,19 @@ export default function CameraModelPage() {
           <FormulaCard
             label="外参变换后"
             mathML={pointVector(projection.camera)}
+            tone="embedded"
             note="该结果是以相机光心为原点的三维坐标。"
           />
           <FormulaCard
             label="透视除法"
             mathML={math(`<mi>x</mi><mo>=</mo><mfrac><mn>${formatMatrixValue(projection.camera.x, 2)}</mn><mn>${formatMatrixValue(projection.camera.z, 2)}</mn></mfrac><mo>=</mo><mn>${formatMatrixValue(projection.normalized.x, 3)}</mn><mo>,</mo><mi>y</mi><mo>=</mo><mfrac><mn>${formatMatrixValue(projection.camera.y, 2)}</mn><mn>${formatMatrixValue(projection.camera.z, 2)}</mn></mfrac><mo>=</mo><mn>${formatMatrixValue(projection.normalized.y, 3)}</mn>`)}
+            tone="embedded"
             note="归一化坐标尚未转换为像素单位。"
           />
           <FormulaCard
             label="内参映射"
             mathML={math(`<mi>u</mi><mo>=</mo><mi>&alpha;</mi><mi>x</mi><mo>+</mo><mi>&gamma;</mi><mi>y</mi><mo>+</mo><msub><mi>u</mi><mn>0</mn></msub><mo>=</mo><mn>${formatMatrixValue(projection.pixel.x, 2)}</mn><mo>,</mo><mi>v</mi><mo>=</mo><mi>&beta;</mi><mi>y</mi><mo>+</mo><msub><mi>v</mi><mn>0</mn></msub><mo>=</mo><mn>${formatMatrixValue(projection.pixel.y, 2)}</mn>`)}
+            tone="embedded"
             note="这一步得到图像数组中的像素坐标。"
           />
         </div>
@@ -443,11 +439,12 @@ export default function CameraModelPage() {
             <div className="text-sm font-semibold text-amber-900">{activeImpact.title}</div>
             <p className="mt-2 text-sm leading-6 text-slate-700">{activeImpact.summary}</p>
           </div>
-          <div className="rounded-2xl border border-amber-200 bg-white px-4 py-3">
+          <div className="rounded-xl border border-amber-100 bg-amber-50/70 px-3 py-3">
             <FormulaCard
               label={activeImpact.formulaLabel}
               mathML={activeImpact.formulaMath}
-              formulaClassName="rounded-xl px-3 py-3 shadow-none"
+              tone="embedded"
+              formulaClassName="rounded-lg px-3 py-3"
               note={`最近调整参数：${activeParameterKey}`}
             />
           </div>
@@ -458,13 +455,13 @@ export default function CameraModelPage() {
         <TeachingCard>
           <div className="text-sm font-semibold text-slate-800">内参与外参的边界</div>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4">
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 px-4 py-4">
               <div className="text-sm font-semibold text-emerald-800">内参 K</div>
               <p className="mt-2 text-xs leading-5 text-slate-700">
                 α、β、γ、u0、v0 描述摄像机成像几何和像素坐标系。换一个拍摄角度，它们通常不变。
               </p>
             </div>
-            <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-4">
+            <div className="rounded-xl border border-blue-200 bg-blue-50/80 px-4 py-4">
               <div className="text-sm font-semibold text-blue-800">外参 [R,T]</div>
               <p className="mt-2 text-xs leading-5 text-slate-700">
                 R、T 描述当前这一张照片中，相机和世界坐标系之间的相对姿态。换一张标定图，它们会变。
@@ -483,6 +480,7 @@ export default function CameraModelPage() {
           <FormulaCard
             className="mt-4"
             mathML={math(`<mfrac><mn>${formatMatrixValue(projection.camera.x, 2)}</mn><mn>${formatMatrixValue(nearDepth, 2)}</mn></mfrac><mo>=</mo><mn>${formatMatrixValue(nearX, 3)}</mn><mo>,</mo><mfrac><mn>${formatMatrixValue(projection.camera.x, 2)}</mn><mn>${formatMatrixValue(farDepth, 2)}</mn></mfrac><mo>=</mo><mn>${formatMatrixValue(farX, 3)}</mn>`)}
+            tone="embedded"
             note="这也是透视投影和正交投影最直观的差别。"
           />
         </TeachingCard>
@@ -503,20 +501,6 @@ export default function CameraModelPage() {
 
   const parameters = (
     <div className="space-y-4">
-      <SelectParam
-        label="观察重点"
-        value={focusMode}
-        onChange={value => setFocusMode(value as FocusMode)}
-        options={FOCUS_OPTIONS.map(item => ({ value: item.value, label: item.label }))}
-      />
-
-      <SelectParam
-        label="世界点"
-        value={String(selectedCornerIndex)}
-        onChange={value => setSelectedCornerIndex(Number(value))}
-        options={CORNER_OPTIONS}
-      />
-
       <SliderParam
         label="点高度 Zw"
         value={pointHeight}
@@ -533,7 +517,14 @@ export default function CameraModelPage() {
         当前点先按外参进入相机坐标系，再除以深度，最后由 K 映射到像素坐标。
       </div>
 
-      <details open={focusMode === 'chain' || focusMode === 'intrinsics'} className="overflow-hidden rounded-2xl border border-emerald-200 bg-emerald-50/60">
+      <SelectParam
+        label="世界点"
+        value={String(selectedCornerIndex)}
+        onChange={value => setSelectedCornerIndex(Number(value))}
+        options={CORNER_OPTIONS}
+      />
+
+      <details className="overflow-hidden rounded-xl border border-emerald-200 bg-emerald-50/70">
         <summary className="cursor-pointer list-none px-3 py-3 text-sm font-semibold text-emerald-800 marker:content-none">内参 K</summary>
         <div className="space-y-4 border-t border-emerald-200 px-3 py-3">
           <SliderParam label="α" value={intrinsics.alpha} onChange={value => updateIntrinsics('alpha', value)} min={28} max={82} step={1} />
@@ -544,7 +535,7 @@ export default function CameraModelPage() {
         </div>
       </details>
 
-      <details open={focusMode === 'chain' || focusMode === 'extrinsics'} className="overflow-hidden rounded-2xl border border-blue-200 bg-blue-50/60">
+      <details className="overflow-hidden rounded-xl border border-blue-200 bg-blue-50/70">
         <summary className="cursor-pointer list-none px-3 py-3 text-sm font-semibold text-blue-800 marker:content-none">外参 [R,T]</summary>
         <div className="space-y-4 border-t border-blue-200 px-3 py-3">
           <SliderParam label="yaw" value={extrinsics.yaw} onChange={value => updateExtrinsics('yaw', value)} min={-30} max={30} step={1} unit="°" />
@@ -568,7 +559,7 @@ export default function CameraModelPage() {
       extrinsics={extrinsics}
       intrinsics={intrinsics}
       mode="camera-model"
-      focusMode={effectiveFocusMode}
+      focusMode={activeImpact.focusMode}
       imageSize={{ width: IMAGE_WIDTH, height: IMAGE_HEIGHT }}
       selectedPoint={{ ...selectedCorner, world: worldPoint }}
       title="成像模型的三维关系"
@@ -588,7 +579,7 @@ export default function CameraModelPage() {
       subtitle="Camera Model & Parameters"
       contentHeader={contentHeader}
       operationLabel="透视投影"
-      parameterIntro="先选世界点，再分别调整内参和外参。观察重点是：外参改变拍摄姿态，内参改变像素映射。"
+      parameterIntro="先选世界点，再分别展开内参 K 和外参 [R,T] 调整。主视觉会自动强调最近参数影响的成像环节。"
       originalImage={originalImage}
       resultImage={resultImage}
       mainVisual={mainVisual}

@@ -5,6 +5,7 @@ import {
   ConceptLayout,
   CodeViewer,
   FormulaCard,
+  InlineMath,
   SelectParam,
   TeachingCard,
   ProcessRail,
@@ -69,6 +70,10 @@ const EQUALIZATION_FORMULA_MATHML = buildInlineMathML(`
     </mrow>
   </mrow>
 `);
+
+function inlineMath(body: string): string {
+  return buildInlineMathML(`<mrow>${body}</mrow>`);
+}
 
 /** 简版直方图 SVG（仅展示，含高亮功能） */
 function HistogramBarChart({
@@ -318,7 +323,9 @@ export default function HistogramEqualizationPage() {
                 </span>
                 {activeGray !== null && (
                   <span className="rounded-full border border-red-200 bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-600">
-                    k={activeGray} (n<sub>k</sub>={originalBins[activeGray]})
+                    <InlineMath
+                      mathML={inlineMath(`<mi>k</mi><mo>=</mo><mn>${activeGray}</mn><mo>,</mo><msub><mi>n</mi><mi>k</mi></msub><mo>=</mo><mn>${originalBins[activeGray]}</mn>`)}
+                    />
                   </span>
                 )}
               </div>
@@ -341,7 +348,9 @@ export default function HistogramEqualizationPage() {
                 </span>
                 {mappedGray !== null && (
                   <span className="rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600">
-                    S<sub>{activeGray}</sub>={mappedGray}
+                    <InlineMath
+                      mathML={inlineMath(`<msub><mi>S</mi><mn>${activeGray}</mn></msub><mo>=</mo><mn>${mappedGray}</mn>`)}
+                    />
                   </span>
                 )}
               </div>
@@ -395,10 +404,10 @@ export default function HistogramEqualizationPage() {
             mathClassName="[&_math]:text-lg"
           />
           <div className="mt-3 text-xs leading-6 text-slate-600 space-y-1">
-            <p><code className="bg-slate-100 px-1 rounded">S_k</code>: 均衡化后灰度级 k 的映射值</p>
-            <p><code className="bg-slate-100 px-1 rounded">n_i</code>: 原图中灰度级 i 的像素个数</p>
-            <p><code className="bg-slate-100 px-1 rounded">n</code>: 图像总像素数（= {totalPixels}）</p>
-            <p><code className="bg-slate-100 px-1 rounded">∑ n_i / n</code>: 累积分布函数（CDF）</p>
+            <p><InlineMath mathML={inlineMath('<msub><mi>S</mi><mi>k</mi></msub>')} />: 均衡化后灰度级 k 的映射值</p>
+            <p><InlineMath mathML={inlineMath('<msub><mi>n</mi><mi>i</mi></msub>')} />: 原图中灰度级 i 的像素个数</p>
+            <p><InlineMath mathML={inlineMath('<mi>n</mi>')} />: 图像总像素数（= {totalPixels}）</p>
+            <p><InlineMath mathML={inlineMath('<munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>0</mn></mrow><mi>k</mi></munderover><msub><mi>n</mi><mi>i</mi></msub><mo>/</mo><mi>n</mi>')} />: 累积分布函数（CDF）</p>
             <p className="mt-1 text-slate-500 italic">
               * 映射函数是单调递增的，保证输出图像保持灰度级的相对顺序。
             </p>
@@ -438,8 +447,11 @@ export default function HistogramEqualizationPage() {
             <p>
               CDF 从灰度 0 开始累加每个灰度级的像素占比：
             </p>
-            <p className="mt-1 bg-slate-50 rounded-lg px-3 py-2 font-mono text-slate-700">
-              CDF[k] = (n₀ + n₁ + ... + n_k) / n
+            <p className="mt-1 rounded-lg bg-slate-50 px-3 py-2 text-slate-700">
+              <InlineMath
+                mathML={inlineMath('<mi>CDF</mi><mo>[</mo><mi>k</mi><mo>]</mo><mo>=</mo><mfrac><mrow><msub><mi>n</mi><mn>0</mn></msub><mo>+</mo><msub><mi>n</mi><mn>1</mn></msub><mo>+</mo><mo>⋯</mo><mo>+</mo><msub><mi>n</mi><mi>k</mi></msub></mrow><mi>n</mi></mfrac>')}
+                className="[&_math]:text-base"
+              />
             </p>
             <p className="mt-2">
               均衡化将 CDF 值线性放大到 0-255 范围，使输出图像的直方图尽可能平坦，
@@ -458,11 +470,11 @@ export default function HistogramEqualizationPage() {
               <table className="w-full text-xs border-collapse">
                 <thead>
                   <tr className="border-b border-amber-200">
-                    <th className="py-2 pr-3 text-left font-semibold text-amber-800">原灰度 s_k</th>
-                    <th className="py-2 px-3 text-left font-semibold text-amber-800">出现次数 n_k</th>
-                    <th className="py-2 px-3 text-left font-semibold text-amber-800">概率 P(s_k)</th>
+                    <th className="py-2 pr-3 text-left font-semibold text-amber-800">原灰度 <InlineMath mathML={inlineMath('<msub><mi>s</mi><mi>k</mi></msub>')} /></th>
+                    <th className="py-2 px-3 text-left font-semibold text-amber-800">出现次数 <InlineMath mathML={inlineMath('<msub><mi>n</mi><mi>k</mi></msub>')} /></th>
+                    <th className="py-2 px-3 text-left font-semibold text-amber-800">概率 <InlineMath mathML={inlineMath('<mi>P</mi><mo>(</mo><msub><mi>s</mi><mi>k</mi></msub><mo>)</mo>')} /></th>
                     <th className="py-2 px-3 text-left font-semibold text-amber-800">CDF 累积</th>
-                    <th className="py-2 pl-3 text-left font-semibold text-amber-800">映射值 S_k</th>
+                    <th className="py-2 pl-3 text-left font-semibold text-amber-800">映射值 <InlineMath mathML={inlineMath('<msub><mi>S</mi><mi>k</mi></msub>')} /></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -489,13 +501,13 @@ export default function HistogramEqualizationPage() {
             </div>
             <div className="mt-3 text-xs leading-5 text-amber-800/80 space-y-1">
               <p>
-                S₅₀ = ⌊255 × 3/9⌋ = ⌊85⌋ = <strong>85</strong>
+                <InlineMath mathML={inlineMath('<msub><mi>S</mi><mn>50</mn></msub><mo>=</mo><mo>⌊</mo><mn>255</mn><mo>×</mo><mfrac><mn>3</mn><mn>9</mn></mfrac><mo>⌋</mo><mo>=</mo><mo>⌊</mo><mn>85</mn><mo>⌋</mo><mo>=</mo><mn>85</mn>')} />
               </p>
               <p>
-                S₁₀₀ = ⌊255 × 7/9⌋ = ⌊198.3⌋ = <strong>198</strong>
+                <InlineMath mathML={inlineMath('<msub><mi>S</mi><mn>100</mn></msub><mo>=</mo><mo>⌊</mo><mn>255</mn><mo>×</mo><mfrac><mn>7</mn><mn>9</mn></mfrac><mo>⌋</mo><mo>=</mo><mo>⌊</mo><mn>198.3</mn><mo>⌋</mo><mo>=</mo><mn>198</mn>')} />
               </p>
               <p>
-                S₂₀₀ = ⌊255 × 9/9⌋ = ⌊255⌋ = <strong>255</strong>
+                <InlineMath mathML={inlineMath('<msub><mi>S</mi><mn>200</mn></msub><mo>=</mo><mo>⌊</mo><mn>255</mn><mo>×</mo><mfrac><mn>9</mn><mn>9</mn></mfrac><mo>⌋</mo><mo>=</mo><mo>⌊</mo><mn>255</mn><mo>⌋</mo><mo>=</mo><mn>255</mn>')} />
               </p>
             </div>
           </TeachingCard>

@@ -536,11 +536,13 @@ export default function FrameDifferenceMotionPage() {
           note={method === 'twoFrame'
             ? `当前位置前向差分为 ${previousDiffGray}，阈值 T = ${threshold}。`
             : `当前位置前向差分为 ${previousDiffGray}，后向差分为 ${nextDiffGray}，两者同时超过 T 才保留。`}
+          tone="embedded"
         />
         <FormulaCard
           label="形态学清理"
           mathML={morphologyFormulaMathML()}
           note={`原始运动像素 ${result.motionPixelCount} 个，清理后 ${result.cleanedPixelCount} 个。`}
+          tone="embedded"
         />
       </TeachingCard>
 
@@ -552,16 +554,16 @@ export default function FrameDifferenceMotionPage() {
         </div>
       </TeachingCard>
 
-      <section className="border-t border-slate-200 pt-5">
+      <TeachingCard>
         <h2 className="mb-3 text-sm font-semibold text-slate-800">教材补充：时间差分法示例</h2>
-        <div className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-3">
+        <div className="grid gap-4 lg:grid-cols-3">
           {TIME_DIFF_EXAMPLES.map(item => (
             <CourseImage key={item.src} src={item.src} label={item.label} className="h-56" />
           ))}
         </div>
-      </section>
+      </TeachingCard>
 
-      <section className="border-t border-slate-200 pt-5">
+      <TeachingCard>
         <h2 className="mb-3 text-sm font-semibold text-slate-800">教材补充：对称差分法实验效果</h2>
         <div className="space-y-5">
           {SYMMETRIC_EXPERIMENT_STEPS.map(step => (
@@ -578,7 +580,7 @@ export default function FrameDifferenceMotionPage() {
             </div>
           ))}
         </div>
-      </section>
+      </TeachingCard>
     </div>
   );
 

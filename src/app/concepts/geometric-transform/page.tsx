@@ -15,6 +15,7 @@ import {
   ProcessRail,
   SelectParam,
   SliderParam,
+  TeachingCard,
   TeachingTerm,
   buildInlineMathML,
 } from '@/components';
@@ -739,7 +740,7 @@ export default function GeometricTransformPage() {
 
   const stepDetails = (
     <div className="space-y-4">
-      <section className="space-y-4">
+      <TeachingCard>
         <div className="grid gap-4">
           <div>
             <div className="text-sm font-semibold text-slate-800">几何变换的统一表达</div>
@@ -753,6 +754,7 @@ export default function GeometricTransformPage() {
               mathML={MAIN_RELATION_MATHML}
               className="mt-3"
               note="图像内容本身不变，改变的是像素之间的位置关系。"
+              tone="embedded"
             />
           </div>
           <div>
@@ -761,6 +763,7 @@ export default function GeometricTransformPage() {
               mathML={HOMOGENEOUS_FORMULA_MATHML}
               className="mt-3"
               note="平移项写入第三列后，平移、旋转、缩放和剪切就都能并入一次矩阵乘法。"
+              tone="embedded"
             />
           </div>
         </div>
@@ -770,11 +773,13 @@ export default function GeometricTransformPage() {
             mathML={buildMatrixStatementMathML('<mi>M</mi>', matrix)}
             label="当前组合矩阵"
             note={`按 ${TRANSFORM_COMPOSITION_ORDER.join(' → ')} 的顺序依次复合。`}
+            tone="embedded"
           />
           <FormulaCard
             mathML={buildMatrixStatementMathML('<msup><mi>M</mi><mrow><mo>-</mo><mn>1</mn></mrow></msup>', inverseMatrix)}
             label="当前反向映射矩阵"
             note="输出图像中的每一个像素，都先乘逆矩阵，再回到原图寻找采样位置。"
+            tone="embedded"
           />
         </div>
 
@@ -783,26 +788,30 @@ export default function GeometricTransformPage() {
             mathML={ORTHOGONAL_FAMILY_MATHML}
             label="正交"
             note="长度和夹角保持不变，常见代表是纯旋转或翻转。"
+            tone="embedded"
           />
           <FormulaCard
             mathML={RIGID_FAMILY_MATHML}
             label="刚体"
             note="在线性部分保持正交的前提下，再加入平移项。"
+            tone="embedded"
           />
           <FormulaCard
             mathML={SIMILAR_FAMILY_MATHML}
             label="相似"
             note="允许整体等比例缩放，因此角度不变、长度按同一比例变化。"
+            tone="embedded"
           />
           <FormulaCard
             mathML={AFFINE_FAMILY_MATHML}
             label="仿射"
             note="最一般的二维线性位置变换，可由平移、缩放、旋转、翻转、剪切复合得到。"
+            tone="embedded"
           />
         </div>
-      </section>
+      </TeachingCard>
 
-      <section className="border-t border-slate-200/80 pt-4">
+      <TeachingCard>
         <div className="grid gap-4">
           <div>
             <div className="flex items-center justify-between gap-3">
@@ -827,6 +836,7 @@ export default function GeometricTransformPage() {
               )}
               className="mt-3"
               note="使用的是中心化后的笛卡尔坐标，因此正角度仍表示逆时针旋转。"
+              tone="embedded"
             />
           </div>
 
@@ -855,9 +865,9 @@ export default function GeometricTransformPage() {
             </div>
           </div>
         </div>
-      </section>
+      </TeachingCard>
 
-      <section className="border-t border-slate-200/80 pt-4">
+      <TeachingCard>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="text-sm font-semibold text-slate-800">当前输出像素的反向映射与插值</div>
@@ -882,6 +892,7 @@ export default function GeometricTransformPage() {
           )}
           className="mt-3"
           note="给出的坐标仍然是中心化后的笛卡尔坐标，便于直接对应齐次矩阵公式。"
+          tone="embedded"
         />
 
         <div className="mt-4">
@@ -908,6 +919,7 @@ export default function GeometricTransformPage() {
                     ? '只取最接近的一个原图像素，速度快，但边缘更容易产生锯齿。'
                     : '同时利用 2×2 邻域的四个像素做加权平均，边缘更平滑，但会略微模糊。'
                 }
+                tone="embedded"
               />
             </div>
           </div>
@@ -933,9 +945,9 @@ export default function GeometricTransformPage() {
             </div>
           </div>
         )}
-      </section>
+      </TeachingCard>
 
-      <section className="border-t border-slate-200/80 pt-4">
+      <TeachingCard>
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-sm font-semibold text-slate-800">原子变换矩阵</div>
@@ -953,24 +965,28 @@ export default function GeometricTransformPage() {
             mathML={TRANSLATION_FORMULA_MATHML}
             label="平移"
             note="控制整体位置，不改变形状和朝向。"
+            tone="embedded"
           />
           <FormulaCard
             mathML={SCALE_FORMULA_MATHML}
             label="缩放"
             note="等比例缩放对应相似变换的一部分。"
+            tone="embedded"
           />
           <FormulaCard
             mathML={ROTATION_FORMULA_MATHML}
             label="旋转 / 翻转"
             note="旋转矩阵保持角度关系；翻转可看作某个坐标轴方向的符号取反，仍属于正交变换。"
+            tone="embedded"
           />
           <FormulaCard
             mathML={SHEAR_FORMULA_MATHML}
             label="剪切"
             note="剪切会改变角度关系，因此会把相似变换推进到更一般的仿射变换。"
+            tone="embedded"
           />
         </div>
-      </section>
+      </TeachingCard>
     </div>
   );
 

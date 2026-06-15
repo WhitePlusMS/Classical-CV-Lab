@@ -519,7 +519,7 @@ export default function PerspectiveTransformPage() {
 
   const stepDetails = (
     <div className="space-y-4">
-      <section className="space-y-4">
+      <TeachingCard>
         <div className="text-sm font-semibold text-slate-800">公式与关键结论</div>
         <p className="mt-1 text-xs leading-5 text-slate-500">
           透视变换强调四对点、3×3 矩阵、直线性保留与平行性不保留。
@@ -529,16 +529,18 @@ export default function PerspectiveTransformPage() {
             label="透视变换"
             mathML={math('<mi>&omega;</mi><mfenced open="[" close="]"><mtable><mtr><mtd><msup><mi>x</mi><mo>&prime;</mo></msup></mtd></mtr><mtr><mtd><msup><mi>y</mi><mo>&prime;</mo></msup></mtd></mtr><mtr><mtd><mn>1</mn></mtd></mtr></mtable></mfenced><mo>=</mo><mfenced open="[" close="]"><mtable><mtr><mtd><msub><mi>t</mi><mn>11</mn></msub></mtd><mtd><msub><mi>t</mi><mn>12</mn></msub></mtd><mtd><msub><mi>t</mi><mn>13</mn></msub></mtd></mtr><mtr><mtd><msub><mi>t</mi><mn>21</mn></msub></mtd><mtd><msub><mi>t</mi><mn>22</mn></msub></mtd><mtd><msub><mi>t</mi><mn>23</mn></msub></mtd></mtr><mtr><mtd><msub><mi>t</mi><mn>31</mn></msub></mtd><mtd><msub><mi>t</mi><mn>32</mn></msub></mtd><mtd><msub><mi>t</mi><mn>33</mn></msub></mtd></mtr></mtable></mfenced><mfenced open="[" close="]"><mtable><mtr><mtd><mi>x</mi></mtd></mtr><mtr><mtd><mi>y</mi></mtd></mtr><mtr><mtd><mn>1</mn></mtd></mtr></mtable></mfenced>')}
             note="t31、t32 描述透视失真；它们为 0 时，矩阵会退化为仿射形式。"
+            tone="embedded"
           />
           <FormulaCard
             label="仿射变换"
             mathML={math('<mfenced open="[" close="]"><mtable><mtr><mtd><msup><mi>x</mi><mo>&prime;</mo></msup></mtd></mtr><mtr><mtd><msup><mi>y</mi><mo>&prime;</mo></msup></mtd></mtr><mtr><mtd><mn>1</mn></mtd></mtr></mtable></mfenced><mo>=</mo><mfenced open="[" close="]"><mtable><mtr><mtd><msub><mi>a</mi><mn>11</mn></msub></mtd><mtd><msub><mi>a</mi><mn>12</mn></msub></mtd><mtd><msub><mi>t</mi><mn>1</mn></msub></mtd></mtr><mtr><mtd><msub><mi>a</mi><mn>21</mn></msub></mtd><mtd><msub><mi>a</mi><mn>22</mn></msub></mtd><mtd><msub><mi>t</mi><mn>2</mn></msub></mtd></mtr><mtr><mtd><mn>0</mn></mtd><mtd><mn>0</mn></mtd><mtd><mn>1</mn></mtd></mtr></mtable></mfenced><mfenced open="[" close="]"><mtable><mtr><mtd><mi>x</mi></mtd></mtr><mtr><mtd><mi>y</mi></mtd></mtr><mtr><mtd><mn>1</mn></mtd></mtr></mtable></mfenced>')}
             note="仿射变换保留平行性，因此它无法完全纠正斜拍平面带来的汇聚现象。"
+            tone="embedded"
           />
         </div>
-      </section>
+      </TeachingCard>
 
-      <section className="space-y-4 border-t border-slate-200/80 pt-4">
+      <TeachingCard>
         <div className="text-sm font-semibold text-slate-800">四对点坐标与变换矩阵</div>
         <div className="grid gap-4">
           <div className="space-y-4">
@@ -552,6 +554,7 @@ export default function PerspectiveTransformPage() {
               label="当前选中点"
               mathML={pointVectorStatement(HANDLE_LABELS[selectedHandleIndex], currentPoint)}
               note={`当前选中 ${HANDLE_LABELS[selectedHandleIndex]} 点，方向键会以 1 像素为单位微调该点。`}
+              tone="embedded"
             />
             <FormulaCard
               label="目标矩形对应点"
@@ -561,6 +564,7 @@ export default function PerspectiveTransformPage() {
                 true
               )}
               note="四个目标点固定在正视矩形的四个顶点。"
+              tone="embedded"
             />
           </div>
           <div className="space-y-4">
@@ -568,6 +572,7 @@ export default function PerspectiveTransformPage() {
               label="当前透视矩阵 T"
               mathML={homographyMatrixMath(computation.homography)}
               note={matrixCardNote}
+              tone="embedded"
             />
             <FormulaCard
               label="当前中心点透视代入"
@@ -579,11 +584,13 @@ export default function PerspectiveTransformPage() {
                 computation.centerProjection.scale
               )}
               note="透视变换先得到齐次坐标，再除以尺度因子 omega 得到真正的像素坐标。"
+              tone="embedded"
             />
             <FormulaCard
               label="当前仿射矩阵 A"
               mathML={affineMatrixMath(computation.affineMatrix)}
               note={`由 A、B、C 三点决定。用它预测 D 点时，坐标约为 (${formatTransformNumber(computation.affineFourthPoint.x, 1)}, ${formatTransformNumber(computation.affineFourthPoint.y, 1)})。`}
+              tone="embedded"
             />
             <FormulaCard
               label="当前 D 点仿射预测"
@@ -594,12 +601,14 @@ export default function PerspectiveTransformPage() {
                 computation.affineFourthPoint
               )}
               note="仿射矩阵没有透视尺度项，因此第四点只能被前三点确定的模型预测。"
+              tone="embedded"
             />
           </div>
         </div>
-      </section>
+      </TeachingCard>
 
-      <div className="grid gap-6 border-t border-slate-200/80 pt-4">
+      <TeachingCard>
+        <div className="grid gap-6">
         <section>
           <div className="text-sm font-semibold text-slate-800">为什么透视变换要四对点</div>
           <p className="mt-2 text-sm leading-6 text-slate-700">
@@ -611,6 +620,7 @@ export default function PerspectiveTransformPage() {
             label="约束数量"
             mathML={math('<mn>4</mn><mtext> 对点 </mtext><mo>&Rightarrow;</mo><mn>8</mn><mtext> 个方程 </mtext><mo>&Rightarrow;</mo><mn>8</mn><mtext> 个自由度</mtext>')}
             note="三对点只够求仿射矩阵，因为仿射矩阵只含 6 个自由度。"
+            tone="embedded"
           />
         </section>
 
@@ -628,7 +638,8 @@ export default function PerspectiveTransformPage() {
             </div>
           </div>
         </section>
-      </div>
+        </div>
+      </TeachingCard>
     </div>
   );
 

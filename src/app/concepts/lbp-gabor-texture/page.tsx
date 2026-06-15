@@ -647,21 +647,24 @@ export default function LBPGaborTexturePage() {
             </p>
           </TeachingCard>
 
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-            <TeachingCard>
+          <TeachingCard>
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
               <h3 className="mb-3 text-sm font-semibold text-slate-800">当前 3x3 灰度矩阵</h3>
               <MatrixPreview image={lbpStep.values} center={{ row: 1, col: 1 }} />
               <p className="mt-3 text-xs leading-5 text-slate-600">
                 中心像素 I(c)={grayByte(lbpStep.center)}。每个邻域值大于等于中心值时记为 1，否则记为 0。
               </p>
-            </TeachingCard>
+            </div>
 
             <FormulaCard
               label="当前 LBP 编码代入"
               mathML={buildLBPFormula(outputCenter.x, outputCenter.y, lbpStep.binaryPattern, lbpStep.decimalValue)}
               note="权重从 p1 到 p8 依次为 2^0 到 2^7，得到 0~255 的单像素纹理编码。"
+              tone="embedded"
             />
-          </div>
+            </div>
+          </TeachingCard>
 
           <TeachingCard>
             <h3 className="mb-3 text-sm font-semibold text-slate-800">逐邻域比较</h3>
@@ -704,11 +707,14 @@ export default function LBPGaborTexturePage() {
 
           {mode === 'lbp-rotation' && rotationStep && (
             <>
+              <TeachingCard>
               <FormulaCard
                 label="旋转不变 LBP 代入"
                 mathML={buildRotationInvariantFormula(rotationStep.rotations.map(item => item.decimalValue), rotationStep.minValue, rotationStep.minShift)}
                 note="旋转不变 LBP 把同一二进制环的 8 种起点都算一遍，取最小值作为该邻域的编码。"
+                tone="embedded"
               />
+              </TeachingCard>
               <TeachingCard>
                 <h3 className="mb-3 text-sm font-semibold text-slate-800">8 种循环移位</h3>
                 <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
@@ -743,14 +749,18 @@ export default function LBPGaborTexturePage() {
             </p>
           </TeachingCard>
 
+          <TeachingCard>
           <FormulaCard
             label="当前 Gabor 核参数代入"
             mathML={buildGaborKernelFormula(gaborParams)}
             note={`当前参数：λ=${gaborParams.wavelength} 控制条纹间隔，θ=${gaborParams.orientation}° 控制响应方向，σ=${gaborParams.sigma} 控制核覆盖范围，γ=${formatFloat(gaborParams.gamma, 1)}，核大小=${gaborParams.kernelSize}x${gaborParams.kernelSize}。`}
+            tone="embedded"
           />
+          </TeachingCard>
 
+          <TeachingCard>
           <div className="grid gap-4 xl:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)]">
-            <TeachingCard>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
               <h3 className="mb-3 text-sm font-semibold text-slate-800">当前输入窗口</h3>
               <ImageCanvas
                 image={gaborStep.inputRegion}
@@ -762,22 +772,26 @@ export default function LBPGaborTexturePage() {
               <p className="mt-3 text-xs leading-5 text-slate-600">
                 红点对应输出像素 ({gaborStep.x}, {gaborStep.y})，核围绕该中心与窗口逐项对齐。
               </p>
-            </TeachingCard>
+            </div>
 
-            <TeachingCard>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
               <h3 className="mb-3 text-sm font-semibold text-slate-800">Gabor 核矩阵预览</h3>
               <KernelPreview kernel={gaborStep.kernel} />
               <p className="mt-3 text-xs leading-5 text-slate-600">
                 蓝色格表示正权重，红色格表示负权重。核的条纹方向、正负交替和密度会随参数实时改变。
               </p>
-            </TeachingCard>
+            </div>
           </div>
+          </TeachingCard>
 
+          <TeachingCard>
           <FormulaCard
             label="当前 Gabor 响应代入"
             mathML={buildGaborResponseFormula(gaborStep.rawSum, gaborStep.kernelAbsSum, gaborStep.normalizedResponse, gaborStep.outputValue)}
             note="先对窗口与核逐项相乘求和，再除以核绝对值和做归一化，最后映射回 [0,1] 作为结果图灰度。"
+            tone="embedded"
           />
+          </TeachingCard>
 
           <TeachingCard>
             <h3 className="mb-3 text-sm font-semibold text-slate-800">逐项乘积摘要</h3>

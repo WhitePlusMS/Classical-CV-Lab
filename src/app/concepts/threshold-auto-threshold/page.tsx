@@ -6,6 +6,7 @@ import {
   ConceptLayout,
   FormulaCard,
   ImageCanvas,
+  InlineMath,
   ProcessRail,
   SelectParam,
   SliderParam,
@@ -28,7 +29,7 @@ type ThresholdMethod = 'manual' | 'otsu' | 'kittler';
 type ThresholdInputType = ThresholdSceneType | 'lenaOriginal';
 
 const METHOD_OPTIONS = [
-  { value: 'manual', label: '固定阈值 T' },
+  { value: 'manual', label: '固定阈值' },
   { value: 'otsu', label: 'OTSU 自动阈值' },
   { value: 'kittler', label: 'Kittler 梯度阈值' },
 ] as const;
@@ -128,6 +129,19 @@ function kittlerCourseThreshold(image: number[][]): number {
 
 function numberNode(value: number | string): string {
   return `<mn>${value}</mn>`;
+}
+
+function thresholdInlineMathML(value: number): string {
+  return buildInlineMathML(`<mrow><mi>T</mi><mo>=</mo>${numberNode(value)}</mrow>`);
+}
+
+function thresholdLabel(label: string, value: number): React.ReactNode {
+  return (
+    <span className="inline-flex items-baseline gap-1">
+      <span>{label}</span>
+      <InlineMath mathML={thresholdInlineMathML(value)} className="[&_math]:text-xs" />
+    </span>
+  );
 }
 
 function byteValue(value: number): number {
@@ -342,7 +356,7 @@ function ThresholdCurvePanel({
         </div>
         <div className="flex flex-wrap gap-2 text-xs">
           <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-600">
-            T = {threshold}
+            <InlineMath mathML={thresholdInlineMathML(threshold)} className="[&_math]:text-xs" />
           </span>
           <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-amber-700">
             {method === 'manual' ? '人工指定' : method === 'otsu' ? 'OTSU 最大类间方差' : 'Kittler 梯度加权'}
@@ -384,7 +398,7 @@ function ThresholdCurvePanel({
         />
 
         <line x1={xFor(threshold)} y1={plotTop} x2={xFor(threshold)} y2={height - plotBottom} stroke="#ef4444" strokeWidth="3" />
-        <text x={xFor(threshold) + 8} y={plotTop + 16} fontSize="13" fill="#dc2626">T = {threshold}</text>
+        <text x={xFor(threshold) + 8} y={plotTop + 16} fontSize="13" fill="#dc2626">阈值 {threshold}</text>
 
         {[0, 64, 128, 192, 255].map(value => (
           <g key={value}>
@@ -404,7 +418,7 @@ function countNonZero(image: GrayscaleImage): number {
 }
 
 export default function ThresholdAutoThresholdPage() {
-  const [sceneType, setSceneType] = useState<ThresholdInputType>('bimodal');
+  const [sceneType, setSceneType] = useState<ThresholdInputType>('lenaOriginal');
   const [method, setMethod] = useState<ThresholdMethod>('otsu');
   const [manualThreshold, setManualThreshold] = useState(128);
   const [outputMode, setOutputMode] = useState<ThresholdOutputMode>('binary');
@@ -495,7 +509,9 @@ export default function ThresholdAutoThresholdPage() {
 
       <div className="shrink-0 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-center shadow-[0_10px_24px_rgba(245,158,11,0.12)]">
         <div className="text-[10px] font-semibold tracking-[0.12em] text-amber-700">阈值判定</div>
-        <div className="mt-1 text-2xl font-bold tabular-nums text-amber-800">T = {threshold}</div>
+        <div className="mt-1 tabular-nums text-amber-800">
+          <InlineMath mathML={thresholdInlineMathML(threshold)} className="[&_math]:text-2xl [&_math]:font-bold" />
+        </div>
         <div className="mt-1 text-[11px] text-amber-700">
           {method === 'manual' ? '固定阈值' : method === 'otsu' ? 'OTSU 自动阈值' : 'Kittler 梯度阈值'}
         </div>
@@ -531,32 +547,35 @@ export default function ThresholdAutoThresholdPage() {
 
   const stepDetails = (
     <div className="space-y-5">
-      <section className="space-y-4">
+      <TeachingCard>
         <h2 className="text-sm font-semibold text-slate-800">阈值来源：决定 T 从哪里来</h2>
         <div className="space-y-4">
           <FormulaCard
             label="固定阈值分割"
             mathML={fixedThresholdFormulaMathML(threshold, sampleSrc, sampleFixedDst)}
             note="固定阈值由人工给定，适合光照稳定、目标与背景灰度差异明确的场景。"
+            tone="embedded"
           />
           <FormulaCard
             label="OTSU 最大类间方差"
             mathML={otsuFormulaMathML(otsuThresholdValue, bestOtsuVariance)}
             note="OTSU 遍历全部候选阈值，选择背景类与目标类之间类间方差最大的阈值。"
+            tone="embedded"
           />
           <FormulaCard
             label="Kittler 梯度加权阈值"
             mathML={kittlerFormulaMathML(kittlerResult.threshold, kittlerResult.weightedGraySum, kittlerResult.gradientSum)}
             note="课件版 Kittler 使用梯度作为权重，使边缘附近的灰度对全局阈值贡献更大。"
+            tone="embedded"
           />
         </div>
-      </section>
+      </TeachingCard>
 
-      <section className="border-t border-slate-200 pt-4">
+      <TeachingCard>
         <h2 className="text-sm font-semibold text-slate-800">输出类型：决定得到 T 后如何生成 dst 图像</h2>
         <p className="mt-2 text-xs leading-6 text-slate-600">
           OpenCV 的 `threshold_type` 包含两类信息：一类是输出规则，例如 BINARY、TRUNC、TOZERO；另一类是自动选阈值标志，例如 OTSU。
-          “阈值方法”表示 T 的来源，“输出类型”表示同一个 T 代入后每个像素如何写入结果图。
+          “阈值方法”表示 <InlineMath mathML={buildInlineMathML('<mi>T</mi>')} className="[&_math]:text-xs" /> 的来源，“输出类型”表示同一个 <InlineMath mathML={buildInlineMathML('<mi>T</mi>')} className="[&_math]:text-xs" /> 代入后每个像素如何写入结果图。
         </p>
         <div className="mt-3 grid gap-3 text-xs leading-6 text-slate-600 md:grid-cols-2">
           <div className="border-l-2 border-amber-300 pl-3">
@@ -565,7 +584,17 @@ export default function ThresholdAutoThresholdPage() {
           </div>
           <div className="border-l-2 border-emerald-300 pl-3">
             <div className="font-semibold text-emerald-700">输出规则</div>
-            <p>输出类型不重新计算阈值，只规定 `src(x,y)` 与 T 比较后写入 0、最大值、阈值或原灰度。</p>
+            <p>
+              输出类型不重新计算阈值，只规定
+              {' '}
+              <InlineMath mathML={buildInlineMathML('<mrow><mi>src</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo></mrow>')} className="[&_math]:text-xs" />
+              {' '}
+              与
+              {' '}
+              <InlineMath mathML={buildInlineMathML('<mi>T</mi>')} className="[&_math]:text-xs" />
+              {' '}
+              比较后写入 0、最大值、阈值或原灰度。
+            </p>
           </div>
         </div>
         <FormulaCard
@@ -573,22 +602,27 @@ export default function ThresholdAutoThresholdPage() {
           label={`当前输出类型：${OUTPUT_MODE_TEXT[outputMode].name}`}
           mathML={modeFormulaMathML(outputMode, sampleSrc, threshold, sampleDst)}
           note={OUTPUT_MODE_TEXT[outputMode].description}
+          tone="embedded"
         />
-      </section>
+      </TeachingCard>
 
-      <section className="border-t border-slate-200 pt-4">
+      <TeachingCard>
         <h2 className="text-sm font-semibold text-slate-800">同一输入下的预设结果对照</h2>
         <p className="mt-2 text-xs leading-6 text-slate-600">
-          下列结果均来自当前灰度图。三种阈值来源使用相同的 BINARY 输出规则，因此差异只来自阈值 T 的选择方式。
+          下列结果均来自当前灰度图。三种阈值来源使用相同的 BINARY 输出规则，因此差异只来自阈值
+          {' '}
+          <InlineMath mathML={buildInlineMathML('<mi>T</mi>')} className="[&_math]:text-xs" />
+          {' '}
+          的选择方式。
         </p>
         <div className="mt-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[
-            { label: '原始灰度图', image: originalImage, hint: '输入' },
-            { label: `固定阈值 T=${manualThreshold}`, image: manualBinary, hint: '人工指定' },
-            { label: `OTSU T=${otsuThresholdValue}`, image: otsuBinary, hint: '类间方差最大' },
-            { label: `Kittler T=${kittlerResult.threshold}`, image: kittlerBinary, hint: '梯度加权' },
+            { id: 'original', label: '原始灰度图', image: originalImage, hint: '输入' },
+            { id: 'manual', label: thresholdLabel('固定阈值', manualThreshold), image: manualBinary, hint: '人工指定' },
+            { id: 'otsu', label: thresholdLabel('OTSU', otsuThresholdValue), image: otsuBinary, hint: '类间方差最大' },
+            { id: 'kittler', label: thresholdLabel('Kittler', kittlerResult.threshold), image: kittlerBinary, hint: '梯度加权' },
           ].map(item => (
-            <figure key={item.label} className="space-y-2">
+            <figure key={item.id} className="space-y-2">
               <div className="flex justify-center rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
                 <ImageCanvas image={item.image} maxDisplaySize={210} showGrid={false} />
               </div>
@@ -599,7 +633,7 @@ export default function ThresholdAutoThresholdPage() {
             </figure>
           ))}
         </div>
-      </section>
+      </TeachingCard>
 
       <TeachingCard>
         <div className="text-sm font-semibold text-slate-800">课堂观察要点</div>
@@ -617,7 +651,7 @@ export default function ThresholdAutoThresholdPage() {
       <SelectParam label="示例场景" value={sceneType} onChange={handleSceneChange} options={SCENE_OPTIONS} />
       <SelectParam label="阈值方法" value={method} onChange={handleMethodChange} options={METHOD_OPTIONS} />
       {method === 'manual' ? (
-        <SliderParam label="固定阈值 T" value={manualThreshold} onChange={setManualThreshold} min={0} max={255} step={1} />
+        <SliderParam label="固定阈值" value={manualThreshold} onChange={setManualThreshold} min={0} max={255} step={1} />
       ) : (
         <div className="border-l-2 border-emerald-300 bg-emerald-50/70 px-3 py-3">
           <div className="text-xs font-medium text-emerald-700">自动计算阈值</div>
@@ -629,7 +663,7 @@ export default function ThresholdAutoThresholdPage() {
       )}
       <SelectParam label="输出类型" value={outputMode} onChange={handleOutputModeChange} options={OUTPUT_OPTIONS} />
       <div className="border-t border-slate-200 pt-3 text-[11px] leading-5 text-slate-500">
-        “阈值方法”决定 T 的来源；“输出类型”决定每个像素与 T 比较后的写入规则。
+        “阈值方法”决定 <InlineMath mathML={buildInlineMathML('<mi>T</mi>')} className="[&_math]:text-[11px]" /> 的来源；“输出类型”决定每个像素与 <InlineMath mathML={buildInlineMathML('<mi>T</mi>')} className="[&_math]:text-[11px]" /> 比较后的写入规则。
       </div>
     </div>
   );
@@ -648,7 +682,7 @@ export default function ThresholdAutoThresholdPage() {
       codeTab={<CodeViewer languages={[{ name: 'TypeScript', code: THRESHOLD_CODE_TS }]} />}
       mainVisual={mainVisual}
       imageLabels={{ input: '灰度图', output: '阈值结果' }}
-      imageHints={{ input: '目标与背景灰度差异', output: `T=${threshold}` }}
+      imageHints={{ input: '目标与背景灰度差异', output: `阈值 ${threshold}` }}
       showOriginalGrid={false}
       originalRegionMarker="dot"
       singlePageScroll

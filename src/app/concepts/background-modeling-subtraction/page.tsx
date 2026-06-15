@@ -11,6 +11,7 @@ import {
   FlowNode,
   FormulaCard,
   ImageCanvas,
+  InlineMath,
   ProcessRail,
   SelectParam,
   SliderParam,
@@ -273,6 +274,10 @@ const MIXTURE_DETECT_ALL = buildInlineMathML(
   '<mtr><mtd><mtext>前景:</mtext><mo>|</mo><msub><mi>I</mi><mi>t</mi></msub><mo>-</mo><msub><mi>μ</mi><mi>i</mi></msub><mo>|</mo><mo>&gt;</mo><mi>D</mi><msub><mi>δ</mi><mi>i</mi></msub><mo>,</mo><mi>i</mi><mo>=</mo><mn>1</mn><mo>,</mo><mn>2</mn><mo>,</mo><mo>⋯</mo><mo>,</mo><mi>B</mi></mtd></mtr></mtable></mrow>'
 );
 
+function inlineMath(body: string): string {
+  return buildInlineMathML(`<mrow>${body}</mrow>`);
+}
+
 
 function grayAt(image: number[][], x: number, y: number): number {
   return Math.round((image[y]?.[x] ?? 0) * 255);
@@ -373,6 +378,15 @@ export default function BackgroundModelingSubtractionPage() {
     : `|${currentGray} - ${backgroundGray}| = ${diffGray}，T = ${threshold}`;
   const decisionText = maskValue > 0 ? '前景运动目标（D=1）' : '背景（D=0）';
   const decisionClassName = maskValue > 0 ? 'font-semibold text-red-600' : 'font-semibold text-emerald-600';
+  const currentPixelMath = inlineMath(`<mi>I</mi><mo>(</mo><mn>${currentPosition.x}</mn><mo>,</mo><mn>${currentPosition.y}</mn><mo>)</mo><mo>=</mo><mn>${currentGray}</mn>`);
+  const deviationMath = inlineMath(`<mi>δ</mi><mo>(</mo><mn>${currentPosition.x}</mn><mo>,</mo><mn>${currentPosition.y}</mn><mo>)</mo><mo>=</mo><mn>${deviationGray}</mn>`);
+  const differenceMath = inlineMath(`<mo>|</mo><mi>I</mi><mo>-</mo><mi>B</mi><mo>|</mo><mo>=</mo><mo>|</mo><mn>${currentGray}</mn><mo>-</mo><mn>${backgroundGray}</mn><mo>|</mo><mo>=</mo><mn>${diffGray}</mn>`);
+  const decisionRuleMath = model === 'singleGaussian'
+    ? inlineMath('<mi>D</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>=</mo><mo>{</mo><mn>1</mn><mtext> 当 </mtext><mo>|</mo><mi>I</mi><mo>-</mo><mi>μ</mi><mo>|</mo><mo>&gt;</mo><mn>2.5</mn><mi>δ</mi><mo>;</mo><mn>0</mn><mtext> 其他</mtext><mo>}</mo>')
+    : inlineMath('<msub><mi>D</mi><mi>t</mi></msub><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>=</mo><mo>{</mo><mn>1</mn><mtext> 当 </mtext><mo>|</mo><msub><mi>I</mi><mi>t</mi></msub><mo>-</mo><msub><mi>B</mi><mi>t</mi></msub><mo>|</mo><mo>&gt;</mo><mi>T</mi><mo>;</mo><mn>0</mn><mtext> 其他</mtext><mo>}</mo>');
+  const comparisonMath = model === 'singleGaussian'
+    ? inlineMath(`<mo>|</mo><mi>I</mi><mo>-</mo><mi>μ</mi><mo>|</mo><mo>=</mo><mn>${diffGray}</mn><mo>,</mo><mn>2.5</mn><mi>δ</mi><mo>=</mo><mn>${gaussianLimit}</mn>`)
+    : inlineMath(`<mo>|</mo><msub><mi>I</mi><mi>t</mi></msub><mo>-</mo><msub><mi>B</mi><mi>t</mi></msub><mo>|</mo><mo>=</mo><mn>${diffGray}</mn><mo>,</mo><mi>T</mi><mo>=</mo><mn>${threshold}</mn>`);
   const trainingWindowEnd = Math.min(7, Math.max(0, currentFrameIndex - 1));
   const trainingWindowStart = Math.max(0, trainingWindowEnd - 4);
   const mainVisual = (
@@ -651,10 +665,10 @@ export default function BackgroundModelingSubtractionPage() {
         </div>
         <div className="mt-3 grid gap-2 text-xs leading-5 text-slate-600 md:grid-cols-3">
           <div className="rounded-xl bg-red-50 px-3 py-2 text-red-700">
-            红条 I<sub>t</sub>：当前像素观测值，当前帧为 {currentGray}。
+            红条 <InlineMath mathML={inlineMath('<msub><mi>I</mi><mi>t</mi></msub>')} />：当前像素观测值，当前帧为 {currentGray}。
           </div>
           <div className="rounded-xl bg-amber-50 px-3 py-2 text-amber-800">
-            黄条 B<sub>t</sub>/μ<sub>t</sub>：背景估计，当前帧为 {backgroundGray}。
+            黄条 <InlineMath mathML={inlineMath('<msub><mi>B</mi><mi>t</mi></msub><mo>/</mo><msub><mi>μ</mi><mi>t</mi></msub>')} />：背景估计，当前帧为 {backgroundGray}。
           </div>
           <div className="rounded-xl bg-slate-50 px-3 py-2">
             下方圆点：红色表示该帧判为前景，绿色表示背景。
@@ -750,7 +764,7 @@ export default function BackgroundModelingSubtractionPage() {
             <div className="mb-2 text-xs font-semibold text-slate-700">前 K 帧训练序列</div>
             <div className="flex gap-2">
               {trainingFrames.map((frame, index) => (
-                <div key={`mean-frame-${index}`} className="shrink-0 rounded-xl border border-slate-200 bg-white px-2 py-2">
+                <div key={`mean-frame-${index}`} className="shrink-0 rounded-lg border border-slate-200 bg-slate-100 px-2 py-2">
                   <ImageCanvas image={frame} maxDisplaySize={58} showGrid={false} highlightPixel={currentPosition} />
                   <div className="mt-1 text-center font-mono text-[10px] text-slate-500">
                     I{index + 1}={trainingPixelValues[index]}
@@ -779,7 +793,7 @@ export default function BackgroundModelingSubtractionPage() {
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
                 <div className="font-semibold text-slate-800">历史帧与当前帧分工</div>
-                <div className="mt-1">历史帧只用于估计 B，当前帧 I<sub>t</sub> 只用于和 B 做差分判定。</div>
+                <div className="mt-1">历史帧只用于估计 B，当前帧 <InlineMath mathML={inlineMath('<msub><mi>I</mi><mi>t</mi></msub>')} /> 只用于和 B 做差分判定。</div>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
                 <div className="font-semibold text-slate-800">课件默认值映射</div>
@@ -789,7 +803,7 @@ export default function BackgroundModelingSubtractionPage() {
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-6 text-slate-700">
               <div className="font-semibold text-slate-800">当前帧判定</div>
               <div className="mt-1">
-                |I<sub>t</sub> - B<sub>t</sub>| = |{currentGray} - {backgroundGray}| = {diffGray}，
+                <InlineMath mathML={inlineMath(`<mo>|</mo><msub><mi>I</mi><mi>t</mi></msub><mo>-</mo><msub><mi>B</mi><mi>t</mi></msub><mo>|</mo><mo>=</mo><mo>|</mo><mn>${currentGray}</mn><mo>-</mo><mn>${backgroundGray}</mn><mo>|</mo><mo>=</mo><mn>${diffGray}</mn>`)} />，
                 T = {threshold}，结果：
                 <span className={decisionClassName}> {decisionText}</span>
               </div>
@@ -816,19 +830,19 @@ export default function BackgroundModelingSubtractionPage() {
         </div>
         <div className="grid gap-3 md:grid-cols-3">
           <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-3">
-            <div className="mb-2 text-xs font-semibold text-red-700">当前帧 I<sub>t</sub></div>
+            <div className="mb-2 text-xs font-semibold text-red-700">当前帧 <InlineMath mathML={inlineMath('<msub><mi>I</mi><mi>t</mi></msub>')} /></div>
             <ImageCanvas image={result.current} maxDisplaySize={150} showGrid={false} highlightPixel={currentPosition} />
             <div className="mt-2 font-mono text-sm font-semibold text-red-700">I = {currentGray}</div>
           </div>
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3">
-            <div className="mb-2 text-xs font-semibold text-amber-700">上一背景 B<sub>t-1</sub></div>
+            <div className="mb-2 text-xs font-semibold text-amber-700">上一背景 <InlineMath mathML={inlineMath('<msub><mi>B</mi><mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow></msub>')} /></div>
             <ImageCanvas image={previousBackgroundImage} maxDisplaySize={150} showGrid={false} highlightPixel={currentPosition} />
-            <div className="mt-2 font-mono text-sm font-semibold text-amber-800">B<sub>t-1</sub> = {previousBackgroundGray}</div>
+            <div className="mt-2 font-mono text-sm font-semibold text-amber-800"><InlineMath mathML={inlineMath(`<msub><mi>B</mi><mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow></msub><mo>=</mo><mn>${previousBackgroundGray}</mn>`)} /></div>
           </div>
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3">
             <div className="mb-2 text-xs font-semibold text-emerald-700">更新后背景</div>
             <ImageCanvas image={result.background} maxDisplaySize={150} showGrid={false} highlightPixel={currentPosition} />
-            <div className="mt-2 font-mono text-sm font-semibold text-emerald-700">B<sub>t</sub> ≈ {adaptiveUpdatedGray}</div>
+            <div className="mt-2 font-mono text-sm font-semibold text-emerald-700"><InlineMath mathML={inlineMath(`<msub><mi>B</mi><mi>t</mi></msub><mo>≈</mo><mn>${adaptiveUpdatedGray}</mn>`)} /></div>
           </div>
         </div>
         <FormulaCard
@@ -840,7 +854,7 @@ export default function BackgroundModelingSubtractionPage() {
         <div className="mt-3 grid gap-3 text-xs leading-5 text-slate-700 md:grid-cols-3">
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
             <div className="font-semibold text-slate-800">初始化</div>
-            <div className="mt-1">第一帧可直接作为初始背景：B<sub>1</sub>(x,y)=I<sub>1</sub>(x,y)。</div>
+            <div className="mt-1">第一帧可直接作为初始背景：<InlineMath mathML={inlineMath('<msub><mi>B</mi><mn>1</mn></msub><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>=</mo><msub><mi>I</mi><mn>1</mn></msub><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo>')} />。</div>
           </div>
           <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">
             <div className="font-semibold text-blue-800">两项加权</div>
@@ -848,7 +862,7 @@ export default function BackgroundModelingSubtractionPage() {
           </div>
           <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2">
             <div className="font-semibold text-amber-800">递推闭环</div>
-            <div className="mt-1">本轮更新后的 B<sub>t</sub> 会在下一帧成为 B<sub>t-1</sub>，这就是课件中“前一背景 = 当前背景”的含义。</div>
+            <div className="mt-1">本轮更新后的 <InlineMath mathML={inlineMath('<msub><mi>B</mi><mi>t</mi></msub>')} /> 会在下一帧成为 <InlineMath mathML={inlineMath('<msub><mi>B</mi><mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow></msub>')} />，这就是课件中“前一背景 = 当前背景”的含义。</div>
           </div>
         </div>
       </TeachingCard>
@@ -862,7 +876,7 @@ export default function BackgroundModelingSubtractionPage() {
           <div>
             <h2 className="text-sm font-semibold text-slate-800">单高斯模型动态推导</h2>
             <p className="mt-1 text-xs leading-5 text-slate-500">
-              当前像素用一个高斯分布描述背景，重点看 I<sub>t</sub> 是否落在 μ ± 2.5δ 区间内。
+              当前像素用一个高斯分布描述背景，重点看 <InlineMath mathML={inlineMath('<msub><mi>I</mi><mi>t</mi></msub>')} /> 是否落在 <InlineMath mathML={inlineMath('<mi>μ</mi><mo>±</mo><mn>2.5</mn><mi>δ</mi>')} /> 区间内。
             </p>
           </div>
           <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-800">
@@ -892,7 +906,7 @@ export default function BackgroundModelingSubtractionPage() {
             </div>
             <div className="mt-3 grid gap-2 text-xs leading-5 text-slate-600 md:grid-cols-3">
               <div className="rounded-xl bg-sky-50 px-3 py-2">下界 μ - 2.5δ = {lowerGaussianBound}</div>
-              <div className="rounded-xl bg-sky-50 px-3 py-2">当前 I<sub>t</sub> = {currentGray}</div>
+              <div className="rounded-xl bg-sky-50 px-3 py-2">当前 <InlineMath mathML={inlineMath('<msub><mi>I</mi><mi>t</mi></msub>')} /> = {currentGray}</div>
               <div className="rounded-xl bg-sky-50 px-3 py-2">上界 μ + 2.5δ = {upperGaussianBound}</div>
             </div>
           </div>
@@ -984,11 +998,11 @@ export default function BackgroundModelingSubtractionPage() {
             </div>
           </div>
           <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-3">
-            <div className="mb-2 text-xs font-semibold text-sky-700">3. 按 ω/δ 排序</div>
+            <div className="mb-2 text-xs font-semibold text-sky-700">3. 按 <InlineMath mathML={inlineMath('<mi>ω</mi><mo>/</mo><mi>δ</mi>')} /> 排序</div>
             <div className="space-y-2 text-xs leading-5">
               {sortedMixtureComponents.map((component, index) => (
                 <div key={`sort-${index}`} className="rounded-xl border border-sky-100 bg-sky-50 px-3 py-2">
-                  G{index + 1}: ω/δ = {(component.weight / Math.max(0.001, component.sigma)).toFixed(2)}
+                  G{index + 1}: <InlineMath mathML={inlineMath(`<mi>ω</mi><mo>/</mo><mi>δ</mi><mo>=</mo><mn>${(component.weight / Math.max(0.001, component.sigma)).toFixed(2)}</mn>`)} />
                   <span className={component.background ? 'ml-2 font-semibold text-emerald-700' : 'ml-2 font-semibold text-red-600'}>
                     {component.background ? '背景' : '前景候选'}
                   </span>
@@ -1013,7 +1027,7 @@ export default function BackgroundModelingSubtractionPage() {
             </div>
             <div className="mt-3 grid gap-2 sm:grid-cols-3">
               {sortedMixtureComponents.map((component, index) => (
-                <div key={`mixture-peak-${index}`} className="rounded-xl border border-white bg-white px-3 py-2">
+                <div key={`mixture-peak-${index}`} className="rounded-lg border border-emerald-100 bg-emerald-50/70 px-3 py-2">
                   <div className="font-semibold text-slate-800">G{index + 1}</div>
                   <div className="mt-1 font-mono text-[11px] text-slate-500">
                     ω={component.weight.toFixed(2)} / μ={grayValue(component.mean)} / δ={grayValue(component.sigma)}
@@ -1055,7 +1069,7 @@ export default function BackgroundModelingSubtractionPage() {
             label="背景选择与前景检测"
             mathML={MIXTURE_DETECT_ALL}
             tone="embedded"
-            note="按 ω/δ 排序后，累计权重大于阈值的分量视为背景分布。"
+            note={<><InlineMath mathML={inlineMath('<mi>ω</mi><mo>/</mo><mi>δ</mi>')} /> 排序后，累计权重大于阈值的分量视为背景分布。</>}
           />
         </div>
       </TeachingCard>
@@ -1094,33 +1108,38 @@ export default function BackgroundModelingSubtractionPage() {
           对当前位置 ({currentPosition.x}, {currentPosition.y}) 和第 {currentFrameIndex + 1} 帧做统一代入。
         </p>
         <div className="space-y-3 text-xs leading-6">
-          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-            <p className="font-semibold text-slate-800">当前帧像素 I(x,y)：</p>
-              I({currentPosition.x}, {currentPosition.y}) = {currentGray}
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+            <p className="font-semibold text-slate-800">当前帧像素：</p>
+            <div className="mt-1 text-slate-700">
+              <InlineMath mathML={currentPixelMath} />
+            </div>
          </div>
           {model === 'singleGaussian' ? (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <p className="font-semibold text-slate-800">标准差 δ(x,y)：</p>
-              <p className="text-slate-600">
-                δ({currentPosition.x}, {currentPosition.y}) = {deviationGray}
-              </p>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+              <p className="font-semibold text-slate-800">标准差：</p>
+              <div className="mt-1 text-slate-700">
+                <InlineMath mathML={deviationMath} />
+              </div>
               <p className="mt-1 text-xs text-slate-500">
-                前景判定阈值 D·δ = 2.5 × {deviationGray} = {Math.round(2.5 * deviationGray)}，|I-B| = {diffGray}
+                前景判定阈值 <InlineMath mathML={inlineMath(`<mi>D</mi><mo>·</mo><mi>δ</mi><mo>=</mo><mn>2.5</mn><mo>×</mo><mn>${deviationGray}</mn><mo>=</mo><mn>${Math.round(2.5 * deviationGray)}</mn>`)} />，<InlineMath mathML={inlineMath(`<mo>|</mo><mi>I</mi><mo>-</mo><mi>B</mi><mo>|</mo><mo>=</mo><mn>${diffGray}</mn>`)} />
               </p>
             </div>
           ) : null}
-         <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+         <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
            <p className="font-semibold text-slate-800">背景减除差值：</p>
-            <p className="text-slate-600">
-              |I – B| = |{currentGray} – {backgroundGray}| = {diffGray}
-            </p>
+            <div className="mt-1 text-slate-700">
+              <InlineMath mathML={differenceMath} />
+            </div>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
             <p className="font-semibold text-slate-800">前景判定 D(x,y)：</p>
-            <p className="text-slate-600">
-              D(x,y) = {'{'} 1 当 {activeRuleText}; 0 其他 {'}'}
-              &emsp;代入：{activeComparisonText}
-              &emsp;结果：<span className={decisionClassName}>{decisionText}</span>
+            <div className="mt-1 text-slate-700">
+              <InlineMath mathML={decisionRuleMath} />
+            </div>
+            <p className="mt-1 text-slate-600">
+              代入：<InlineMath mathML={comparisonMath} />
+              <span className="mx-2">，</span>
+              结果：<span className={decisionClassName}>{decisionText}</span>
             </p>
           </div>
         </div>
@@ -1174,11 +1193,11 @@ export default function BackgroundModelingSubtractionPage() {
             单高斯演示使用 μ 和 δ 判定，不使用前景阈值 T。α 控制 μ/δ 的逐帧更新速度，λ 固定为 2.5。
           </div>
           <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+            <div className="rounded-lg border border-sky-100 bg-sky-50/70 px-3 py-2">
               <div className="text-slate-500">μ(x,y)</div>
               <div className="mt-1 font-mono text-base font-semibold text-slate-800">{backgroundGray}</div>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+            <div className="rounded-lg border border-sky-100 bg-sky-50/70 px-3 py-2">
               <div className="text-slate-500">2.5·δ</div>
               <div className="mt-1 font-mono text-base font-semibold text-slate-800">{gaussianLimit}</div>
             </div>
@@ -1196,7 +1215,7 @@ export default function BackgroundModelingSubtractionPage() {
           </div>
           <div className="space-y-2">
             {result.mixtureComponents.map((component, index) => (
-              <div key={`param-mixture-${index}`} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs">
+              <div key={`param-mixture-${index}`} className="rounded-lg border border-emerald-100 bg-emerald-50/70 px-3 py-2 text-xs">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-semibold text-slate-700">G{index + 1}</span>
                   <span className={component.background ? 'text-emerald-600' : 'text-red-600'}>

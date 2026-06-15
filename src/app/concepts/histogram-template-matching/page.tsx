@@ -631,12 +631,14 @@ export default function HistogramTemplateMatchingPage() {
             label={templateMethod === 'ssd' ? 'SSD 平方差匹配' : 'SAD 绝对差匹配'}
             mathML={templateFormula}
             note={`当前公式只代入模板 T 与当前窗口 Sxy：当前窗口 (${templateResult.currentWindow.x}, ${templateResult.currentWindow.y}) 的分数为 ${formatScore(templateResult.currentScore)}。${templateMethod === 'ssd' ? 'SSD' : 'SAD'} 越小表示当前窗口越接近模板；热力图最优参考分数为 ${formatScore(templateResult.bestScore)}。`}
+            tone="embedded"
           />
         ) : (
           <FormulaCard
             label={`${HIST_METHOD_OPTIONS.find(item => item.value === histMethod)?.label} 代表 bin 代入`}
             mathML={histFormula}
             note={`上式只展开前 ${histogramResult.sampleContributions.length} 个 bin，完整分数使用 16 个 bin 汇总；该方法${scoreDirectionText(histMethod)}。`}
+            tone="embedded"
           />
         )}
       </TeachingCard>
@@ -661,14 +663,14 @@ export default function HistogramTemplateMatchingPage() {
         </div>
       </TeachingCard>
 
-      <section className="border-t border-slate-200 pt-5">
+      <TeachingCard>
         <h2 className="mb-3 text-sm font-semibold text-slate-800">教材补充</h2>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {TEXTBOOK_IMAGES.map(image => (
             <CourseImage key={image.src} src={image.src} label={image.label} />
           ))}
         </div>
-      </section>
+      </TeachingCard>
     </div>
   );
 

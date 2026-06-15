@@ -569,10 +569,10 @@ export default function HaarLbpFeatureVectorPage() {
                 {mode === 'haar-integral' && firstRegion ? (
                   <div className="space-y-2 text-xs text-amber-800">
                     <div className="grid grid-cols-2 gap-2">
-                      <span className="rounded-lg border border-amber-200 bg-white px-2 py-1">A={firstRegion.corners.a}</span>
-                      <span className="rounded-lg border border-amber-200 bg-white px-2 py-1">B={firstRegion.corners.b}</span>
-                      <span className="rounded-lg border border-amber-200 bg-white px-2 py-1">C={firstRegion.corners.c}</span>
-                      <span className="rounded-lg border border-amber-200 bg-white px-2 py-1">D={firstRegion.corners.d}</span>
+                      <span className="rounded-lg border border-amber-100 bg-amber-50/70 px-2 py-1">A={firstRegion.corners.a}</span>
+                      <span className="rounded-lg border border-amber-100 bg-amber-50/70 px-2 py-1">B={firstRegion.corners.b}</span>
+                      <span className="rounded-lg border border-amber-100 bg-amber-50/70 px-2 py-1">C={firstRegion.corners.c}</span>
+                      <span className="rounded-lg border border-amber-100 bg-amber-50/70 px-2 py-1">D={firstRegion.corners.d}</span>
                     </div>
                     <p className="leading-5">用四个积分值直接得到第一个矩形区域和：{firstRegion.sum}</p>
                   </div>
@@ -581,7 +581,7 @@ export default function HaarLbpFeatureVectorPage() {
                     <p>{HAAR_TEMPLATE_NOTES[haarTemplateType]}</p>
                     <div className="grid grid-cols-2 gap-2">
                       <span className="rounded-lg border border-slate-300 bg-slate-800 px-2 py-1 text-white">黑区求和</span>
-                      <span className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-slate-700">白区求和</span>
+                      <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-slate-700">白区求和</span>
                     </div>
                   </div>
                 )}
@@ -592,7 +592,7 @@ export default function HaarLbpFeatureVectorPage() {
               <FlowNode tone="emerald" className="haar-lbp-anchor-result">
                 <div className="mb-2 text-[11px] font-semibold uppercase text-emerald-700">当前响应</div>
                 <div className="grid gap-2 text-xs">
-                  <div className="rounded-xl border border-emerald-200 bg-white px-3 py-2">
+                  <div className="rounded-lg border border-emerald-100 bg-emerald-50/70 px-3 py-2">
                     <div className="text-[10px] text-emerald-600">黑区和 - 白区和</div>
                     <div className="font-mono text-lg font-bold text-emerald-800">
                       {haarStep.blackSum} - {haarStep.whiteSum} = {haarStep.featureValue}
@@ -699,7 +699,7 @@ export default function HaarLbpFeatureVectorPage() {
                       className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-xs ${
                         region.tone === 'black'
                           ? 'border-slate-700 bg-slate-800 text-white'
-                          : 'border-slate-200 bg-white text-slate-700'
+                          : 'border-slate-200 bg-slate-50 text-slate-700'
                       }`}
                     >
                       <span>
@@ -829,7 +829,7 @@ export default function HaarLbpFeatureVectorPage() {
               {lbpStep.vectorPreview.map((value, index) => (
                 <span
                   key={`vector-preview-${index}`}
-                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 font-mono text-[11px] text-slate-600"
+                  className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 font-mono text-[11px] text-slate-600"
                 >
                   v[{index}]={formatNumber(value)}
                 </span>
@@ -882,7 +882,7 @@ export default function HaarLbpFeatureVectorPage() {
 
       <div className="rounded-2xl border border-blue-200 bg-blue-50 px-3 py-3">
         <div className="text-xs font-semibold text-blue-700">当前窗口</div>
-        <div className="mt-2 rounded-xl bg-white/80 px-3 py-2 font-mono text-sm font-semibold text-blue-800">
+        <div className="mt-2 rounded-lg border border-blue-100 bg-blue-50/80 px-3 py-2 font-mono text-sm font-semibold text-blue-800">
           ({safePosition.x}, {safePosition.y}) / {windowSize}x{windowSize}
         </div>
         <p className="mt-2 text-xs leading-5 text-blue-700">

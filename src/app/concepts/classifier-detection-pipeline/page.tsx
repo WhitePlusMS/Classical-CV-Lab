@@ -975,59 +975,68 @@ export default function ClassifierDetectionPipelinePage() {
             <MetricCard label="训练产物" value="分类器参数" tone="amber" />
           </div>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <TeachingCard>
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4">
               <div className="mb-2 text-xs font-semibold text-emerald-700">正样本窗口</div>
               <ImageCanvas image={positiveTrainingSample} maxDisplaySize={130} showGrid />
               <p className="mt-2 text-xs leading-5 text-slate-600">
                 该窗口覆盖目标中心区域，标签为 +1。
               </p>
-            </TeachingCard>
-            <TeachingCard>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
               <div className="mb-2 text-xs font-semibold text-slate-700">负样本窗口</div>
               <ImageCanvas image={negativeTrainingSample} maxDisplaySize={130} showGrid />
               <p className="mt-2 text-xs leading-5 text-slate-600">
                 该窗口只包含背景纹理，标签为 -1。
               </p>
-            </TeachingCard>
+            </div>
           </div>
         </TeachingCard>
       )}
 
       {taskStage === 'feature' && currentScanStep && (
-        <div className="space-y-4">
+        <>
+          <TeachingCard>
           <FormulaCard
             label="当前 Haar 特征值"
             mathML={buildHaarFeatureFormula(currentScanStep)}
             note="黑区与白区来自当前窗口内的 Haar 模板划分。特征值越能区分目标结构，越适合作为分类器输入。"
+            tone="embedded"
           />
+          </TeachingCard>
           <TeachingCard>
             <h3 className="mb-3 text-sm font-semibold text-slate-800">当前窗口灰度矩阵</h3>
             <WindowMatrix image={currentScanStep.windowStep.inputRegion} />
           </TeachingCard>
-        </div>
+        </>
       )}
 
       {taskStage === 'classifier' && (
-        <div className="space-y-4">
+        <>
+          <TeachingCard>
           <FormulaCard
             label="当前 Cascade 阶段判定"
             mathML={buildCascadeFormula(currentScanStep)}
             note="任一级拒绝后，后续级不再计算；只有全部通过的窗口才进入候选集合。"
+            tone="embedded"
           />
+          </TeachingCard>
           <TeachingCard>
             <h3 className="mb-3 text-sm font-semibold text-slate-800">逐级过滤状态</h3>
             <CascadeStageList step={currentScanStep} />
           </TeachingCard>
-        </div>
+        </>
       )}
 
       {taskStage === 'scan' && (
-        <div className="space-y-4">
+        <>
+          <TeachingCard>
           <FormulaCard
             label="扫描进度"
             mathML={buildScanProgressFormula(progress)}
             note="滑动窗口按行扫描整张图，每个位置都执行同一个 Haar + Cascade 判定过程。"
+            tone="embedded"
           />
+          </TeachingCard>
           <TeachingCard>
             <h3 className="mb-3 text-sm font-semibold text-slate-800">扫描统计</h3>
             <div className="grid gap-3 md:grid-cols-4">
@@ -1037,16 +1046,19 @@ export default function ClassifierDetectionPipelinePage() {
               <MetricCard label="当前窗口" value={currentScanStep ? `(${currentScanStep.x},${currentScanStep.y})` : '-'} />
             </div>
           </TeachingCard>
-        </div>
+        </>
       )}
 
       {taskStage === 'result' && (
-        <div className="space-y-4">
+        <>
+          <TeachingCard>
           <FormulaCard
             label="候选框合并"
             mathML={buildScanProgressFormula(fullProgress)}
             note="多个相邻候选窗口通常对应同一个目标，需要合并成少量最终检测框。"
+            tone="embedded"
           />
+          </TeachingCard>
           <TeachingCard>
             <h3 className="mb-3 text-sm font-semibold text-slate-800">最终检测框</h3>
             {fullProgress.detections.length > 0 ? (
@@ -1064,7 +1076,7 @@ export default function ClassifierDetectionPipelinePage() {
               <p className="text-xs leading-6 text-slate-600">当前教学阈值下没有形成稳定最终框，可回到扫描步骤观察候选窗口怎样累积。</p>
             )}
           </TeachingCard>
-        </div>
+        </>
       )}
 
       {taskStage === 'compare' && (
