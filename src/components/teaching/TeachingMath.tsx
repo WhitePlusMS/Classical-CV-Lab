@@ -4,6 +4,9 @@ function classNames(...classes: Array<string | false | null | undefined>): strin
   return classes.filter(Boolean).join(' ');
 }
 
+const MATH_FONT_STACK =
+  '"Cambria Math", "STIX Two Math", "STIXGeneral", "Latin Modern Math", "Times New Roman", serif';
+
 export function buildInlineMathML(body: string): string {
   return `<math xmlns="http://www.w3.org/1998/Math/MathML">${body}</math>`;
 }
@@ -21,7 +24,22 @@ interface MathTextProps {
 }
 
 export function MathText({ mathML, className }: MathTextProps) {
-  return <span className={className} dangerouslySetInnerHTML={{ __html: normalizeMathML(mathML) }} />;
+  return (
+    <span
+      className={classNames('[&_math]:align-middle', className)}
+      style={{ fontFamily: MATH_FONT_STACK }}
+      dangerouslySetInnerHTML={{ __html: normalizeMathML(mathML) }}
+    />
+  );
+}
+
+export function InlineMath({ mathML, className }: MathTextProps) {
+  return (
+    <MathText
+      mathML={mathML}
+      className={classNames('align-middle [&_math]:inline-block [&_math]:align-middle', className)}
+    />
+  );
 }
 
 interface FormulaCardProps {
@@ -31,7 +49,7 @@ interface FormulaCardProps {
   className?: string;
   formulaClassName?: string;
   mathClassName?: string;
-  tone?: 'default' | 'embedded';
+  tone?: 'embedded';
 }
 
 export function FormulaCard({
@@ -41,7 +59,7 @@ export function FormulaCard({
   className,
   formulaClassName,
   mathClassName,
-  tone = 'default',
+  tone = 'embedded',
 }: FormulaCardProps) {
   return (
     <div className={className}>
@@ -52,9 +70,7 @@ export function FormulaCard({
       )}
       <div
         className={classNames(
-          tone === 'embedded'
-            ? 'kernel-formula-block overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 text-slate-800'
-            : 'kernel-formula-block overflow-x-auto rounded-2xl border border-slate-200 bg-[#f8f7f3] px-5 py-5 text-slate-800 shadow-[0_10px_24px_rgba(15,23,42,0.05)]',
+          'kernel-formula-block overflow-x-auto rounded-xl border border-slate-200 bg-[#f8f7f3] px-4 py-4 text-slate-800',
           formulaClassName
         )}
       >

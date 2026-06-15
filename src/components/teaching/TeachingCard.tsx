@@ -25,7 +25,7 @@ export function TeachingCard({
   return (
     <div
       className={classNames(
-        'rounded-2xl border p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)]',
+        'relative rounded-2xl border p-4 shadow-[0_10px_24px_rgba(15,23,42,0.04)] transition-shadow hover:z-10 hover:shadow-[0_16px_34px_rgba(15,23,42,0.08)] focus-within:z-10 focus-within:shadow-[0_16px_34px_rgba(15,23,42,0.08)]',
         toneClass[tone],
         className
       )}

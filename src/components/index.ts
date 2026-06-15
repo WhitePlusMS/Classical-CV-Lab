@@ -10,6 +10,7 @@ export {
   FlowColumns,
   FlowNode,
   FormulaCard,
+  InlineMath,
   MathText,
   PixelColorSwatch,
   ProcessRail,
