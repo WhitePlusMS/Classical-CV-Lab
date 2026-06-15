@@ -907,20 +907,16 @@ export default function SiftSurfScaleFeaturesPage() {
               <div className="grid gap-4 lg:grid-cols-2">
                 <TeachingCard>
                   <div className="mb-2 text-[11px] font-semibold text-red-700">待匹配图像</div>
-                  <div className="sift-match-query-image">
-                    <ImageCanvas image={keypointImage} maxDisplaySize={180} showGrid={false} />
-                  </div>
+                  <ImageCanvas image={keypointImage} maxDisplaySize={180} showGrid={false} containerClassName="sift-match-query-image" />
                   <p className="mt-2 text-xs text-slate-500">{keypoints.length} 个关键点</p>
                 </TeachingCard>
                 <TeachingCard>
                   <div className="mb-2 text-[11px] font-semibold text-emerald-700">
                     参考图像{resolvedRefImage ? `（${resolvedRefImage.label}）` : ''}
                   </div>
-                  <div className="sift-match-reference-image">
-                    {refKeypointImage && (
-                      <ImageCanvas image={refKeypointImage} maxDisplaySize={180} showGrid={false} />
-                    )}
-                  </div>
+                  {refKeypointImage && (
+                    <ImageCanvas image={refKeypointImage} maxDisplaySize={180} showGrid={false} containerClassName="sift-match-reference-image" />
+                  )}
                   <p className="mt-2 text-xs text-slate-500">{matchingResult?.referenceKeypoints.length ?? 0} 个关键点</p>
                 </TeachingCard>
               </div>
