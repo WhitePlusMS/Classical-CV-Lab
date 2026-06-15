@@ -866,7 +866,6 @@ export default function Home() {
           </div>
         </div>
       </main>
-
       {/* Footer */}
       <footer className="border-t border-slate-200 bg-white">
         <div className="mx-auto max-w-6xl px-8 py-6">
