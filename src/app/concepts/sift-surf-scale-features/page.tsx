@@ -198,24 +198,31 @@ function DoGNeighborTables({ data }: { data: NeighborComparisonsData }) {
     highlightCenter: boolean,
   ) => {
     const greaterCount = comparisons.filter(c => c.relation === 'greater').length;
+    const maxAbs = Math.max(...patch.flat().map(Math.abs), 0.001);
     return (
       <div className="flex flex-col items-center">
         <div className="mb-1 text-[10px] font-semibold text-slate-500">{label}</div>
-        <div className="grid grid-cols-3 gap-px">
+        <div className="grid grid-cols-3 gap-0.5">
           {patch.map((row, ri) =>
             row.map((val, ci) => {
               const isCenter = ri === 1 && ci === 1;
+              // 颜色热力图：正→绿，负→红，中心格加粗边框
+              const intensity = Math.min(Math.abs(val) / maxAbs, 1);
+              const bg = val > 0
+                ? `rgba(16,185,129,${0.08 + intensity * 0.55})`
+                : val < 0
+                  ? `rgba(239,68,68,${0.08 + intensity * 0.55})`
+                  : 'white';
+              const border = highlightCenter && isCenter
+                ? '2px solid rgb(239,68,68)'
+                : '1px solid rgb(226,232,240)';
               return (
                 <div
                   key={`${ri}-${ci}`}
-                  className="flex w-14 items-center justify-center border text-[9px] font-mono"
-                  style={{
-                    height: '1.75rem',
-                    backgroundColor: highlightCenter && isCenter ? 'rgba(239,68,68,0.15)' : 'white',
-                    borderColor: highlightCenter && isCenter ? 'rgb(239,68,68)' : 'rgb(226,232,240)',
-                  }}
+                  className="flex h-7 w-14 items-center justify-center text-[10px] font-mono font-semibold"
+                  style={{ backgroundColor: bg, border, borderRadius: highlightCenter && isCenter ? '3px' : '0' }}
                 >
-                  {val.toFixed(4)}
+                  {val > 0 ? '+' : ''}{val.toFixed(2)}
                 </div>
               );
             })
@@ -494,20 +501,36 @@ function stepTermHints(step: TeachingStepKey): Array<{ term: string; explanation
   }
 }
 
-function getStepEvidenceText(step: TeachingStepKey): string {
+function getStepEvidenceText(
+  step: TeachingStepKey,
+  kp: SiftKeypoint | null,
+  neighborData: NeighborComparisonsData | null,
+): string {
+  if (!kp && step !== 'overview') return '当前没有可用关键点，请先切换图像或调整参数。';
+
   switch (step) {
     case 'scale-space':
-      return '先看同一个局部结构在不同 σ 下如何从清晰细节变成稳定轮廓。尺度空间不是为了"变模糊"，而是为了让不同大小的结构都能在某一层被看清。';
-    case 'dog-detection':
-      return '先看 DoG 响应，再看它是否同时压过上中下三层的 26 个邻居。真正留下的不是"亮一点的像素"，而是跨尺度仍然突出的局部结构。';
+      return `关键点 (${kp!.x}, ${kp!.y}) 在 σ=${kp!.scale.toFixed(2)} 处被检出。不同 σ 下的高斯响应揭示该局部结构的尺度稳定性：若同一结构跨 3 层以上仍保持相似的 DoG 响应轮廓，则被判定为稳定候选点。`;
+    case 'dog-detection': {
+      if (neighborData) {
+        const upG = neighborData.prevComparisons.filter(c => c.relation === 'greater').length;
+        const sameG = neighborData.sameComparisons.filter(c => c.relation === 'greater').length;
+        const dnG = neighborData.nextComparisons.filter(c => c.relation === 'greater').length;
+        const total = neighborData.prevComparisons.length + neighborData.sameComparisons.length + neighborData.nextComparisons.length;
+        const allG = upG + sameG + dnG;
+        const allType = allG === total ? '极大值（全部大于）' : allG === 0 ? '极小值（全部小于）' : '非极值';
+        return `26 邻域比较：DoG 值 ${neighborData.currentValue.toFixed(4)} vs 上层 ${upG}/9 邻居 + 同层 ${sameG}/8 邻居 + 下层 ${dnG}/9 邻居 → ${allType}`;
+      }
+      return `DoG 极值检测通过 26 邻域跨尺度比较：同一点在上/中/下三层 DoG 中必须同时大于（或同时小于）全部 26 个邻居。`;
+    }
     case 'orientation':
-      return '先看关键点邻域里的梯度投票，再看哪一个方向的票最多。主方向记录的是局部纹理最稳定的朝向，不等于整幅图里物体的朝向。';
+      return `以关键点 (${kp!.x}, ${kp!.y}) 为中心计算 17×17 邻域梯度，按 8 方向加权投票。主方向 ${(kp!.orientation * 180 / Math.PI).toFixed(0)}° 是梯度投票最多的方向。`;
     case 'descriptor':
-      return '先把邻域切成 4×4 子区域，再统计每块的方向分布。描述子保存的是"局部梯度模式"，不是原始像素值，所以更适合跨图匹配。';
+      return `16×16 邻域划分为 4×4=16 个子区域，每个子区域统计 8 方向梯度累加 → 128 维向量。L2 归一化消除光照影响，坐标旋转到主方向消除旋转影响。`;
     case 'matching':
-      return '匹配阶段不再问"这是不是角点"，而是问"这个描述子和谁最像，而且这种相似是不是足够明显"。最近邻比值检验就是在排除模棱两可的匹配。';
+      return `对查询图中的每个关键点描述子，在参考图中找欧氏距离最近和次近的两个候选。若最近/次近 < 0.8 则为可靠匹配，否则该匹配被舍弃。`;
     default:
-      return '这张卡片应该让你围绕同一个关键点走完整条证据链：为什么它被保留、为什么有方向、为什么能被描述、最后为什么能匹配。';
+      return '从概览进入任一步骤，检查关键点如何一路从候选点变成可匹配特征。每一步的证据都基于具体数值和判定结果。';
   }
 }
 
@@ -633,7 +656,7 @@ export default function SiftSurfScaleFeaturesPage() {
   const matchCount = matches.length;
   const neighborData = stepData.neighborComparisons;
   const currentTermHints = stepTermHints(step);
-  const currentEvidenceText = getStepEvidenceText(step);
+  const currentEvidenceText = getStepEvidenceText(step, currentKeypoint, stepData.neighborComparisons);
   const currentResultText = getStepResultText(step, currentKeypoint, matchCount, neighborData, matches);
   const currentStageIndex = TASK_STAGES.findIndex(s => s.key === step);
 
@@ -854,21 +877,65 @@ export default function SiftSurfScaleFeaturesPage() {
             {currentKeypointRail}
             <TabSwitcher activeTab={activeTab} onChange={setActiveTab} />
             {activeTab === 'sift' && (
-              <div className="grid gap-4 lg:grid-cols-2">
-                <TeachingCard>
-                  <div className="mb-2 text-[11px] font-semibold text-red-700">待匹配图像</div>
-                  <ImageCanvas image={keypointImage} maxDisplaySize={180} showGrid={false} />
-                  <p className="mt-2 text-xs text-slate-500">{keypoints.length} 个关键点</p>
-                </TeachingCard>
-                <TeachingCard>
-                  <div className="mb-2 text-[11px] font-semibold text-emerald-700">
-                    参考图像{resolvedRefImage ? `（${resolvedRefImage.label}）` : ''}
+              <div className="space-y-3">
+                <div className="relative flex gap-2">
+                  {/* 左：待匹配图像 */}
+                  <div className="flex-1">
+                    <div className="mb-1 text-[10px] font-semibold text-red-700 text-center">待匹配图像</div>
+                    <ImageCanvas image={keypointImage} maxDisplaySize={180} showGrid={false} />
+                    <p className="mt-1 text-center text-[10px] text-slate-500">{keypoints.length} 个关键点</p>
                   </div>
-                  {refKeypointImage && (
-                    <ImageCanvas image={refKeypointImage} maxDisplaySize={180} showGrid={false} />
+                  {/* 中：SVG匹配连线覆盖层 */}
+                  {crossMatches.length > 0 && (
+                    <svg
+                      className="absolute inset-0 pointer-events-none"
+                      style={{ zIndex: 10 }}
+                      viewBox="0 0 200 100"
+                      preserveAspectRatio="none"
+                    >
+                      {crossMatches.slice(0, 15).map((m, i) => {
+                        const qKp = keypoints[m.queryIdx];
+                        const rKp = matchingResult?.referenceKeypoints[m.trainIdx];
+                        if (!qKp || !rKp) return null;
+                        const srcW = sourceImage[0]?.length ?? 64;
+                        const srcH = sourceImage.length || 64;
+                        const refW = (matchingResult?.referenceKeypoints.length ? (matchingResult as { referenceKeypoints: SiftKeypoint[] }).referenceKeypoints : keypoints);
+                        // 将关键点坐标映射到SVG坐标系：左图占 0-95，右图占 105-200
+                        const x1 = (qKp.x / srcW) * 95;
+                        const y1 = (qKp.y / srcH) * 100;
+                        const refSrcW = sourceImage[0]?.length ?? 64;
+                        const refSrcH = sourceImage.length || 64;
+                        const x2 = 105 + (rKp.x / refSrcW) * 95;
+                        const y2 = (rKp.y / refSrcH) * 100;
+                        const alpha = Math.max(0.2, 1 - m.distance * 2);
+                        return (
+                          <line
+                            key={i}
+                            x1={x1} y1={y1} x2={x2} y2={y2}
+                            stroke={`rgba(245,158,11,${alpha.toFixed(2)})`}
+                            strokeWidth={m.distance < 0.3 ? 2.5 : 1.2}
+                            strokeLinecap="round"
+                          />
+                        );
+                      })}
+                    </svg>
                   )}
-                  <p className="mt-2 text-xs text-slate-500">{matchingResult?.referenceKeypoints.length ?? 0} 个关键点</p>
-                </TeachingCard>
+                  {/* 右：参考图像 */}
+                  <div className="flex-1">
+                    <div className="mb-1 text-[10px] font-semibold text-emerald-700 text-center">
+                      参考图像{resolvedRefImage ? `（${resolvedRefImage.label}）` : ''}
+                    </div>
+                    {refKeypointImage && (
+                      <ImageCanvas image={refKeypointImage} maxDisplaySize={180} showGrid={false} />
+                    )}
+                    <p className="mt-1 text-center text-[10px] text-slate-500">{matchingResult?.referenceKeypoints.length ?? 0} 个关键点</p>
+                  </div>
+                </div>
+                {crossMatches.length > 0 && (
+                  <div className="text-center text-[10px] text-amber-600">
+                    连线粗细表示匹配距离：越细距离越远，越粗匹配质量越高
+                  </div>
+                )}
               </div>
             )}
             {activeTab === 'surf' && (
