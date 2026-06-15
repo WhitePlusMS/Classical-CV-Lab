@@ -1750,14 +1750,16 @@ export default function EdgeDetectionPage() {
             <div className="text-xs font-semibold text-amber-800">Canny 阶段流程</div>
             <div className="mt-2 space-y-1.5">
               {CANNY_STAGES.map((stage, idx) => (
-                <div
+                <button
                   key={stage.key}
-                  className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs cursor-pointer transition-colors ${
+                  type="button"
+                  className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40 ${
                     cannyStage === stage.key
                       ? 'border border-amber-300 bg-white text-amber-800 font-semibold'
                       : 'border border-transparent text-slate-500 hover:bg-white/50'
                   }`}
                   onClick={() => setCannyStage(stage.key)}
+                  aria-pressed={cannyStage === stage.key}
                 >
                   <span className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold ${
                     cannyStage === stage.key
@@ -1767,7 +1769,7 @@ export default function EdgeDetectionPage() {
                     {idx + 1}
                   </span>
                   <span>{stage.label}</span>
-                </div>
+                </button>
               ))}
             </div>
           </div>

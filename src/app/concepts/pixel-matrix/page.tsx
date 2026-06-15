@@ -772,9 +772,10 @@ export default function PixelMatrixPage() {
                     const pixel = colorImage[r]?.[c] ?? { r: val, g: val, b: val, gray: val };
                     const isSelected = r === row && c === col;
                     return (
-                      <div
+                      <button
                         key={`${r}-${c}`}
-                        className={`flex items-center justify-center border rounded text-[8px] font-mono cursor-pointer transition-colors ${
+                        type="button"
+                        className={`flex items-center justify-center border rounded text-[8px] font-mono transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 ${
                           isSelected
                             ? 'border-red-500 bg-red-50 text-red-700 font-bold ring-1 ring-red-400 z-10'
                             : 'border-slate-200 text-slate-500 hover:border-slate-300'
@@ -790,10 +791,12 @@ export default function PixelMatrixPage() {
                           const idx = steps.findIndex(s => s.row === r && s.col === c);
                           if (idx !== -1) setCurrentStepIndex(idx);
                         }}
+                        aria-pressed={isSelected}
+                        aria-label={`选择第 ${r + 1} 行第 ${c + 1} 列像素，灰度值 ${(pixel.gray ?? pixel.r).toFixed(2)}`}
                         title={`行 ${r + 1}, 列 ${c + 1} = ${(pixel.gray ?? pixel.r).toFixed(2)}`}
                       >
                         {displayMode === 'grayscale' ? (pixel.gray ?? pixel.r).toFixed(1) : ''}
-                      </div>
+                      </button>
                     );
                   })
                 )}

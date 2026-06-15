@@ -329,11 +329,14 @@ export default function SiftSurfScaleFeaturesPage() {
           {keypoints.slice(0, 15).map((kp, i) => (
             <button
               key={i}
+              type="button"
               onClick={() => setSelectedKpIdx(i)}
-              className={'rounded px-1 py-0.5 text-[9px] font-mono ' +
+              className={'min-h-7 rounded px-1.5 py-1 text-[9px] font-mono focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40 ' +
                 (selectedKpIdx === i
                   ? 'bg-amber-500 text-white'
                   : 'bg-white text-slate-600 hover:bg-amber-100')}
+              aria-pressed={selectedKpIdx === i}
+              aria-label={`选择第 ${i} 个关键点`}
             >
               #{i}
             </button>
@@ -705,6 +708,9 @@ export default function SiftSurfScaleFeaturesPage() {
               <img
                 src="/assets/sift-surf/gaussian-pyramid.jpg"
                 alt="高斯金字塔"
+                width={620}
+                height={548}
+                loading="lazy"
                 className="h-auto max-w-full rounded-lg"
               />
               <div className="mt-2 text-[10px] text-slate-500">
@@ -745,6 +751,9 @@ export default function SiftSurfScaleFeaturesPage() {
               <img
                 src="/assets/sift-surf/dog-pyramid.jpg"
                 alt="DoG 金字塔"
+                width={1464}
+                height={976}
+                loading="lazy"
                 className="h-auto max-w-full rounded-lg"
               />
             </TeachingCard>
@@ -764,6 +773,9 @@ export default function SiftSurfScaleFeaturesPage() {
               <img
                 src="/assets/sift-surf/dog-extreme-detection.jpg"
                 alt="DOG 极值检测 26 邻域"
+                width={618}
+                height={512}
+                loading="lazy"
                 className="h-auto max-w-full rounded-lg"
               />
               <div className="mt-2 text-[10px] text-slate-500">
@@ -815,6 +827,9 @@ export default function SiftSurfScaleFeaturesPage() {
               <img
                 src="/assets/sift-surf/orientation-histogram.jpg"
                 alt="方向直方图"
+                width={751}
+                height={318}
+                loading="lazy"
                 className="h-auto max-w-full rounded-lg"
               />
               <div className="mt-1 text-[10px] text-slate-500">直方图的峰值方向即为关键点主方向。</div>
@@ -837,6 +852,9 @@ export default function SiftSurfScaleFeaturesPage() {
               <img
                 src="/assets/sift-surf/sift-descriptor-grid.jpg"
                 alt="SIFT 描述子网格"
+                width={1426}
+                height={739}
+                loading="lazy"
                 className="h-auto max-w-full rounded-lg"
               />
               <div className="mt-1 text-[10px] text-slate-500">
@@ -848,6 +866,9 @@ export default function SiftSurfScaleFeaturesPage() {
               <img
                 src="/assets/sift-surf/coordinate-rotation.jpg"
                 alt="坐标旋转"
+                width={1484}
+                height={634}
+                loading="lazy"
                 className="h-auto max-w-full rounded-lg"
               />
               <div className="mt-1 text-[10px] text-slate-500">
@@ -931,6 +952,9 @@ export default function SiftSurfScaleFeaturesPage() {
               <img
                 src="/assets/sift-surf/integral-image.jpg"
                 alt="积分图像"
+                width={1029}
+                height={320}
+                loading="lazy"
                 className="h-auto max-w-full rounded-lg"
               />
             </TeachingCard>
@@ -951,6 +975,9 @@ export default function SiftSurfScaleFeaturesPage() {
               <img
                 src="/assets/sift-surf/surf-hessian-filters.jpg"
                 alt="SURF 滤波器"
+                width={387}
+                height={384}
+                loading="lazy"
                 className="h-auto max-w-full rounded-lg"
               />
               <div className="mt-1 text-[10px] text-slate-500">盒子滤波器对高斯二阶导数的近似（9x9 模板）。</div>
@@ -961,6 +988,9 @@ export default function SiftSurfScaleFeaturesPage() {
               <img
                 src="/assets/sift-surf/sift-surf-scale-comparison.jpg"
                 alt="SIFT 与 SURF 尺度空间对比"
+                width={1259}
+                height={640}
+                loading="lazy"
                 className="mt-2 h-auto max-w-full rounded-lg"
               />
               <div className="mt-1 text-[10px] text-slate-500">
@@ -972,6 +1002,9 @@ export default function SiftSurfScaleFeaturesPage() {
               <img
                 src="/assets/sift-surf/surf-descriptor.jpg"
                 alt="SURF 描述子"
+                width={1765}
+                height={579}
+                loading="lazy"
                 className="h-auto max-w-full rounded-lg"
               />
               <div className="mt-1 text-[10px] text-slate-500">
