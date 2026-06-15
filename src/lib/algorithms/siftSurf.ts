@@ -341,7 +341,8 @@ function computeSiftDescriptor(
           const ri = py - (kpY - 8), ci = px - (kpX - 8);
           if (ri < 0 || ri >= orientations.length || ci < 0 || ci >= (orientations[0]?.length ?? 0)) continue;
           const mag = magnitudes[ri][ci], orient = orientations[ri][ci];
-          const bin = Math.floor((orient - orientation + Math.PI) / (Math.PI / 4)) % 8;
+          const rawBin = Math.floor((orient - orientation + Math.PI) / (Math.PI / 4));
+          const bin = ((rawBin % 8) + 8) % 8;  // JS % 是余数，负数需修正
           const dist = Math.sqrt((sr - 1.5 + dy / subSize) ** 2 + (sc - 1.5 + dx / subSize) ** 2);
           hist[bin] += mag * Math.exp(-dist * dist / 2);
         }
@@ -442,6 +443,11 @@ export function computeSiftSurf(
     const result = detectExtremaCrossScale(
       dogScales[s - 1], dogScales[s], dogScales[s + 1], 0, s
     );
+    // 将关键点 scale 从索引修正为实际高斯 σ 值
+    const actualSigma = sigma * (kFactor ** s);
+    for (const kp of result.keypoints) {
+      kp.scale = actualSigma;
+    }
     // 使用复合 key：scale * h * w + y * w + x，支持跨尺度查找
     const scaleOffset = s * dogH * dogW;
     for (const [localKey, data] of result.comparisons) {
@@ -483,7 +489,9 @@ export function computeSiftSurf(
     const matches: Array<{ queryIdx: number; trainIdx: number; distance: number }> = [];
 
     // 查找选中关键点的 26 邻域比较明细
-    const cmpKey = kp.scale * dogH * dogW + kp.y * dogW + kp.x;
+    // kp.scale 已存为实际 σ 值，需反推尺度索引来查表
+    const kpScaleIndex = Math.round(Math.log(kp.scale / sigma) / Math.log(kFactor));
+    const cmpKey = kpScaleIndex * dogH * dogW + kp.y * dogW + kp.x;
     const neighborComparisons = allComparisons.get(cmpKey) ?? null;
 
     stepData = {
