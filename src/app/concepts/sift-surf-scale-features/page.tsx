@@ -963,7 +963,7 @@ export default function SiftSurfScaleFeaturesPage() {
                     </div>
                   ))}
                 </div>
-                <div className="mt-2 text-[10px] text-slate-500">比值检验阈值 0.8：d&lt;sub&gt;1&lt;/sub&gt; / d&lt;sub&gt;2&lt;/sub&gt; &lt; 0.8</div>
+                <div className="mt-2 text-[10px] text-slate-500">比值检验阈值 0.8：d<sub>1</sub> / d<sub>2</sub> &lt; 0.8</div>
               </TeachingCard>
             )}
             {(activeTab === 'sift' || activeTab === 'surf') && crossMatches.length === 0 && (
