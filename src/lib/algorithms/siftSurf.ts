@@ -479,7 +479,8 @@ export function computeSiftSurf(
     const hist = computeOrientationHistogram(magnitudes, orientations, radius);
     const { grid: siftGrid } = computeSiftDescriptor(magnitudes, orientations, kp.x, kp.y, kp.orientation);
     const { grid: surfGrid } = computeSurfDescriptor(image, kp.x, kp.y, Math.max(kp.scale, 1));
-    const matches = findMatches(topKeypoints.map(k => k.siftDescriptor), topKeypoints.map(k => k.siftDescriptor), 0.8);
+    // 跨图匹配由 computeSiftSurfMatching 负责，基础函数不生成自匹配结果
+    const matches: Array<{ queryIdx: number; trainIdx: number; distance: number }> = [];
 
     // 查找选中关键点的 26 邻域比较明细
     const cmpKey = kp.scale * dogH * dogW + kp.y * dogW + kp.x;
