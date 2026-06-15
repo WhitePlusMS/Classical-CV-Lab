@@ -43,6 +43,8 @@ export interface AnchoredOverlayPath {
   from: OverlayAnchor;
   to: OverlayAnchor;
   dashed?: boolean;
+  /** 直线模式：适合匹配连线等场景，默认 false 为贝塞尔曲线 */
+  straight?: boolean;
 }
 
 interface ResolvedOverlayPath {
@@ -51,6 +53,7 @@ interface ResolvedOverlayPath {
   from: OverlayPoint;
   to: OverlayPoint;
   dashed?: boolean;
+  straight?: boolean;
 }
 
 interface AnchoredOverlayProps {
@@ -99,7 +102,7 @@ export function AnchoredOverlay({ paths }: AnchoredOverlayProps) {
         const from = resolveAnchor(path.from);
         const to = resolveAnchor(path.to);
         if (!from || !to) return [];
-        return [{ id: path.id, tone: path.tone, from, to, dashed: path.dashed }];
+        return [{ id: path.id, tone: path.tone, from, to, dashed: path.dashed, straight: path.straight }];
       });
 
       setResolvedPaths(nextPaths);
@@ -134,7 +137,9 @@ export function AnchoredOverlay({ paths }: AnchoredOverlayProps) {
       </defs>
       {resolvedPaths.map(path => {
         const controlY = Math.min(path.to.y - 48, path.from.y + 150);
-        const d = `M ${path.from.x} ${path.from.y} C ${path.from.x} ${controlY}, ${path.to.x} ${controlY}, ${path.to.x} ${path.to.y}`;
+        const d = path.straight
+          ? `M ${path.from.x} ${path.from.y} L ${path.to.x} ${path.to.y}`
+          : `M ${path.from.x} ${path.from.y} C ${path.from.x} ${controlY}, ${path.to.x} ${controlY}, ${path.to.x} ${path.to.y}`;
 
         return (
           <g key={path.id} className={strokeClass[path.tone]} filter="url(#teaching-overlay-glow)">
@@ -147,7 +152,8 @@ export function AnchoredOverlay({ paths }: AnchoredOverlayProps) {
               strokeLinecap="round"
               strokeDasharray={path.dashed ? '9 7' : undefined}
             />
-            <circle cx={path.from.x} cy={path.from.y} r="5" fill="white" stroke="currentColor" strokeWidth="3" />
+            <circle cx={path.from.x} cy={path.from.y} r={path.straight ? 3 : 5} fill="white" stroke="currentColor" strokeWidth={path.straight ? 2 : 3} />
+            {!path.straight && (
             <path
               d={`M ${path.to.x - 7} ${path.to.y - 10} L ${path.to.x} ${path.to.y} L ${path.to.x + 7} ${path.to.y - 10}`}
               fill="none"
@@ -156,6 +162,10 @@ export function AnchoredOverlay({ paths }: AnchoredOverlayProps) {
               strokeLinecap="round"
               strokeLinejoin="round"
             />
+            )}
+            {path.straight && (
+            <circle cx={path.to.x} cy={path.to.y} r="3" fill="white" stroke="currentColor" strokeWidth="2" />
+            )}
           </g>
         );
       })}

@@ -2,6 +2,8 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  AnchoredOverlay,
+  type AnchoredOverlayPath,
   CodeViewer,
   ConceptLayout,
   FlowColumn,
@@ -568,10 +570,11 @@ function getStepResultText(
       if (matches.length > 0) {
         const sorted = [...matches].sort((a, b) => a.distance - b.distance);
         const bestDist = sorted[0]?.distance ?? 0;
-        const secondDist = sorted[1]?.distance ?? 1;
-        return `最近匹配距离 ${bestDist.toFixed(3)}，最近/次近比值 ${(bestDist / Math.max(secondDist, 1e-10)).toFixed(3)}（< 0.8 通过）。当前共有 ${matches.length} 对通过比值检验的匹配。`;
+        const worstDist = sorted[sorted.length - 1]?.distance ?? 0;
+        const avgDist = sorted.reduce((s, m) => s + m.distance, 0) / sorted.length;
+        return `${matches.length} 对匹配通过比值检验（< 0.8）。最近距离 ${bestDist.toFixed(3)}，平均 ${avgDist.toFixed(3)}，最远 ${worstDist.toFixed(3)}。`;
       }
-      return `当前教学演示没有通过比值检验的匹配。可尝试调整参数或切换图像。`;
+      return `当前教学演示没有通过比值检验的匹配。阈值 0.8 过滤掉了模棱两可的匹配对。可尝试调整参数或切换图像。`;
     }
     default:
       return '现在可以从概览进入任一步骤，检查这个关键点是如何一路从候选点变成可匹配特征的。';
@@ -867,6 +870,30 @@ export default function SiftSurfScaleFeaturesPage() {
     </div>
   );
 
+  // ---------- 匹配连线覆层 ----------
+  const matchOverlayPaths = useMemo<AnchoredOverlayPath[]>(() => {
+    if (step !== 'matching' || activeTab !== 'sift') return [];
+    const matchList = matchingResult?.stepData.matches ?? [];
+    const refKps = matchingResult?.referenceKeypoints ?? [];
+    const srcW = sourceImage[0]?.length ?? 1;
+    const srcH = sourceImage.length || 1;
+    const refW = resolvedRefImage?.image[0]?.length ?? srcW;
+    const refH = resolvedRefImage?.image.length ?? srcH;
+
+    return matchList.slice(0, 12).map((m, i) => {
+      const qKp = keypoints[m.queryIdx];
+      const rKp = refKps[m.trainIdx];
+      if (!qKp || !rKp) return null;
+      return {
+        id: `match-${i}`,
+        tone: 'amber' as const,
+        straight: true,
+        from: { kind: 'pixel' as const, selector: '.sift-match-query-image', x: qKp.x, y: qKp.y, imageWidth: srcW, imageHeight: srcH },
+        to: { kind: 'pixel' as const, selector: '.sift-match-reference-image', x: rKp.x, y: rKp.y, imageWidth: refW, imageHeight: refH },
+      };
+    }).filter(Boolean) as AnchoredOverlayPath[];
+  }, [step, activeTab, matchingResult, keypoints, sourceImage, resolvedRefImage]);
+
   // ---------- 分析预览 ----------
   const analysisPreview = useMemo(() => {
     switch (step) {
@@ -877,65 +904,25 @@ export default function SiftSurfScaleFeaturesPage() {
             {currentKeypointRail}
             <TabSwitcher activeTab={activeTab} onChange={setActiveTab} />
             {activeTab === 'sift' && (
-              <div className="space-y-3">
-                <div className="relative flex gap-2">
-                  {/* 左：待匹配图像 */}
-                  <div className="flex-1">
-                    <div className="mb-1 text-[10px] font-semibold text-red-700 text-center">待匹配图像</div>
+              <div className="grid gap-4 lg:grid-cols-2">
+                <TeachingCard>
+                  <div className="mb-2 text-[11px] font-semibold text-red-700">待匹配图像</div>
+                  <div className="sift-match-query-image">
                     <ImageCanvas image={keypointImage} maxDisplaySize={180} showGrid={false} />
-                    <p className="mt-1 text-center text-[10px] text-slate-500">{keypoints.length} 个关键点</p>
                   </div>
-                  {/* 中：SVG匹配连线覆盖层 */}
-                  {crossMatches.length > 0 && (
-                    <svg
-                      className="absolute inset-0 pointer-events-none"
-                      style={{ zIndex: 10 }}
-                      viewBox="0 0 200 100"
-                      preserveAspectRatio="none"
-                    >
-                      {crossMatches.slice(0, 15).map((m, i) => {
-                        const qKp = keypoints[m.queryIdx];
-                        const rKp = matchingResult?.referenceKeypoints[m.trainIdx];
-                        if (!qKp || !rKp) return null;
-                        const srcW = sourceImage[0]?.length ?? 64;
-                        const srcH = sourceImage.length || 64;
-                        const refW = (matchingResult?.referenceKeypoints.length ? (matchingResult as { referenceKeypoints: SiftKeypoint[] }).referenceKeypoints : keypoints);
-                        // 将关键点坐标映射到SVG坐标系：左图占 0-95，右图占 105-200
-                        const x1 = (qKp.x / srcW) * 95;
-                        const y1 = (qKp.y / srcH) * 100;
-                        const refSrcW = sourceImage[0]?.length ?? 64;
-                        const refSrcH = sourceImage.length || 64;
-                        const x2 = 105 + (rKp.x / refSrcW) * 95;
-                        const y2 = (rKp.y / refSrcH) * 100;
-                        const alpha = Math.max(0.2, 1 - m.distance * 2);
-                        return (
-                          <line
-                            key={i}
-                            x1={x1} y1={y1} x2={x2} y2={y2}
-                            stroke={`rgba(245,158,11,${alpha.toFixed(2)})`}
-                            strokeWidth={m.distance < 0.3 ? 2.5 : 1.2}
-                            strokeLinecap="round"
-                          />
-                        );
-                      })}
-                    </svg>
-                  )}
-                  {/* 右：参考图像 */}
-                  <div className="flex-1">
-                    <div className="mb-1 text-[10px] font-semibold text-emerald-700 text-center">
-                      参考图像{resolvedRefImage ? `（${resolvedRefImage.label}）` : ''}
-                    </div>
+                  <p className="mt-2 text-xs text-slate-500">{keypoints.length} 个关键点</p>
+                </TeachingCard>
+                <TeachingCard>
+                  <div className="mb-2 text-[11px] font-semibold text-emerald-700">
+                    参考图像{resolvedRefImage ? `（${resolvedRefImage.label}）` : ''}
+                  </div>
+                  <div className="sift-match-reference-image">
                     {refKeypointImage && (
                       <ImageCanvas image={refKeypointImage} maxDisplaySize={180} showGrid={false} />
                     )}
-                    <p className="mt-1 text-center text-[10px] text-slate-500">{matchingResult?.referenceKeypoints.length ?? 0} 个关键点</p>
                   </div>
-                </div>
-                {crossMatches.length > 0 && (
-                  <div className="text-center text-[10px] text-amber-600">
-                    连线粗细表示匹配距离：越细距离越远，越粗匹配质量越高
-                  </div>
-                )}
+                  <p className="mt-2 text-xs text-slate-500">{matchingResult?.referenceKeypoints.length ?? 0} 个关键点</p>
+                </TeachingCard>
               </div>
             )}
             {activeTab === 'surf' && (
@@ -2326,6 +2313,7 @@ export default function SiftSurfScaleFeaturesPage() {
       navigationHintText="方向键移动 / 点击图像选择关键点"
       onInputRegionSelect={handleInputRegionSelect}
       onOutputPixelSelect={handleInputRegionSelect}
+      visualOverlay={matchOverlayPaths.length > 0 ? <AnchoredOverlay paths={matchOverlayPaths} /> : null}
       codeTab={
         <CodeViewer languages={[{ name: 'TypeScript', code: SIFT_SURF_CODE }]} />
       }
