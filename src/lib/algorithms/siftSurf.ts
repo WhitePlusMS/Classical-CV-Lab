@@ -32,6 +32,27 @@ export interface SiftKeypoint {
   surfDescriptor: number[];
 }
 
+/** 单个邻居点的比较结果：relation 描述当前像素与该邻居的 DoG 值关系 */
+export interface NeighborComparison {
+  dx: number;
+  dy: number;
+  value: number;
+  relation: 'greater' | 'less' | 'equal';
+}
+
+/** 26 邻域跨尺度比较明细 */
+export interface NeighborComparisonsData {
+  prevDogPatch: number[][];       // 上层 DoG 3×3 patch
+  currentDogPatch: number[][];    // 当前层 DoG 3×3 patch
+  nextDogPatch: number[][];       // 下层 DoG 3×3 patch
+  currentValue: number;
+  prevComparisons: NeighborComparison[];   // 上层 9 个邻居
+  sameComparisons: NeighborComparison[];   // 同层 8 个邻居
+  nextComparisons: NeighborComparison[];   // 下层 9 个邻居
+  isExtremum: boolean;
+  extremumType: 'max' | 'min' | 'none';
+}
+
 /** SIFT 当前步骤的上下文数据 */
 export interface SiftStepData {
   gaussianValues: number[][];
@@ -43,6 +64,8 @@ export interface SiftStepData {
   siftDescriptorGrid: number[][] | null;
   surfDescriptorGrid: number[][] | null;
   matches: Array<{ queryIdx: number; trainIdx: number; distance: number }> | null;
+  /** 选中关键点的 26 邻域跨尺度比较明细，用于教学可视化 */
+  neighborComparisons: NeighborComparisonsData | null;
 }
 
 // ==================== 尺度空间辅助 ====================
@@ -108,29 +131,145 @@ function computeDoG(l1: GrayscaleImage, l2: GrayscaleImage): GrayscaleImage {
 
 // ==================== 关键点检测 ====================
 
-function detectExtrema(dogImage: GrayscaleImage, octave: number, scale: number): SiftKeypoint[] {
-  const h = dogImage.length;
-  const w = dogImage[0]?.length ?? 0;
+/**
+ * 真正的 26 邻域跨尺度极值检测
+ *
+ * 对 currDog 中的每个像素，与以下邻居比较：
+ *   - 同层 8 邻域（3×3 去中心）
+ *   - 上层 prevDog 的 9 邻域
+ *   - 下层 nextDog 的 9 邻域
+ * 总共 26 个比较。只有当前值严格大于（或严格小于）全部 26 个邻居时，
+ * 才被判定为候选关键点。
+ *
+ * @param prevDog 上层（更模糊）DoG 图像
+ * @param currDog 当前层 DoG 图像
+ * @param nextDog 下层（更清晰）DoG 图像
+ * @param octave  所在八度（多八度场景用，当前教学固定为 0）
+ * @param scaleIndex DoG 尺度序号（用于记录关键点来源）
+ * @returns 检测到的关键点列表 + 每个关键点的比较明细 Map
+ */
+function detectExtremaCrossScale(
+  prevDog: GrayscaleImage,
+  currDog: GrayscaleImage,
+  nextDog: GrayscaleImage,
+  octave: number,
+  scaleIndex: number
+): { keypoints: SiftKeypoint[]; comparisons: Map<number, NeighborComparisonsData> } {
+  const h = currDog.length;
+  const w = currDog[0]?.length ?? 0;
   const keypoints: SiftKeypoint[] = [];
+  const comparisons = new Map<number, NeighborComparisonsData>();
+
+  // 最小 DoG 绝对值阈值：过滤纯噪声区域
+  const DOG_THRESHOLD = 0.005;
 
   for (let y = 1; y < h - 1; y++) {
     for (let x = 1; x < w - 1; x++) {
-      const value = dogImage[y][x];
-      const isMax = (
-        value > dogImage[y - 1][x - 1] && value > dogImage[y - 1][x] && value > dogImage[y - 1][x + 1] &&
-        value > dogImage[y][x - 1] && value > dogImage[y][x + 1] &&
-        value > dogImage[y + 1][x - 1] && value > dogImage[y + 1][x] && value > dogImage[y + 1][x + 1]
-      );
-      if (isMax) {
-        keypoints.push({
-          x, y, octave, scale,
-          orientation: 0, magnitude: value,
-          siftDescriptor: [], surfDescriptor: [],
-        });
+      const currentValue = currDog[y][x];
+
+      // Task 3: 绝对值过小的点视为噪声，跳过
+      if (Math.abs(currentValue) < DOG_THRESHOLD) continue;
+
+      const sameComparisons: NeighborComparison[] = [];
+      const prevComparisons: NeighborComparison[] = [];
+      const nextComparisons: NeighborComparison[] = [];
+
+      let allGreater = true;  // 当前值 > 全部 26 个邻居 → 极大值
+      let allLess = true;     // 当前值 < 全部 26 个邻居 → 极小值
+
+      // ---- 同层 8 邻域比较 ----
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nv = currDog[y + dy][x + dx];
+          let relation: 'greater' | 'less' | 'equal';
+          if (currentValue > nv) { relation = 'greater'; }
+          else if (currentValue < nv) { relation = 'less'; allGreater = false; }
+          else { relation = 'equal'; allGreater = false; allLess = false; }
+          // 仅当 nv >= currentValue 时才非极大值
+          if (nv >= currentValue) allGreater = false;
+          // 仅当 nv <= currentValue 时才非极小值
+          if (nv <= currentValue) allLess = false;
+          sameComparisons.push({ dx, dy, value: nv, relation });
+        }
       }
+
+      // 同层已无法判定极值 → 跳过
+      if (!allGreater && !allLess) continue;
+
+      // ---- 上层 9 邻域比较 ----
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nv = prevDog[y + dy][x + dx];
+          let relation: 'greater' | 'less' | 'equal';
+          if (currentValue > nv) { relation = 'greater'; }
+          else if (currentValue < nv) { relation = 'less'; allGreater = false; }
+          else { relation = 'equal'; allGreater = false; allLess = false; }
+          if (nv >= currentValue) allGreater = false;
+          if (nv <= currentValue) allLess = false;
+          prevComparisons.push({ dx, dy, value: nv, relation });
+        }
+      }
+
+      if (!allGreater && !allLess) continue;
+
+      // ---- 下层 9 邻域比较 ----
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nv = nextDog[y + dy][x + dx];
+          let relation: 'greater' | 'less' | 'equal';
+          if (currentValue > nv) { relation = 'greater'; }
+          else if (currentValue < nv) { relation = 'less'; allGreater = false; }
+          else { relation = 'equal'; allGreater = false; allLess = false; }
+          if (nv >= currentValue) allGreater = false;
+          if (nv <= currentValue) allLess = false;
+          nextComparisons.push({ dx, dy, value: nv, relation });
+        }
+      }
+
+      if (!allGreater && !allLess) continue;
+
+      // ---- 通过全部 26 邻域比较，确定为极值点 ----
+      const extremumType: 'max' | 'min' | 'none' = allGreater ? 'max' : 'min';
+
+      // 提取三层 DoG 的 3×3 patch
+      const extract3x3 = (img: GrayscaleImage, cx: number, cy: number): number[][] => {
+        const patch: number[][] = [];
+        for (let dy = -1; dy <= 1; dy++) {
+          const row: number[] = [];
+          for (let dx = -1; dx <= 1; dx++) {
+            row.push(img[cy + dy][cx + dx]);
+          }
+          patch.push(row);
+        }
+        return patch;
+      };
+
+      const comparisonsData: NeighborComparisonsData = {
+        prevDogPatch: extract3x3(prevDog, x, y),
+        currentDogPatch: extract3x3(currDog, x, y),
+        nextDogPatch: extract3x3(nextDog, x, y),
+        currentValue,
+        prevComparisons,
+        sameComparisons,
+        nextComparisons,
+        isExtremum: true,
+        extremumType,
+      };
+
+      // 用 y * w + x 作为局部 key
+      const localKey = y * w + x;
+      comparisons.set(localKey, comparisonsData);
+
+      keypoints.push({
+        x, y, octave, scale: scaleIndex,
+        orientation: 0, magnitude: Math.abs(currentValue),
+        siftDescriptor: [], surfDescriptor: [],
+      });
     }
   }
-  return keypoints;
+
+  return { keypoints, comparisons };
 }
 
 // ==================== 梯度与方向 ====================
@@ -288,9 +427,21 @@ export function computeSiftSurf(
     dogScales.push(computeDoG(gaussianScales[s], gaussianScales[s + 1]));
   }
 
+  // ---- 使用 detectExtremaCrossScale 进行 26 邻域跨尺度极值检测 ----
+  const allComparisons = new Map<number, NeighborComparisonsData>();
   const allKeypoints: SiftKeypoint[] = [];
+  const dogH = dogScales[0]?.length ?? image.length;
+  const dogW = dogScales[0]?.[0]?.length ?? image[0]?.length ?? 64;
   for (let s = 1; s < dogScales.length - 1; s++) {
-    allKeypoints.push(...detectExtrema(dogScales[s], 0, s));
+    const result = detectExtremaCrossScale(
+      dogScales[s - 1], dogScales[s], dogScales[s + 1], 0, s
+    );
+    // 使用复合 key：scale * h * w + y * w + x，支持跨尺度查找
+    const scaleOffset = s * dogH * dogW;
+    for (const [localKey, data] of result.comparisons) {
+      allComparisons.set(scaleOffset + localKey, data);
+    }
+    allKeypoints.push(...result.keypoints);
   }
 
   const keypoints: SiftKeypoint[] = [];
@@ -311,6 +462,7 @@ export function computeSiftSurf(
     gaussianValues: gaussianScales[0], dogValues: dogScales[0],
     currentKeypoint: null, gradientMagnitudes: null, gradientOrientations: null,
     orientationHistogram: null, siftDescriptorGrid: null, surfDescriptorGrid: null, matches: null,
+    neighborComparisons: null,
   };
 
   if (topKeypoints.length > 0) {
@@ -323,10 +475,15 @@ export function computeSiftSurf(
     const { grid: surfGrid } = computeSurfDescriptor(image, kp.x, kp.y, Math.max(kp.scale, 1));
     const matches = findMatches(topKeypoints.map(k => k.siftDescriptor), topKeypoints.map(k => k.siftDescriptor), 0.8);
 
+    // 查找选中关键点的 26 邻域比较明细
+    const cmpKey = kp.scale * dogH * dogW + kp.y * dogW + kp.x;
+    const neighborComparisons = allComparisons.get(cmpKey) ?? null;
+
     stepData = {
       gaussianValues: gaussianScales[0], dogValues: dogScales[0],
       currentKeypoint: kp, gradientMagnitudes: magnitudes, gradientOrientations: orientations,
       orientationHistogram: hist, siftDescriptorGrid: siftGrid, surfDescriptorGrid: surfGrid, matches,
+      neighborComparisons,
     };
   }
 
@@ -334,5 +491,54 @@ export function computeSiftSurf(
     keypoints: topKeypoints, gaussianScales, dogScales, stepData,
     allSiftDescriptors: topKeypoints.map(k => k.siftDescriptor),
     allSurfDescriptors: topKeypoints.map(k => k.surfDescriptor),
+  };
+}
+
+// ==================== 跨图像匹配 ====================
+
+/** 跨图像匹配的完整结果，SiftSurfResult 的超集 */
+export interface SiftSurfMatchingResult extends SiftSurfResult {
+  referenceKeypoints: SiftKeypoint[];
+  referenceDescriptors: number[][];
+}
+
+/**
+ * 对 queryImage 和 referenceImage 分别执行 SIFT 检测，然后进行跨图像描述子匹配。
+ *
+ * @param queryImage      待匹配图像
+ * @param referenceImage  参考图像
+ * @param sigma           初始尺度
+ * @param numScales       每组层数
+ * @param selectedKp      查询图中选中的关键点序号
+ * @returns               包含双方关键点、描述子和匹配结果的 SiftSurfMatchingResult
+ */
+export function computeSiftSurfMatching(
+  queryImage: GrayscaleImage,
+  referenceImage: GrayscaleImage,
+  sigma: number,
+  numScales: number,
+  selectedKp: number
+): SiftSurfMatchingResult {
+  const queryResult = computeSiftSurf(queryImage, sigma, numScales, selectedKp);
+  const refResult = computeSiftSurf(referenceImage, sigma, numScales, 0);
+
+  // 跨图像匹配：查询图描述子 vs 参考图描述子
+  const matches = findMatches(
+    queryResult.allSiftDescriptors,
+    refResult.allSiftDescriptors,
+    0.8
+  );
+
+  // 覆盖 stepData 中的 matches（原为自匹配结果）
+  const stepData: SiftStepData = {
+    ...queryResult.stepData,
+    matches,
+  };
+
+  return {
+    ...queryResult,
+    stepData,
+    referenceKeypoints: refResult.keypoints,
+    referenceDescriptors: refResult.allSiftDescriptors,
   };
 }

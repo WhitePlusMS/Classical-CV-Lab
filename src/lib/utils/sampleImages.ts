@@ -71,7 +71,7 @@ export function createCheckerboardImage(size: number = 8, cellSize: number = 8):
 }
 
 export function createCircleImage(
-  radius: number = 25,
+  radius: number = 22,
   centerX: number = 32,
   centerY: number = 32
 ): GrayscaleImage {
@@ -83,7 +83,7 @@ export function createCircleImage(
       const dist = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
       if (dist < radius) {
         image[y][x] = 0.9;
-      } else if (dist < radius + 3) {
+      } else if (dist < radius + 5) {
         image[y][x] = 0.3;
       } else {
         image[y][x] = 0.1;
@@ -95,10 +95,10 @@ export function createCircleImage(
 }
 
 export function createRectangleImage(
-  x1: number = 15,
-  y1: number = 15,
-  x2: number = 45,
-  y2: number = 45
+  x1: number = 12,
+  y1: number = 12,
+  x2: number = 48,
+  y2: number = 48
 ): GrayscaleImage {
   const size = 64;
   const image = create2DArray(size, size, 0);
@@ -106,7 +106,7 @@ export function createRectangleImage(
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       if (x >= x1 && x <= x2 && y >= y1 && y <= y2) {
-        if (x < x1 + 3 || x > x2 - 3 || y < y1 + 3 || y > y2 - 3) {
+        if (x < x1 + 5 || x > x2 - 5 || y < y1 + 5 || y > y2 - 5) {
           image[y][x] = 0.3;
         } else {
           image[y][x] = 0.85;
@@ -168,3 +168,84 @@ export const sampleImages: Record<SampleImageType, { name: string; image: Graysc
   rectangle: { name: '矩形', image: createRectangleImage() },
   binary: { name: '二值图', image: createBinaryImage() },
 };
+
+// ==================== 仿射变换辅助（用于跨图像匹配） ====================
+
+/**
+ * 对输入图像做旋转 (angleDeg 度) + 缩放 (scale 倍) 生成参考图。
+ * 使用最近邻采样，输出与输入图像尺寸相同。
+ *
+ * @param image    源灰度图
+ * @param angleDeg 旋转角度（度，正值为逆时针）
+ * @param scale    缩放因子（<1 缩小，>1 放大）
+ * @returns        变换后的新图像
+ */
+export function createRotatedScaledImage(
+  image: GrayscaleImage,
+  angleDeg: number = 15,
+  scale: number = 0.9
+): GrayscaleImage {
+  const h = image.length;
+  const w = image[0]?.length ?? 0;
+  if (h === 0 || w === 0) return image;
+
+  const result = create2DArray(h, w, 0);
+
+  const angle = (angleDeg * Math.PI) / 180;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+
+  const cx = w / 2;
+  const cy = h / 2;
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      // 逆映射：输出 (x,y) → 源图像中的采样位置 (sx, sy)
+      const dx = x - cx;
+      const dy = y - cy;
+      const sx = ((cos * dx + sin * dy) / scale) + cx;
+      const sy = ((-sin * dx + cos * dy) / scale) + cy;
+
+      // 最近邻采样
+      const sxInt = Math.round(sx);
+      const syInt = Math.round(sy);
+
+      if (sxInt >= 0 && sxInt < w && syInt >= 0 && syInt < h) {
+        result[y][x] = image[syInt][sxInt];
+      } else {
+        // 边界外填充 0（黑色）
+        result[y][x] = 0;
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * 根据源图像类型生成对应的参考图像，用于跨图像匹配教学演示。
+ *
+ * - rectangle → 圆形参考图（形状变化）
+ * - circle     → 矩形参考图（形状变化）
+ * - lenaOriginal → 旋转 + 缩放参考图（仿射变化）
+ *
+ * @param sourceImage 源灰度图
+ * @param sourceType  源图类型
+ * @returns 参考图像及说明标签
+ */
+export function createReferenceImage(
+  sourceImage: GrayscaleImage,
+  sourceType: 'rectangle' | 'circle' | 'lenaOriginal'
+): { image: GrayscaleImage; label: string } {
+  switch (sourceType) {
+    case 'rectangle':
+      return { image: createCircleImage(), label: '圆形参考图' };
+    case 'circle':
+      return { image: createRectangleImage(), label: '矩形参考图' };
+    case 'lenaOriginal':
+      return {
+        image: createRotatedScaledImage(sourceImage, 15, 0.9),
+        label: '旋转缩放参考图（15°, 0.9×）',
+      };
+  }
+}
