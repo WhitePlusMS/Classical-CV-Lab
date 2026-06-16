@@ -189,7 +189,7 @@ function buildGaborKernelFormula(params: GaborParams): string {
     <mrow>
       <mi>h</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo>
       <mo>=</mo>
-      <msup><mi>e</mi><mrow><mo>-</mo><mfrac><mrow><msup><mi>x</mi><mo>&#8242;</mo></msup><mn>2</mn><mo>+</mo><msup><mn>${params.gamma}</mn><mn>2</mn></msup><msup><mi>y</mi><mo>&#8242;</mo></msup><mn>2</mn></mrow><mrow><mn>2</mn><mo>&#x22C5;</mo><msup><mn>${params.sigma}</mn><mn>2</mn></msup></mrow></mfrac></mrow></msup>
+      <msup><mi>e</mi><mrow><mo>-</mo><mfrac><mrow><msup><mrow><mi>x</mi><mo>&#8242;</mo></mrow><mn>2</mn></msup><mo>+</mo><msup><mn>${params.gamma}</mn><mn>2</mn></msup><msup><mrow><mi>y</mi><mo>&#8242;</mo></mrow><mn>2</mn></msup></mrow><mrow><mn>2</mn><mo>&#x22C5;</mo><msup><mn>${params.sigma}</mn><mn>2</mn></msup></mrow></mfrac></mrow></msup>
       <mo>&#x22C5;</mo>
       <mi>cos</mi><mo>(</mo><mfrac><mrow><mn>2</mn><mi>&#960;</mi><mi>x</mi><mo>&#8242;</mo></mrow><mn>${params.wavelength}</mn></mfrac><mo>+</mo><mn>${params.phase}</mn><mo>&#176;</mo><mo>)</mo>
     </mrow>
@@ -494,7 +494,7 @@ export default function LBPGaborTexturePage() {
             <FlowColumn align="center">
               <FlowNode tone="amber">
                 <div className="mb-2 text-[11px] font-semibold uppercase text-amber-800">
-                  阶跃比较与位权重
+                  阈值比较与位权重
                 </div>
                 <div className="grid gap-2">
                   {lbpStep.binaryPattern.map((bit, index) => {

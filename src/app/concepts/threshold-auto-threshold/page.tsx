@@ -110,7 +110,7 @@ function otsuThreshold(histogram: number[], total: number): number {
   return bestThreshold;
 }
 
-function kittlerCourseThreshold(image: number[][]): number {
+function kittlerGradientThreshold(image: number[][]): number {
   let weightedGraySum = 0;
   let gradientSum = 0;
 
@@ -682,12 +682,9 @@ export default function ThresholdAutoThresholdPage() {
       codeTab={<CodeViewer languages={[{ name: 'TypeScript', code: THRESHOLD_CODE_TS }]} />}
       mainVisual={mainVisual}
       imageLabels={{ input: '灰度图', output: '阈值结果' }}
-      imageHints={{ input: '目标与背景灰度差异', output: `阈值 ${threshold}` }}
-      showOriginalGrid={false}
-      originalRegionMarker="dot"
       singlePageScroll
       stepInfo={method === 'manual' ? { current: manualThreshold, total: 256 } : null}
-      onDirectionMove={handleDirectionMove}
+      onDirectionMove={method === 'manual' ? handleDirectionMove : undefined}
       showNavigationControls={method === 'manual'}
     />
   );

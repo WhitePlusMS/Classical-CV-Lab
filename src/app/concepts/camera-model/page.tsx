@@ -128,20 +128,20 @@ function parameterImpact(key: CameraParameterKey): {
     case 'roll':
       return {
         focusMode: 'extrinsics',
-        title: '当前参数正在改变相机姿态',
-        summary: 'yaw / pitch / roll 改的是旋转矩阵 R，也就是世界坐标系如何转到相机坐标系。',
+        title: '当前参数正在改变摄像机姿态',
+        summary: 'yaw / pitch / roll 改的是旋转矩阵 R，也就是世界坐标系如何转到摄像机坐标系。',
         formulaLabel: '当前观察链路',
-        formulaMath: math('<msub><mi>X</mi><mi>c</mi></msub><mo>=</mo><mi>R</mi><msub><mi>X</mi><mi>w</mi></msub><mo>+</mo><mi>T</mi>'),
+        formulaMath: math('<msub><mi>X</mi><mi>c</mi></msub><mo>=</mo><mi>R</mi><msub><mi>X</mi><mi>w</mi></msub><mo>+</mo><mi>t</mi>'),
       };
     case 'tx':
     case 'ty':
     case 'tz':
       return {
         focusMode: key === 'tz' ? 'depth' : 'extrinsics',
-        title: '当前参数正在改变相机平移',
+        title: '当前参数正在改变摄像机平移',
         summary: 'tx / ty / tz 改的是平移向量 T。tz 还会直接改变深度 Zc，所以投影缩放最明显。',
         formulaLabel: '当前观察链路',
-        formulaMath: math('<msub><mi>X</mi><mi>c</mi></msub><mo>=</mo><mi>R</mi><msub><mi>X</mi><mi>w</mi></msub><mo>+</mo><mi>T</mi>'),
+        formulaMath: math('<msub><mi>X</mi><mi>c</mi></msub><mo>=</mo><mi>R</mi><msub><mi>X</mi><mi>w</mi></msub><mo>+</mo><mi>t</mi>'),
       };
     case 'alpha':
     case 'beta':
@@ -167,7 +167,7 @@ function parameterImpact(key: CameraParameterKey): {
       return {
         focusMode: 'depth',
         title: '当前参数正在改变归一化平面上的位置',
-        summary: '点高度 Zw 会先影响相机坐标中的深度 Zc，再通过透视除法改变归一化平面坐标。',
+        summary: '点高度 Zw 会先影响摄像机坐标中的深度 Zc，再通过透视除法改变归一化平面坐标。',
         formulaLabel: '当前观察链路',
         formulaMath: math('<mi>x</mi><mo>=</mo><msub><mi>X</mi><mi>c</mi></msub><mo>/</mo><msub><mi>Z</mi><mi>c</mi></msub><mo>,</mo><mi>y</mi><mo>=</mo><msub><mi>Y</mi><mi>c</mi></msub><mo>/</mo><msub><mi>Z</mi><mi>c</mi></msub>'),
       };
@@ -298,13 +298,13 @@ export default function CameraModelPage() {
       <div>
         <div className="text-sm font-semibold text-slate-800">先明确：摄像机标定到底要解什么</div>
         <p className="mt-1 text-sm leading-6 text-slate-600">
-          单目摄像机数学模型先建立“投影”和“反求”两种视角。正向看，已知内参 K 和外参 [R,T]，可以把世界点投影到像素点；
-          反向看，摄像机标定就是用许多已知点对反求 K，以及每张照片对应的 [R,T]。
+          单目摄像机数学模型先建立“投影”和“反求”两种视角。正向看，已知内参 K 和外参 [R,t]，可以把世界点投影到像素点；
+          反向看，摄像机标定就是用许多已知点对反求 K，以及每张照片对应的 [R,t]。
         </p>
       </div>
       <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
         <MathText
-          mathML={math('<mi>s</mi><mover><mi>m</mi><mo>~</mo></mover><mo>=</mo><mi>K</mi><mo>[</mo><mi>R</mi><mo>,</mo><mi>T</mi><mo>]</mo><msub><mover><mi>X</mi><mo>~</mo></mover><mi>w</mi></msub>')}
+          mathML={math('<mi>s</mi><mover><mi>m</mi><mo>~</mo></mover><mo>=</mo><mi>K</mi><mo>[</mo><mi>R</mi><mo>,</mo><mi>t</mi><mo>]</mo><msub><mover><mi>X</mi><mo>~</mo></mover><mi>w</mi></msub>')}
         />
       </div>
     </div>
@@ -315,12 +315,12 @@ export default function CameraModelPage() {
       <FlowColumns>
         <FlowColumn align="start">
           <FlowNode tone="red">
-            <div className="text-[11px] font-semibold uppercase text-red-700">1. 外参：回答相机与世界的相对姿态</div>
+            <div className="text-[11px] font-semibold uppercase text-red-700">1. 外参：回答摄像机与世界的相对姿态</div>
             <p className="mt-2 text-xs leading-5 text-slate-600">
               第一步是刚体变换：
-              <MathText className="mx-1" mathML={math('<msub><mi>X</mi><mi>c</mi></msub><mo>=</mo><mi>R</mi><msub><mi>X</mi><mi>w</mi></msub><mo>+</mo><mi>T</mi>')} />
-              。它说明当前世界点在这台相机坐标系下的位置，这一段就是
-              <TeachingTerm term="外参" explanation="外参描述这张照片里相机相对世界的姿态和位置，每换一个拍摄姿态就会变。" className="mx-1" />
+              <MathText className="mx-1" mathML={math('<msub><mi>X</mi><mi>c</mi></msub><mo>=</mo><mi>R</mi><msub><mi>X</mi><mi>w</mi></msub><mo>+</mo><mi>t</mi>')} />
+              。它说明当前世界点在这台摄像机坐标系下的位置，这一段就是
+              <TeachingTerm term="外参" explanation="外参描述这张照片里摄像机相对世界的姿态和位置，每换一个拍摄姿态就会变。" className="mx-1" />
               的作用范围。
             </p>
             <div className="mt-3 grid gap-2 text-xs">
@@ -341,7 +341,7 @@ export default function CameraModelPage() {
               针孔模型的关键动作是
               <MathText className="mx-1" mathML={math('<mi>x</mi><mo>=</mo><msub><mi>X</mi><mi>c</mi></msub><mo>/</mo><msub><mi>Z</mi><mi>c</mi></msub><mo>,</mo><mi>y</mi><mo>=</mo><msub><mi>Y</mi><mi>c</mi></msub><mo>/</mo><msub><mi>Z</mi><mi>c</mi></msub>')} />
               。这一步把点落到
-              <TeachingTerm term="归一化平面" explanation="归一化平面就是先把相机坐标除以深度 Zc 后得到的无单位平面坐标，还没变成像素。" className="mx-1" />
+              <TeachingTerm term="归一化平面" explanation="归一化平面就是先把摄像机坐标除以深度 Zc 后得到的无单位平面坐标，还没变成像素。" className="mx-1" />
               上，也解释了“远处物体成像更小”。
             </p>
             <div className="mt-3 grid gap-2 text-xs">
@@ -359,7 +359,7 @@ export default function CameraModelPage() {
           <FlowNode tone="emerald">
             <div className="text-[11px] font-semibold uppercase text-emerald-700">3. 内参：回答落在图像数组哪个像素</div>
             <p className="mt-2 text-xs leading-5 text-slate-600">
-              <TeachingTerm term="内参" explanation="内参描述同一台相机自身的成像尺度、倾斜和主点位置，通常不随拍摄姿态变化。" className="mr-1" />
+              <TeachingTerm term="内参" explanation="内参描述同一台摄像机自身的成像尺度、倾斜和主点位置，通常不随拍摄姿态变化。" className="mr-1" />
               矩阵把归一化坐标变成图像数组中的
               <MathText className="mx-1" mathML={math('<mi>u</mi><mo>,</mo><mi>v</mi>')} />
               。其中
@@ -385,26 +385,26 @@ export default function CameraModelPage() {
       <TeachingCard>
         <div className="text-sm font-semibold text-slate-800">正向模型与反向标定</div>
         <p className="mt-1 text-xs leading-5 text-slate-500">
-          先按成像顺序理解正向模型，再用棋盘角点的世界坐标和图像坐标反求公式中的 K 与每张图的 [R,T]。
+          先按成像顺序理解正向模型，再用棋盘角点的世界坐标和图像坐标反求公式中的 K 与每张图的 [R,t]。
         </p>
         <div className="mt-4 grid gap-4 xl:grid-cols-3">
           <FormulaCard
             label="正向成像"
-            mathML={math('<mi>s</mi><mover><mi>m</mi><mo>~</mo></mover><mo>=</mo><mi>K</mi><mo>[</mo><mi>R</mi><mo>,</mo><mi>T</mi><mo>]</mo><msub><mover><mi>X</mi><mo>~</mo></mover><mi>w</mi></msub>')}
+            mathML={math('<mi>s</mi><mover><mi>m</mi><mo>~</mo></mover><mo>=</mo><mi>K</mi><mo>[</mo><mi>R</mi><mo>,</mo><mi>t</mi><mo>]</mo><msub><mover><mi>X</mi><mo>~</mo></mover><mi>w</mi></msub>')}
             tone="embedded"
             note="已知参数时，世界点可以投影到像素点。"
           />
           <FormulaCard
             label="刚体变换"
-            mathML={math('<msub><mi>X</mi><mi>c</mi></msub><mo>=</mo><mi>R</mi><msub><mi>X</mi><mi>w</mi></msub><mo>+</mo><mi>T</mi>')}
+            mathML={math('<msub><mi>X</mi><mi>c</mi></msub><mo>=</mo><mi>R</mi><msub><mi>X</mi><mi>w</mi></msub><mo>+</mo><mi>t</mi>')}
             tone="embedded"
-            note="[R,T] 是每张照片对应的外参。"
+            note="[R,t] 是每张照片对应的外参。"
           />
           <FormulaCard
             label="内参矩阵 K"
             mathML={buildIntrinsicMatrixMath(intrinsics)}
             tone="embedded"
-            note="K 是同一台相机通常保持不变的内部参数。"
+            note="K 是同一台摄像机通常保持不变的内部参数。"
           />
         </div>
       </TeachingCard>
@@ -416,7 +416,7 @@ export default function CameraModelPage() {
             label="外参变换后"
             mathML={pointVector(projection.camera)}
             tone="embedded"
-            note="该结果是以相机光心为原点的三维坐标。"
+            note="该结果是以摄像机光心为原点的三维坐标。"
           />
           <FormulaCard
             label="透视除法"
@@ -462,9 +462,9 @@ export default function CameraModelPage() {
               </p>
             </div>
             <div className="rounded-xl border border-blue-200 bg-blue-50/80 px-4 py-4">
-              <div className="text-sm font-semibold text-blue-800">外参 [R,T]</div>
+              <div className="text-sm font-semibold text-blue-800">外参 [R,t]</div>
               <p className="mt-2 text-xs leading-5 text-slate-700">
-                R、T 描述当前这一张照片中，相机和世界坐标系之间的相对姿态。换一张标定图，它们会变。
+                R、t 描述当前这一张照片中，摄像机和世界坐标系之间的相对姿态。换一张标定图，它们会变。
               </p>
             </div>
           </div>
@@ -493,7 +493,7 @@ export default function CameraModelPage() {
           <MathText className="mx-1" mathML={math('<msub><mi>X</mi><mi>w</mi></msub>')} />
           和检测到的
           <MathText className="mx-1" mathML={math('<mi>m</mi>')} />
-          ，才能反求 K 和每张图的 [R,T]。
+          ，才能反求 K 和每张图的 [R,t]。
         </p>
       </TeachingCard>
     </div>
@@ -514,7 +514,7 @@ export default function CameraModelPage() {
       />
 
       <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-5 text-slate-600">
-        当前点先按外参进入相机坐标系，再除以深度，最后由 K 映射到像素坐标。
+        当前点先按外参进入摄像机坐标系，再除以深度，最后由 K 映射到像素坐标。
       </div>
 
       <SelectParam
@@ -536,7 +536,7 @@ export default function CameraModelPage() {
       </details>
 
       <details className="overflow-hidden rounded-xl border border-blue-200 bg-blue-50/70">
-        <summary className="cursor-pointer list-none px-3 py-3 text-sm font-semibold text-blue-800 marker:content-none">外参 [R,T]</summary>
+        <summary className="cursor-pointer list-none px-3 py-3 text-sm font-semibold text-blue-800 marker:content-none">外参 [R,t]</summary>
         <div className="space-y-4 border-t border-blue-200 px-3 py-3">
           <SliderParam label="yaw" value={extrinsics.yaw} onChange={value => updateExtrinsics('yaw', value)} min={-30} max={30} step={1} unit="°" />
           <SliderParam label="pitch" value={extrinsics.pitch} onChange={value => updateExtrinsics('pitch', value)} min={-25} max={25} step={1} unit="°" />
@@ -579,7 +579,7 @@ export default function CameraModelPage() {
       subtitle="Camera Model & Parameters"
       contentHeader={contentHeader}
       operationLabel="透视投影"
-      parameterIntro="先选世界点，再分别展开内参 K 和外参 [R,T] 调整。主视觉会自动强调最近参数影响的成像环节。"
+      parameterIntro="先选世界点，再分别展开内参 K 和外参 [R,t] 调整。主视觉会自动强调最近参数影响的成像环节。"
       originalImage={originalImage}
       resultImage={resultImage}
       mainVisual={mainVisual}
@@ -596,7 +596,7 @@ export default function CameraModelPage() {
       currentStep={currentStep}
       currentStepLabel="投影像素"
       stepInfo={{ current: selectedCornerIndex, total: boardCorners.length }}
-      navigationHintText="方向键移动角点 / 点击左图或右图切换观察点"
+      navigationHintText="方向键移动角点 / 下拉菜单切换观察点"
       onDirectionMove={handleDirectionMove}
       onInputRegionSelect={handleInputRegionSelect}
       onOutputPixelSelect={handleOutputPixelSelect}

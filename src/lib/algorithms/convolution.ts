@@ -16,6 +16,17 @@ export function createKernel(size: number, anchorX: number, anchorY: number): Ke
   };
 }
 
+function flipKernelValues(values: number[][]): number[][] {
+  const size = values.length;
+  return Array.from({ length: size }, (_, y) =>
+    Array.from({ length: size }, (_, x) => values[size - 1 - y][size - 1 - x])
+  );
+}
+
+function getConvolutionKernel(kernel: Kernel): number[][] {
+  return flipKernelValues(kernel.values);
+}
+
 function padImage(image: GrayscaleImage, padding: number): GrayscaleImage {
   const height = image.length;
   const width = image[0]?.length || 0;
@@ -45,6 +56,7 @@ export function convolve2D(
   const padded = padImage(image, padding);
   const paddedHeight = padded.length;
   const paddedWidth = padded[0]?.length || 0;
+  const convolutionKernel = getConvolutionKernel(kernel);
 
   const outputWidth = Math.floor((paddedWidth - kernelSize) / stride) + 1;
   const outputHeight = Math.floor((paddedHeight - kernelSize) / stride) + 1;
@@ -59,7 +71,7 @@ export function convolve2D(
         for (let kx = 0; kx < kernelSize; kx++) {
           const px = x * stride + kx;
           const py = y * stride + ky;
-          sum += padded[py][px] * kernel.values[ky][kx];
+          sum += padded[py][px] * convolutionKernel[ky][kx];
         }
       }
 
@@ -83,6 +95,7 @@ export function* convolve2DSteps(
   const padded = padImage(image, padding);
   const paddedHeight = padded.length;
   const paddedWidth = padded[0]?.length || 0;
+  const convolutionKernel = getConvolutionKernel(kernel);
 
   const outputWidth = Math.floor((paddedWidth - kernelSize) / stride) + 1;
   const outputHeight = Math.floor((paddedHeight - kernelSize) / stride) + 1;
@@ -98,7 +111,7 @@ export function* convolve2DSteps(
           const px = x * stride + kx;
           const py = y * stride + ky;
           row.push(padded[py][px]);
-          sum += padded[py][px] * kernel.values[ky][kx];
+          sum += padded[py][px] * convolutionKernel[ky][kx];
         }
         inputRegion.push(row);
       }
@@ -107,7 +120,8 @@ export function* convolve2DSteps(
         x,
         y,
         inputRegion,
-        kernel: kernel.values,
+        kernel: convolutionKernel,
+        displayKernel: kernel.values,
         outputValue: sum,
         formula: `G(${x},${y}) = Σ f(i,j) · g(${x}-i, ${y}-j)`,
       };
@@ -130,6 +144,7 @@ export function getConvolutionStepAt(
   const padded = padImage(image, padding);
   const paddedHeight = padded.length;
   const paddedWidth = padded[0]?.length || 0;
+  const convolutionKernel = getConvolutionKernel(kernel);
   const outputWidth = Math.floor((paddedWidth - kernelSize) / stride) + 1;
   const outputHeight = Math.floor((paddedHeight - kernelSize) / stride) + 1;
 
@@ -146,7 +161,7 @@ export function getConvolutionStepAt(
       const px = x * stride + kx;
       const py = y * stride + ky;
       row.push(padded[py][px]);
-      sum += padded[py][px] * kernel.values[ky][kx];
+      sum += padded[py][px] * convolutionKernel[ky][kx];
     }
     inputRegion.push(row);
   }
@@ -155,7 +170,8 @@ export function getConvolutionStepAt(
     x,
     y,
     inputRegion,
-    kernel: kernel.values,
+    kernel: convolutionKernel,
+    displayKernel: kernel.values,
     outputValue: sum,
     formula: `G(${x},${y}) = Σ f(i,j) · g(${x}-i, ${y}-j)`,
   };

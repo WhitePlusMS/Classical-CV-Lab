@@ -307,8 +307,8 @@ export default function HogFeaturePage() {
   const cellsX = Math.floor(imageWidth / CELL_SIZE);
   const cellsY = Math.floor(imageHeight / CELL_SIZE);
   const safeCell = {
-    x: cellsX > 0 ? Math.min(currentCell.x, cellsX - 1) : 0,
-    y: cellsY > 0 ? Math.min(currentCell.y, cellsY - 1) : 0,
+    x: cellsX > 0 ? Math.max(0, Math.min(currentCell.x, cellsX - 1)) : 0,
+    y: cellsY > 0 ? Math.max(0, Math.min(currentCell.y, cellsY - 1)) : 0,
   };
   const anglePerBin = 180 / nbins;
   const blocksX = Math.max(0, cellsX - cellsPerBlock + 1);
@@ -464,7 +464,7 @@ export default function HogFeaturePage() {
           <FormulaCard
             label={`像素 (${currentHogStep.sample.x}, ${currentHogStep.sample.y}) 的一阶差分`}
             mathML={buildGradientSubstitutionMathML(currentHogStep, originalImage)}
-            note="这里使用 Sobel 梯度场中的水平和垂直响应，数值来自当前 Lena 图。"
+            note="这里使用 Sobel 梯度场中的水平梯度 Gx 与垂直梯度 Gy，数值来自当前 Lena 图。"
             tone="embedded"
           />
           <FormulaCard
@@ -522,7 +522,7 @@ export default function HogFeaturePage() {
       </TeachingCard>
 
       <TeachingCard>
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">这个特征向量能做什么</h2>
+        <h2 className="mb-3 text-sm font-semibold text-slate-800">这个描述子能做什么</h2>
         <div className="space-y-3 text-xs leading-6 text-slate-600">
           <p>
             从当前 Lena 选区看，红框 cell 负责统计一个小区域的边缘方向；灰框 block 负责把相邻 cell 合成更稳定的小向量；

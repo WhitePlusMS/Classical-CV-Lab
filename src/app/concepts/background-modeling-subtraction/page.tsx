@@ -164,7 +164,7 @@ function mixtureGaussianProcess(
     const minIdx = updated.reduce(
       (idx, c, i, arr) => (c.weight < arr[idx].weight ? i : idx), 0
     );
-    updated[minIdx] = { weight: 0.05, mean: pixel, sigma: 20 / 255 };
+    updated[minIdx] = { weight: 0.05, mean: pixel, sigma: 20 };
   }
 
   // 权值归一化
@@ -388,7 +388,7 @@ export default function BackgroundModelingSubtractionPage() {
     ? inlineMath(`<mo>|</mo><mi>I</mi><mo>-</mo><mi>μ</mi><mo>|</mo><mo>=</mo><mn>${diffGray}</mn><mo>,</mo><mn>2.5</mn><mi>δ</mi><mo>=</mo><mn>${gaussianLimit}</mn>`)
     : inlineMath(`<mo>|</mo><msub><mi>I</mi><mi>t</mi></msub><mo>-</mo><msub><mi>B</mi><mi>t</mi></msub><mo>|</mo><mo>=</mo><mn>${diffGray}</mn><mo>,</mo><mi>T</mi><mo>=</mo><mn>${threshold}</mn>`);
   const trainingWindowEnd = Math.min(7, Math.max(0, currentFrameIndex - 1));
-  const trainingWindowStart = Math.max(0, trainingWindowEnd - 4);
+  const trainingWindowStart = 0;
   const mainVisual = (
     <div className="space-y-4">
       <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
@@ -797,7 +797,7 @@ export default function BackgroundModelingSubtractionPage() {
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
                 <div className="font-semibold text-slate-800">课件默认值映射</div>
-                <div className="mt-1">课件示例常用 T=60、K=3；本页 T 可调，K 固定为 {trainingFrames.length} 帧以增强连续序列稳定性。</div>
+                <div className="mt-1">课件示例常用 T=58、K=3；本页 T 可调，K 固定为 {trainingFrames.length} 帧以增强连续序列稳定性。</div>
               </div>
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-6 text-slate-700">
@@ -1033,7 +1033,7 @@ export default function BackgroundModelingSubtractionPage() {
                     ω={component.weight.toFixed(2)} / μ={grayValue(component.mean)} / δ={grayValue(component.sigma)}
                   </div>
                   <div className={component.background ? 'mt-1 font-semibold text-emerald-700' : 'mt-1 font-semibold text-red-600'}>
-                    {component.background ? '背景峰' : '前景候选峰'}
+                    {component.background ? '背景峰' : '前景候选'}
                   </div>
                 </div>
               ))}

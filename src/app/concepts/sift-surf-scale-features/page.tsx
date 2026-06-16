@@ -31,6 +31,7 @@ import {
 } from '@/lib/utils/sampleImages';
 import { moveGridPoint } from '@/hooks/useGridNavigation';
 import { useLenaGrayscaleImage } from '@/hooks/useLenaGrayscaleImage';
+import { resolveAssetPath } from '@/lib/utils/assetPath';
 
 // ==================== 类型与步骤常量 ====================
 
@@ -87,7 +88,7 @@ const ROTATION_FORMULA = buildInlineMathML(
   '<mrow><mrow><mo>[</mo><mtable><mtr><mtd><msup><mi>x</mi><mo>′</mo></msup></mtd></mtr><mtr><mtd><msup><mi>y</mi><mo>′</mo></msup></mtd></mtr></mtable><mo>]</mo></mrow><mo>=</mo><mrow><mo>[</mo><mtable><mtr><mtd><mi>cos</mi><mi>θ</mi></mtd><mtd><mo>-</mo><mi>sin</mi><mi>θ</mi></mtd></mtr><mtr><mtd><mi>sin</mi><mi>θ</mi></mtd><mtd><mi>cos</mi><mi>θ</mi></mtd></mtr></mtable><mo>]</mo></mrow><mrow><mo>[</mo><mtable><mtr><mtd><mi>x</mi></mtd></mtr><mtr><mtd><mi>y</mi></mtd></mtr></mtable><mo>]</mo></mrow></mrow>'
 );
 const DESCRIPTOR_NORM = buildInlineMathML(
-  '<mrow><msub><mi>l</mi><mi>j</mi></msub><mo>=</mo><mfrac><msub><mi>w</mi><mi>j</mi></msub><mrow><msqrt><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mn>128</mn></munderover><msub><mi>w</mi><mi>i</mi></msub></msqrt></mrow></mfrac><mo>,</mo><mi>j</mi><mo>=</mo><mn>1</mn><mo>,</mo><mn>2</mn><mo>,</mo><mo>⋯</mo><mo>,</mo><mn>128</mn></mrow>'
+  '<mrow><msub><mi>l</mi><mi>j</mi></msub><mo>=</mo><mfrac><msub><mi>w</mi><mi>j</mi></msub><mrow><msqrt><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mn>128</mn></munderover><msup><msub><mi>w</mi><mi>i</mi></msub><mn>2</mn></msup></msqrt></mrow></mfrac><mo>,</mo><mi>j</mi><mo>=</mo><mn>1</mn><mo>,</mo><mn>2</mn><mo>,</mo><mo>⋯</mo><mo>,</mo><mn>128</mn></mrow>'
 );
 const SURF_HESSIAN = buildInlineMathML(
   '<mrow><mi>H</mi><mo>(</mo><mi>X</mi><mo>,</mo><mi>σ</mi><mo>)</mo><mo>=</mo><mrow><mo>[</mo><mtable><mtr><mtd><msub><mi>L</mi><mrow><mi>x</mi><mi>x</mi></mrow></msub><mo>(</mo><mi>X</mi><mo>,</mo><mi>σ</mi><mo>)</mo></mtd><mtd><msub><mi>L</mi><mrow><mi>x</mi><mi>y</mi></mrow></msub><mo>(</mo><mi>X</mi><mo>,</mo><mi>σ</mi><mo>)</mo></mtd></mtr><mtr><mtd><msub><mi>L</mi><mrow><mi>x</mi><mi>y</mi></mrow></msub><mo>(</mo><mi>X</mi><mo>,</mo><mi>σ</mi><mo>)</mo></mtd><mtd><msub><mi>L</mi><mrow><mi>y</mi><mi>y</mi></mrow></msub><mo>(</mo><mi>X</mi><mo>,</mo><mi>σ</mi><mo>)</mo></mtd></mtr></mtable><mo>]</mo></mrow></mrow>'
@@ -240,9 +241,9 @@ function DoGNeighborTables({ data }: { data: NeighborComparisonsData }) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap justify-center gap-3">
-        {renderTable(data.prevDogPatch, '上层 DoG (kσ)', data.prevComparisons, false)}
+        {renderTable(data.prevDogPatch, '下层 DoG (σ/k)', data.prevComparisons, false)}
         {renderTable(data.currentDogPatch, '当前层 DoG (σ)', data.sameComparisons, true)}
-        {renderTable(data.nextDogPatch, '下层 DoG (σ/k)', data.nextComparisons, false)}
+        {renderTable(data.nextDogPatch, '上层 DoG (kσ)', data.nextComparisons, false)}
       </div>
       <div
         className={
@@ -358,7 +359,7 @@ function TabSwitcher({
 function SiftSurfCompareTable() {
   const rows = [
     { feature: '尺度空间', sift: '改变图像大小，不同σ高斯核', surf: '固定图像大小，不同尺度 box filter' },
-    { feature: '特征点检测', sift: 'DoG 非极大抑制 + 25 邻域', surf: 'Hessian 行列式 + 非极大抑制' },
+    { feature: '特征点检测', sift: 'DoG 非极大抑制 + 26 邻域', surf: 'Hessian 行列式 + 非极大抑制' },
     { feature: '方向', sift: '正方形区域梯度直方图（36柱）', surf: '圆形区域 Haar 小波，扇形滑动' },
     { feature: '描述子邻域', sift: '16x16', surf: '20s x 20s' },
     { feature: '描述子维数', sift: '128', surf: '64' },
@@ -816,7 +817,7 @@ export default function SiftSurfScaleFeaturesPage() {
         label="每组层数"
         value={numScales}
         onChange={(v) => { setNumScales(v); setSelectedKpIdx(0); }}
-        min={2}
+        min={3}
         max={5}
         step={1}
       />
@@ -1038,7 +1039,7 @@ export default function SiftSurfScaleFeaturesPage() {
                 <TeachingCard>
                   <div className="text-sm font-semibold text-slate-800">SURF Hessian 行列式检测</div>
                   <p className="mt-2 text-xs leading-6 text-slate-600">
-                    SURF 使用近似的 Hessian 矩阵行列式定位兴趣点。与 DoG 在相邻高斯层之间做差不同，
+                    SURF 使用近似的 Hessian 矩阵行列式定位关键点。与 DoG 在相邻高斯层之间做差不同，
                     Hessian 行列式直接在单层响应图上评估二阶变化强度。
                   </p>
                 </TeachingCard>
@@ -1051,7 +1052,7 @@ export default function SiftSurfScaleFeaturesPage() {
                 </TeachingCard>
                 <TeachingCard>
                   <img
-                    src="/assets/sift-surf/surf-hessian-filters.jpg"
+                    src={resolveAssetPath('/assets/sift-surf/surf-hessian-filters.jpg')}
                     alt="SURF 滤波器"
                     width={387}
                     height={384}
@@ -1771,7 +1772,7 @@ export default function SiftSurfScaleFeaturesPage() {
                 </TeachingCard>
                 <TeachingCard>
                   <img
-                    src="/assets/sift-surf/gaussian-pyramid.jpg"
+                    src={resolveAssetPath('/assets/sift-surf/gaussian-pyramid.jpg')}
                     alt="高斯金字塔"
                     width={620}
                     height={548}
@@ -1799,7 +1800,7 @@ export default function SiftSurfScaleFeaturesPage() {
                 </TeachingCard>
                 <TeachingCard>
                   <img
-                    src="/assets/sift-surf/integral-image.jpg"
+                    src={resolveAssetPath('/assets/sift-surf/integral-image.jpg')}
                     alt="积分图像"
                     width={1029}
                     height={320}
@@ -1809,7 +1810,7 @@ export default function SiftSurfScaleFeaturesPage() {
                 </TeachingCard>
                 <TeachingCard>
                   <img
-                    src="/assets/sift-surf/sift-surf-scale-comparison.jpg"
+                    src={resolveAssetPath('/assets/sift-surf/sift-surf-scale-comparison.jpg')}
                     alt="SIFT 与 SURF 尺度空间对比"
                     width={1259}
                     height={640}
@@ -1876,7 +1877,7 @@ export default function SiftSurfScaleFeaturesPage() {
                 </TeachingCard>
                 <TeachingCard>
                   <img
-                    src="/assets/sift-surf/dog-pyramid.jpg"
+                    src={resolveAssetPath('/assets/sift-surf/dog-pyramid.jpg')}
                     alt="DoG 金字塔"
                     width={1464}
                     height={976}
@@ -1897,7 +1898,7 @@ export default function SiftSurfScaleFeaturesPage() {
                 </TeachingCard>
                 <TeachingCard>
                   <img
-                    src="/assets/sift-surf/dog-extreme-detection.jpg"
+                    src={resolveAssetPath('/assets/sift-surf/dog-extreme-detection.jpg')}
                     alt="DOG 极值检测 26 邻域"
                     width={618}
                     height={512}
@@ -1915,7 +1916,7 @@ export default function SiftSurfScaleFeaturesPage() {
                 <TeachingCard>
                   <div className="text-sm font-semibold text-slate-800">Hessian 矩阵检测</div>
                   <p className="mt-2 text-xs leading-6 text-slate-600">
-                    SURF 使用近似的 Hessian 矩阵行列式定位兴趣点。
+                    SURF 使用近似的 Hessian 矩阵行列式定位关键点。
                     用盒子滤波器近似高斯二阶偏导，结合积分图实现快速卷积。
                   </p>
                 </TeachingCard>
@@ -1928,7 +1929,7 @@ export default function SiftSurfScaleFeaturesPage() {
                 </TeachingCard>
                 <TeachingCard>
                   <img
-                    src="/assets/sift-surf/surf-hessian-filters.jpg"
+                    src={resolveAssetPath('/assets/sift-surf/surf-hessian-filters.jpg')}
                     alt="SURF 滤波器"
                     width={387}
                     height={384}
@@ -1944,7 +1945,7 @@ export default function SiftSurfScaleFeaturesPage() {
                 <div className="text-sm font-semibold text-slate-800">检测阶段总对比</div>
                 <p className="mt-2 text-xs leading-6 text-slate-600">
                   SIFT 的 DoG 检测本质上是"跨尺度的灰度变化"检测器；SURF 的 Hessian 行列式则是
-                  "同尺度的二阶结构强度"检测器。两者目标都是寻找稳定、可重复的兴趣点，但数学工具不同。
+                  "同尺度的二阶结构强度"检测器。两者目标都是寻找稳定、可重复的关键点，但数学工具不同。
                 </p>
               </TeachingCard>
             )}
@@ -2007,7 +2008,7 @@ export default function SiftSurfScaleFeaturesPage() {
                 </TeachingCard>
                 <TeachingCard>
                   <img
-                    src="/assets/sift-surf/orientation-histogram.jpg"
+                    src={resolveAssetPath('/assets/sift-surf/orientation-histogram.jpg')}
                     alt="方向直方图"
                     width={751}
                     height={318}
@@ -2030,7 +2031,7 @@ export default function SiftSurfScaleFeaturesPage() {
                 </TeachingCard>
                 <TeachingCard>
                   <img
-                    src="/assets/sift-surf/surf-descriptor.jpg"
+                    src={resolveAssetPath('/assets/sift-surf/surf-descriptor.jpg')}
                     alt="SURF 描述子"
                     width={1765}
                     height={579}
@@ -2073,7 +2074,7 @@ export default function SiftSurfScaleFeaturesPage() {
                 </TeachingCard>
                 <TeachingCard>
                   <img
-                    src="/assets/sift-surf/sift-descriptor-grid.jpg"
+                    src={resolveAssetPath('/assets/sift-surf/sift-descriptor-grid.jpg')}
                     alt="SIFT 描述子网格"
                     width={1426}
                     height={739}
@@ -2086,7 +2087,7 @@ export default function SiftSurfScaleFeaturesPage() {
                 </TeachingCard>
                 <TeachingCard>
                   <img
-                    src="/assets/sift-surf/coordinate-rotation.jpg"
+                    src={resolveAssetPath('/assets/sift-surf/coordinate-rotation.jpg')}
                     alt="坐标旋转"
                     width={1484}
                     height={634}
@@ -2121,7 +2122,7 @@ export default function SiftSurfScaleFeaturesPage() {
                 </TeachingCard>
                 <TeachingCard>
                   <img
-                    src="/assets/sift-surf/surf-descriptor.jpg"
+                    src={resolveAssetPath('/assets/sift-surf/surf-descriptor.jpg')}
                     alt="SURF 描述子"
                     width={1765}
                     height={579}
@@ -2236,7 +2237,7 @@ export default function SiftSurfScaleFeaturesPage() {
                 </TeachingCard>
                 <TeachingCard>
                   <img
-                    src="/assets/sift-surf/integral-image.jpg"
+                    src={resolveAssetPath('/assets/sift-surf/integral-image.jpg')}
                     alt="积分图像"
                     width={1029}
                     height={320}

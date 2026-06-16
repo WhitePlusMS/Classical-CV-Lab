@@ -126,6 +126,8 @@ export default function GrayscalePage() {
         const raw = await loadImageAsRgb('/assets/lena-original.jpg');
         if (cancelled) return;
         setLenaRgbImage(resizeRgbImage(centerCropRgbImage(raw), 128));
+        // 图像尺寸变化后重置步进索引
+        setCurrentStepIndex(0);
       } catch {
         // 加载失败则回退到程序生成的图
       }
@@ -156,6 +158,8 @@ export default function GrayscalePage() {
 
   const displayImage = useMemo(() => {
     if (!rgbImage) return null;
+    // color 模式用 weightedResult 作为坐标映射基底图（点击/选取需非 null image），
+    // 实际彩色渲染由 originalRgbImage prop 提供
     if (displayMode === 'color') return weightedResult;
     return getDisplayImage(rgbImage, displayMode, weightedResult, averageResult);
   }, [rgbImage, displayMode, weightedResult, averageResult]);
@@ -433,7 +437,7 @@ export default function GrayscalePage() {
       title="图像灰度化"
       subtitle="Grayscale - RGB 三通道与灰度转换"
       operationLabel="灰度转换"
-      parameterIntro="左侧切换示例图像、通道显示和灰度化方法；右侧只围绕当前像素，展示 R/G/B 权重如何合成为一个灰度值。"
+      parameterIntro="参数区切换示例图像、通道显示和灰度化方法；详情区围绕当前像素，展示 R/G/B 权重如何合成为一个灰度值。"
       originalImage={displayImage}
       originalRgbImage={displayMode === 'color' ? rgbImage : null}
       resultImage={resultImage}
@@ -449,7 +453,7 @@ export default function GrayscalePage() {
       onInputRegionSelect={handleInputRegionSelect}
       onOutputPixelSelect={handleOutputPixelSelect}
       singlePageScroll
-      navigationHintText="方向键移动 / 点击图像格子跳转"
+      navigationHintText="方向键移动 / 点击图像跳转"
     />
   );
 }

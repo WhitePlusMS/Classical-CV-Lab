@@ -1,26 +1,9 @@
 import { GrayscaleImage, Histogram, ThresholdResult } from './types';
-import { create2DArray } from '../utils/imageProcessing';
+import { clamp, create2DArray } from '../utils/imageProcessing';
 
-export function computeHistogram(image: GrayscaleImage): Histogram {
-  const height = image.length;
-  const width = image[0]?.length || 0;
-  const bins = new Array(256).fill(0);
-  let totalPixels = 0;
-
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const value = Math.round(clamp(image[y][x], 0, 1) * 255);
-      bins[value]++;
-      totalPixels++;
-    }
-  }
-
-  return { bins, totalPixels };
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
+// computeHistogram 已迁移至 ./histogram，此处为内部使用 + 向后兼容导出
+import { computeHistogram } from './histogram';
+export { computeHistogram };
 
 export function fixedThreshold(image: GrayscaleImage, threshold: number): ThresholdResult {
   const height = image.length;

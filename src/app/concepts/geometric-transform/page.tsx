@@ -616,7 +616,7 @@ export default function GeometricTransformPage() {
           <span className="mx-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-medium text-amber-700">
             {FAMILY_LABELS[activeFamily]}
           </span>
-          该层级由是否包含平移、是否保持等比例缩放，以及是否出现剪切共同决定。
+          。该层级由是否包含平移、是否保持等比例缩放，以及是否出现剪切共同决定。
         </p>
       </div>
       <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
@@ -624,7 +624,7 @@ export default function GeometricTransformPage() {
           坐标约定
         </div>
         <p className="mt-2 text-xs leading-6 text-slate-600">
-          为了让旋转方向与角度定义保持一致，画布中心建立笛卡尔坐标系，
+          为了让旋转方向与角度定义保持一致，程序在画布中心建立笛卡尔坐标系，
           再把结果映射回图像像素坐标。
         </p>
         <p className="mt-2 text-xs leading-6 text-slate-600">
@@ -997,7 +997,7 @@ export default function GeometricTransformPage() {
         tone: 'red',
         from: {
           kind: 'region',
-          selector: '.conv-anchor-input-main',
+          selector: '.geo-anchor-input-main',
           x: currentStep.regionX,
           y: currentStep.regionY,
           size: currentStep.regionWidth,
@@ -1011,7 +1011,7 @@ export default function GeometricTransformPage() {
       {
         id: 'matrix-flow',
         tone: 'amber',
-        from: { kind: 'element', selector: '.conv-anchor-main-operator' },
+        from: { kind: 'element', selector: '.geo-anchor-main-operator' },
         to: { kind: 'element', selector: '.geo-anchor-matrix-node' },
       },
       {
@@ -1019,7 +1019,7 @@ export default function GeometricTransformPage() {
         tone: 'emerald',
         from: {
           kind: 'pixel',
-          selector: '.conv-anchor-output-main',
+          selector: '.geo-anchor-output-main',
           x: currentPosition.x,
           y: currentPosition.y,
           imageWidth: width,
@@ -1140,7 +1140,7 @@ export default function GeometricTransformPage() {
       />
 
       <div className="border-t border-amber-200 pt-3 text-xs leading-5 text-amber-800">
-        当前证据链固定为：源点正向映射到目标点，输出像素再通过
+        当前处理流程固定为：源点正向映射到目标点，输出像素再通过
         <TeachingTerm term="反向映射" explanation="生成结果图时，先从输出像素回到原图坐标，再在原图采样，避免正向写回留下空洞。" className="mx-1" />
         找采样来源。点击原图会选中一个教学点；点击结果图则查看当前输出像素从原图哪里采样。
       </div>

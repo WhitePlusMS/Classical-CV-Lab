@@ -340,6 +340,9 @@ export default function ZhangCalibrationPage() {
             重投影点 m^=({selectedImageCorner.projected.x.toFixed(2)}, {selectedImageCorner.projected.y.toFixed(2)})
           </div>
         </div>
+        <p className="mt-3 text-xs leading-5 text-slate-400">
+          页面中的检测角点由模拟偏移量生成，用于展示三类点的坐标对应关系。
+        </p>
       </TeachingCard>
 
       <TeachingCard>
@@ -381,7 +384,7 @@ export default function ZhangCalibrationPage() {
           <div>
             <div className="text-sm font-semibold text-slate-800">为什么至少需要三张有效图像</div>
             <p className="mt-1 text-xs leading-5 text-slate-500">
-              K 有 5 个自由参数，每张图的 H 提供 2 条线性约束。
+              K 有 5 个自由参数（当假设 skew=0 时降为 4 参数），每张图的 H 提供 2 条线性约束。
             </p>
           </div>
           <div className={`rounded-full border px-3 py-1 text-xs font-medium ${enoughEquations ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
@@ -536,7 +539,7 @@ export default function ZhangCalibrationPage() {
       currentStep={currentStep}
       currentStepLabel="投影点"
       stepInfo={totalCorners > 0 ? { current: selectedCornerIndex, total: totalCorners } : null}
-      navigationHintText="方向键移动角点 / 点击左图或右图切换角点"
+      navigationHintText="方向键移动角点 / 下拉菜单切换角点"
       onDirectionMove={handleDirectionMove}
       onInputRegionSelect={handleInputRegionSelect}
       onOutputPixelSelect={handleOutputPixelSelect}

@@ -143,7 +143,7 @@ export function grayscaleToTeachingColorImage(image: GrayscaleImage): ColorImage
       const r = clamp(gray * 0.58 + nx * 0.35 + 0.10 * Math.sin(y * 0.25), 0, 1);
       const g = clamp(gray * 0.52 + (1 - ny) * 0.38 + 0.08 * Math.cos(x * 0.2), 0, 1);
       const b = clamp(gray * 0.46 + (1 - nx) * 0.24 + ny * 0.32, 0, 1);
-      row.push({ r, g, b, gray: clamp(0.299 * r + 0.587 * g + 0.114 * b, 0, 1) });
+      row.push({ r, g, b, gray }); // 保留原始灰度值，确保显示模式切换时数值一致
     }
     result.push(row);
   }

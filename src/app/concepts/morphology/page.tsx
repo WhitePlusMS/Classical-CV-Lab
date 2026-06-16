@@ -1699,7 +1699,7 @@ export default function MorphologyPage() {
         </p>
         {isComposite && (
           <div className="mt-2 rounded-xl bg-white/80 px-3 py-2 text-xs font-medium text-blue-800">
-            当前为两阶段操作（先{operation === 'open' ? '腐蚀后膨胀' : '膨胀后腐蚀'}），
+            当前为两阶段操作（先{effectiveOperation === 'open' ? '腐蚀后膨胀' : '膨胀后腐蚀'}），
             右侧步骤分两阶段展示每一步的详细计算。
           </div>
         )}

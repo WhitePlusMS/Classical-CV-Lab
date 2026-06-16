@@ -292,6 +292,7 @@ export function buildTeachingSvmScore(
   };
 }
 
+/** 教学简化：级联各阶段使用同一归一化特征值 |V|。真实 Cascade 各阶段的特征组合和数量均不同，此处用递增阈值模拟"前级宽松、后级严格"的教学意图。 */
 export function evaluateCascadeStages(
   haarFeatureValue: number,
   stageThresholds: number[]

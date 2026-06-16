@@ -160,7 +160,7 @@ export default function CalibrationPatternPage() {
     <div>
       <div className="text-sm font-semibold text-slate-800">继续回答“求参数需要哪些数据”</div>
       <p className="mt-1 text-sm leading-6 text-slate-600">
-        投影方程确定后，为了反求 K 和每张图的 [R,T]，需要采集许多组同一角点的两种坐标：
+        投影方程确定后，为了反求 K 和每张图的 [R,t]，需要采集许多组同一角点的两种坐标：
         棋盘平面上的世界坐标 M，以及照片中检测到的像素坐标 m。
       </p>
     </div>
@@ -217,7 +217,7 @@ export default function CalibrationPatternPage() {
             </p>
             <FormulaCard
               className="mt-3"
-              mathML={math('<mi>s</mi><mover><mi>m</mi><mo>~</mo></mover><mo>=</mo><mi>K</mi><mo>[</mo><mi>R</mi><mo>,</mo><mi>T</mi><mo>]</mo><mover><mi>M</mi><mo>~</mo></mover>')}
+              mathML={math('<mi>s</mi><mover><mi>m</mi><mo>~</mo></mover><mo>=</mo><mi>K</mi><mo>[</mo><mi>R</mi><mo>,</mo><mi>t</mi><mo>]</mo><mover><mi>M</mi><mo>~</mo></mover>')}
               formulaClassName="rounded-xl px-3 py-3 shadow-none"
               note="成像模型保持不变，只是输入点来自标定板。"
             />
@@ -230,7 +230,7 @@ export default function CalibrationPatternPage() {
             <p className="mt-2 text-xs leading-5 text-slate-600">
               每个角点形成一组
               <MathText className="mx-1" mathML={math('<msub><mi>M</mi><mi>i</mi></msub><mo>&#8596;</mo><msub><mi>m</mi><mi>i</mi></msub>')} />
-              。多张不同姿态的标定图共享同一个 K，但各自有不同的 [R,T]。
+              。多张不同姿态的标定图共享同一个 K，但各自有不同的 [R,t]。
             </p>
             <FormulaCard
               className="mt-3"

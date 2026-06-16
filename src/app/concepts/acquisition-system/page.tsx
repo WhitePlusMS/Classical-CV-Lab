@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { ConceptIntro, CONCEPT_INTRO_CONTENT, type ConceptIntroProps } from '@/components/teaching';
+import { resolveAssetPath } from '@/lib/utils/assetPath';
 const systemChain = [
   { title: '光源', desc: '提供照明、克服环境光干扰、形成稳定成像条件', impact: '影响后续阈值、边缘和缺陷检测是否稳定。' },
   { title: '目标', desc: '被观测的物体或场景', impact: '材质、颜色和运动速度决定应选择哪类视觉算法。' },
@@ -184,7 +185,7 @@ const [conceptIntro, setConceptIntro] = useState<ConceptIntroProps | null>(null)
               <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                 <div className="relative aspect-[16/9] bg-slate-100">
                   <img
-                    src="/assets/acquisition-system/system-vision-scene.jpg"
+                    src={resolveAssetPath('/assets/acquisition-system/system-vision-scene.jpg')}
                     alt="农业分拣视觉设备现场，包含采集、照明和输送结构"
                     width={960}
                     height={768}
@@ -257,7 +258,7 @@ const [conceptIntro, setConceptIntro] = useState<ConceptIntroProps | null>(null)
                     <div key={type.title} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                       <div className="aspect-[4/3] bg-slate-100">
                         <img
-                          src={type.imageUrl}
+                          src={resolveAssetPath(type.imageUrl)}
                           alt={type.imageAlt}
                           width={type.imageWidth}
                           height={type.imageHeight}
@@ -290,7 +291,7 @@ const [conceptIntro, setConceptIntro] = useState<ConceptIntroProps | null>(null)
                 <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                   <div className="aspect-[16/10] bg-white">
                     <img
-                      src="/assets/acquisition-system/industrial-cameras.jpg"
+                      src={resolveAssetPath('/assets/acquisition-system/industrial-cameras.jpg')}
                       alt="工业机器视觉相机机身与传感器窗口"
                       width={960}
                       height={640}
@@ -365,7 +366,7 @@ const [conceptIntro, setConceptIntro] = useState<ConceptIntroProps | null>(null)
                 <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                   <div className="aspect-[16/10] bg-white">
                     <img
-                      src="/assets/acquisition-system/c-mount-lens.jpg"
+                      src={resolveAssetPath('/assets/acquisition-system/c-mount-lens.jpg')}
                       alt="C-mount 工业镜头实物"
                       width={1200}
                       height={797}
@@ -450,7 +451,7 @@ const [conceptIntro, setConceptIntro] = useState<ConceptIntroProps | null>(null)
                 <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                   <div className="aspect-[16/9] bg-white">
                     <img
-                      src="/assets/acquisition-system/jetson-board.jpg"
+                      src={resolveAssetPath('/assets/acquisition-system/jetson-board.jpg')}
                       alt="NVIDIA Jetson 嵌入式视觉计算平台"
                       width={960}
                       height={540}

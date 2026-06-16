@@ -11,7 +11,7 @@ import {
   TeachingCard,
   buildInlineMathML,
 } from '@/components';
-import { computeHistogram } from '@/lib/algorithms/threshold';
+import { computeHistogram } from '@/lib/algorithms/histogram';
 import { generateExampleImage } from '@/lib/algorithms/histogram';
 import { centerCropGrayscaleImage, loadImageAsGrayscale } from '@/lib/utils/imageProcessing';
 import { GrayscaleImage } from '@/lib/algorithms/types';
@@ -27,19 +27,26 @@ const EXAMPLE_LABELS: Record<ExampleType, string> = {
   lena: 'Lena 图',
 };
 
-const HISTOGRAM_CODE_TS = `function computeHistogram(image: number[][]): number[] {
+const HISTOGRAM_CODE_TS = `interface Histogram {
+  bins: number[];      // 256 个灰度级的像素计数
+  totalPixels: number; // 图像总像素数
+}
+
+function computeHistogram(image: number[][]): Histogram {
   const bins = new Array(256).fill(0);
+  let totalPixels = 0;
 
   for (let y = 0; y < image.length; y++) {
     for (let x = 0; x < image[0].length; x++) {
       const gray = Math.round(image[y][x] * 255);
       bins[gray]++;
+      totalPixels++;
     }
   }
-  return bins;
+  return { bins, totalPixels };
 }
 
-// P(s_k) = n_k / n
+// P(s_k) = n_k / n  — 页面实时计算展示概率，下为示意实现
 function probability(bins: number[], total: number): number[] {
   return bins.map(n => n / total);
 }`;
@@ -85,17 +92,10 @@ function HistogramSVG({
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<SVGSVGElement>) => {
-    const currentGray = activeGray ?? 128;
-    if (event.key === 'ArrowLeft') {
+    // 方向键由 ConceptLayout 的全局 keydown 处理，此处只处理 Enter/Space 锁定
+    if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      onPinGray(Math.max(0, currentGray - 1));
-      onHoverGrayChange(null);
-    } else if (event.key === 'ArrowRight') {
-      event.preventDefault();
-      onPinGray(Math.min(255, currentGray + 1));
-      onHoverGrayChange(null);
-    } else if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
+      const currentGray = activeGray ?? 128;
       onPinGray(currentGray);
       onHoverGrayChange(null);
     }
@@ -180,7 +180,12 @@ export default function HistogramPage() {
   useEffect(() => {
     let cancelled = false;
     loadImageAsGrayscale('/assets/lena-original.jpg').then(img => {
-      if (!cancelled) setLenaImage(centerCropGrayscaleImage(img));
+      if (!cancelled) {
+        setLenaImage(centerCropGrayscaleImage(img));
+        // 图像切换后重置灰度级锁定状态
+        setHoveredGray(null);
+        setPinnedGray(null);
+      }
     }).catch(() => {});
     return () => { cancelled = true; };
   }, []);
@@ -294,10 +299,10 @@ export default function HistogramPage() {
               <p>所有像素的灰度值 {'<'} 64，直方图集中在左侧暗区。图像整体很暗，细节难以辨认。</p>
             )}
             {exampleType === 'bright' && (
-              <p>所有像素的灰度值 {'>'} 192，直方图集中在右侧亮区。图像整体很亮，可能过曝。</p>
+              <p>所有像素的灰度值 ≥ 192，直方图集中在右侧亮区。图像整体很亮，可能过曝。</p>
             )}
             {exampleType === 'lowContrast' && (
-              <p>像素值集中在 80-120 的窄范围内，直方图呈陡峭的峰形。图像对比度低、看起来灰蒙蒙的。</p>
+              <p>像素值集中在 80–119 的窄范围内，直方图呈陡峭的峰形。图像对比度低、看起来灰蒙蒙的。</p>
             )}
             {exampleType === 'bimodal' && (
               <p>上半部分偏暗（&lt;64）、下半部分偏亮（&gt;192），直方图出现两个明显峰值。适合用阈值分割为前景和背景。</p>
@@ -351,7 +356,7 @@ export default function HistogramPage() {
       stepDetails={stepDetails}
       analysisPreview={analysisPreview}
       codeTab={<CodeViewer languages={[{ name: 'TypeScript', code: HISTOGRAM_CODE_TS }]} />}
-      imageHints={{ input: imageInfo + ' 示例图像', output: '直方图（悬停查看统计）' }}
+      imageHints={{ input: imageInfo + ' 示例图像', output: '原图副本（直方图统计不改变图像本身）' }}
       showOriginalGrid={false}
       originalRegionMarker="dot"
       singlePageScroll

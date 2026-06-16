@@ -1,5 +1,26 @@
-import { GrayscaleImage } from './types';
+import { GrayscaleImage, Histogram } from './types';
 import { clamp } from '../utils/imageProcessing';
+
+/**
+ * 计算灰度直方图
+ * 统计每个灰度级（0-255）的像素数。
+ */
+export function computeHistogram(image: GrayscaleImage): Histogram {
+  const height = image.length;
+  const width = image[0]?.length || 0;
+  const bins = new Array(256).fill(0);
+  let totalPixels = 0;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const value = Math.round(clamp(image[y][x], 0, 1) * 255);
+      bins[value]++;
+      totalPixels++;
+    }
+  }
+
+  return { bins, totalPixels };
+}
 
 /** 基于位置的确定性伪随机值 [0, 1) */
 function posNoise(x: number, y: number): number {

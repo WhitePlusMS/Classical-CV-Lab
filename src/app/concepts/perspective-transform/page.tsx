@@ -386,30 +386,36 @@ export default function PerspectiveTransformPage() {
           setLenaReferenceRgb(finalRgb);
         }
       })
-      .catch(() => { if (!cancelled) setLenaReferenceRgb(null); });
-    return () => { cancelled = true; };
+      .catch(() => {
+        if (!cancelled) setLenaReferenceRgb(null);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const [selectedHandleIndex, setSelectedHandleIndex] = useState(0);
   const [imageType, setImageType] = useState<PerspectiveImageType>('document');
   const [lenaReferenceRgb, setLenaReferenceRgb] = useState<RgbImage | null>(null);
-  const scene = useMemo(() => createPerspectiveTeachingScene(imageType === 'lenaOriginal' && lenaReferenceRgb ? lenaReferenceRgb : undefined), [imageType, lenaReferenceRgb]);
+  const scene = useMemo(
+    () => createPerspectiveTeachingScene(imageType === 'lenaOriginal' && lenaReferenceRgb ? lenaReferenceRgb : undefined),
+    [imageType, lenaReferenceRgb]
+  );
   const [controlPoints, setControlPoints] = useState<PerspectivePoint[]>(() =>
     scene.sourcePoints.map(point => ({ ...point }))
   );
-  const adjustedScene = scene;
 
   const currentPoint = controlPoints[selectedHandleIndex] ?? controlPoints[0];
 
   const handleDirectionMove = useGridNavigation({
     current: currentPoint,
-    bounds: adjustedScene.sourceSize,
+    bounds: scene.sourceSize,
     onMove: nextPoint => {
       setControlPoints(previous => {
         const nextPoints = previous.map(point => ({ ...point }));
         nextPoints[selectedHandleIndex] = clampPerspectivePoint(
           nextPoint,
-          adjustedScene.sourceSize,
+          scene.sourceSize,
           DRAG_PADDING
         );
         return isValidPerspectiveQuad(nextPoints) ? nextPoints : previous;
@@ -432,9 +438,14 @@ export default function PerspectiveTransformPage() {
     setControlPoints(scene.sourcePoints.map(point => ({ ...point })));
   }, [scene.sourcePoints]);
 
+  useEffect(() => {
+    setControlPoints(scene.sourcePoints.map(point => ({ ...point })));
+    setSelectedHandleIndex(0);
+  }, [scene]);
+
   const computation = useMemo(
-    () => computePerspectiveCorrection(adjustedScene, controlPoints),
-    [adjustedScene, controlPoints]
+    () => computePerspectiveCorrection(scene, controlPoints),
+    [scene, controlPoints]
   );
 
   const matrixCardNote = (
@@ -454,7 +465,7 @@ export default function PerspectiveTransformPage() {
         </p>
       </div>
       <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-        四对点确定单应矩阵，随后对整幅图执行重采样。
+        四对点确定透视矩阵，随后对整幅图执行重采样。
       </div>
     </div>
   );
@@ -466,14 +477,14 @@ export default function PerspectiveTransformPage() {
           <FlowNode tone="red">
             <div className="text-[11px] font-semibold uppercase text-red-700">1. 建立四对点对应</div>
             <p className="mt-2 text-xs leading-5 text-slate-600">
-              左图四个控点对应拍摄到的平面角点，右侧目标平面固定为一个矩形。每一对点都在说明“同一平面上的同一位置，在两个视角下分别落到哪里”。
+              左图四个控制点对应拍摄到的平面角点，右侧目标平面固定为一个矩形。每一对点都在说明”同一平面上的同一位置，在两个视角下分别落到哪里”。
             </p>
             <div className="mt-3 space-y-1 border-t border-red-100 pt-3 text-xs leading-5">
               <div className="font-medium text-red-800">
-                当前控点：{HANDLE_LABELS[selectedHandleIndex]} {HANDLE_DESCRIPTIONS[selectedHandleIndex]}
+                当前控制点：{HANDLE_LABELS[selectedHandleIndex]} {HANDLE_DESCRIPTIONS[selectedHandleIndex]}
               </div>
               <div className="text-slate-600">
-                控点四边形保持凸包顺序，才能稳定对应同一平面边界。
+                控制点四边形保持凸包顺序，才能稳定对应同一平面边界。
               </div>
             </div>
           </FlowNode>
@@ -483,7 +494,7 @@ export default function PerspectiveTransformPage() {
           <FlowNode tone="amber">
             <div className="text-[11px] font-semibold uppercase text-amber-800">2. 由对应点求变换矩阵</div>
             <p className="mt-2 text-xs leading-5 text-slate-600">
-              透视变换使用四对点，得到 3×3 齐次矩阵；仿射变换只使用前三对点，得到 2×3 矩阵。
+              透视变换使用四对点，得到 3×3 齐次矩阵；仿射变换只使用前三对点，得到的 3×3 矩阵第三行为 [0,0,1]。
               两者都保留直线，但只有透视矩阵能补偿斜拍造成的汇聚关系。
             </p>
             <div className="mt-3 space-y-1 border-t border-amber-100 pt-3 text-xs leading-5">
@@ -505,7 +516,7 @@ export default function PerspectiveTransformPage() {
             </p>
             <div className="mt-3 space-y-1 border-t border-emerald-100 pt-3 text-xs leading-5">
               <div className="font-medium text-emerald-800">
-                透视结果输出为 {adjustedScene.destinationSize.width}×{adjustedScene.destinationSize.height} 的正视图
+                透视结果输出为 {scene.destinationSize.width}×{scene.destinationSize.height} 的正视图
               </div>
               <div className="text-slate-600">
                 仿射第四角残差约为 {formatTransformNumber(computation.affineResidual, 2)} 像素
@@ -560,7 +571,7 @@ export default function PerspectiveTransformPage() {
               label="目标矩形对应点"
               mathML={pointVectorStatement(
                 HANDLE_LABELS[selectedHandleIndex],
-                adjustedScene.destinationPoints[selectedHandleIndex],
+                scene.destinationPoints[selectedHandleIndex],
                 true
               )}
               note="四个目标点固定在正视矩形的四个顶点。"
@@ -610,7 +621,7 @@ export default function PerspectiveTransformPage() {
       <TeachingCard>
         <div className="grid gap-6">
         <section>
-          <div className="text-sm font-semibold text-slate-800">为什么透视变换要四对点</div>
+          <div className="text-sm font-semibold text-slate-800">为什么透视变换需要四对点</div>
           <p className="mt-2 text-sm leading-6 text-slate-700">
             3×3 齐次矩阵共有 9 个元素，但整体只差一个比例因子，因此有效自由度是 8。
             一对点给出两个独立方程，四对点正好提供 8 个约束，所以求解过程和 OpenCV 实现都要求使用四对点。
@@ -646,6 +657,16 @@ export default function PerspectiveTransformPage() {
   const parameters = (
     <div className="space-y-4">
       <SelectParam
+        label="参考图像"
+        value={imageType}
+        onChange={value => setImageType(value as PerspectiveImageType)}
+        options={[
+          { value: 'document', label: '教学文档' },
+          { value: 'lenaOriginal', label: 'Lena 原图' },
+        ]}
+      />
+
+      <SelectParam
         label="微调控点"
         value={String(selectedHandleIndex)}
         onChange={value => setSelectedHandleIndex(Number(value))}
@@ -667,6 +688,12 @@ export default function PerspectiveTransformPage() {
       <div className="border-l-4 border-emerald-300 pl-3 text-xs leading-5 text-emerald-800">
         透视矩阵由四点决定；仿射矩阵只由前三点决定，因此残差大小可以直接反映两者能力差异。
       </div>
+
+      {imageType === 'lenaOriginal' && !lenaReferenceRgb && (
+        <div className="border-l-4 border-amber-300 pl-3 text-xs leading-5 text-amber-800">
+          Lena 参考图加载失败，当前将自动退回教学文档示例。
+        </div>
+      )}
     </div>
   );
 
@@ -718,7 +745,7 @@ export default function PerspectiveTransformPage() {
             />
           </div>
           <div className="mt-3 border-t border-emerald-200 pt-3 text-xs leading-5 text-emerald-900">
-            单应矩阵同时约束四个角，因此能把梯形平面展开为矩形正视图。
+            透视矩阵同时约束四个角，因此能把梯形平面展开为矩形正视图。
           </div>
         </TeachingCard>
 
@@ -756,7 +783,7 @@ export default function PerspectiveTransformPage() {
       subtitle="Perspective Transform"
       contentHeader={contentHeader}
       operationLabel="透视校正"
-      parameterIntro="先拖动左图四个控点贴合纸张边界；当前点对只用于解单应矩阵，再对比透视结果与仿射结果的差别。"
+      parameterIntro="先拖动左图四个控制点贴合纸张边界；当前点对只用于解透视矩阵，再对比透视结果与仿射结果的差别。"
       originalImage={scene.sourceGray}
       resultImage={computation.perspectiveGray}
       originalRgbImage={scene.sourceRgb}

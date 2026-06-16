@@ -373,6 +373,14 @@ function buildGaussianTemplateMathML(): string {
   `);
 }
 
+function getRegionTopLeft(x: number, y: number, kernelSize: number, imageWidth: number, imageHeight: number) {
+  const half = Math.floor(kernelSize / 2);
+  return {
+    x: Math.max(0, Math.min(x - half, imageWidth - kernelSize)),
+    y: Math.max(0, Math.min(y - half, imageHeight - kernelSize)),
+  };
+}
+
 // ========== 页面组件 ==========
 
 export default function BlurPage() {
@@ -454,6 +462,12 @@ export default function BlurPage() {
     return swSteps[currentStepIndex] ?? null;
   }, [method, swSteps, currentStepIndex]);
 
+  const currentRegion = useMemo(() => {
+    const activeStep = method === 'sidewindow' ? currentSwStep : currentStep;
+    if (!activeStep) return null;
+    return getRegionTopLeft(activeStep.x, activeStep.y, kernelSize, imageWidth, imageHeight);
+  }, [currentStep, currentSwStep, imageHeight, imageWidth, kernelSize, method]);
+
   // 网格导航
   const handleDirectionMove = useGridNavigation({
     current: currentPosition,
@@ -519,6 +533,7 @@ export default function BlurPage() {
       }
 
       const { x, y, inputRegion, centerValue, candidates, selectedIndex, outputValue } = currentSwStep;
+      const regionStart = getRegionTopLeft(x, y, kernelSize, imageWidth, imageHeight);
       const swCellClass = getSwCellClass(kernelSize);
       const half = Math.floor(kernelSize / 2);
 
@@ -574,7 +589,7 @@ export default function BlurPage() {
               <div className="rounded-2xl border border-red-200 bg-red-50/55 p-3">
                 <div className="text-sm font-semibold text-red-700">输入邻域</div>
                 <div className="mt-1 text-[11px] text-red-600">
-                  第 {y + 1}-{y + kernelSize} 行 / 第 {x + 1}-{x + kernelSize} 列
+                  第 {regionStart.y + 1}-{regionStart.y + kernelSize} 行 / 第 {regionStart.x + 1}-{regionStart.x + kernelSize} 列
                 </div>
                 <div className="mt-3">
                   <div
@@ -729,16 +744,23 @@ export default function BlurPage() {
             mathClassName="[&_math]:text-lg sm:[&_math]:text-xl"
           />
 
-          {!isBox && !isMedian && kernelSize === 3 && (
+          {!isBox && !isMedian && kernelSize === 3 && Math.abs(sigma - 1) < 1e-6 && (
             <div className="mx-auto mt-4 max-w-2xl rounded-2xl border border-amber-200 bg-amber-50/60 px-4 py-3">
               <div className="mb-2 text-xs font-semibold text-amber-800">
-                经典 3×3 高斯模板
+                经典 3×3 高斯模板（σ = 1.0）
               </div>
               <FormulaLine
                 mathML={buildGaussianTemplateMathML()}
                 className="text-amber-800"
                 mathClassName="[&_math]:text-base sm:[&_math]:text-lg"
               />
+            </div>
+          )}
+
+          {!isBox && !isMedian && kernelSize === 3 && Math.abs(sigma - 1) >= 1e-6 && (
+            <div className="mx-auto mt-4 max-w-2xl rounded-2xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-xs leading-6 text-amber-800">
+              当前 3×3 高斯核会随 <span className="font-semibold">σ = {sigma.toFixed(1)}</span> 动态变化；
+              上方输出值使用实时生成的高斯权重计算，不再套用固定的 `1/16` 经典模板。
             </div>
           )}
 
@@ -1125,6 +1147,7 @@ export default function BlurPage() {
     if (!currentStep) return null;
 
     const { x, y, inputRegion, kernel, outputValue, operation } = currentStep;
+    const regionStart = getRegionTopLeft(x, y, kernelSize, imageWidth, imageHeight);
     const isMedian = operation === 'median';
     const half = Math.floor(kernelSize / 2);
     const centerPixel = inputRegion[half]?.[half] ?? 0;
@@ -1140,7 +1163,7 @@ export default function BlurPage() {
               <div className="mb-2 flex items-center justify-between gap-3">
                 <span className="text-[11px] font-semibold uppercase text-red-700">输入窗口放大</span>
                 <span className="text-[11px] text-red-700">
-                  第 {y + 1}-{y + kernelSize} 行 / 第 {x + 1}-{x + kernelSize} 列
+                  第 {regionStart.y + 1}-{regionStart.y + kernelSize} 行 / 第 {regionStart.x + 1}-{regionStart.x + kernelSize} 列
                 </span>
               </div>
               <div className="flex flex-col items-center gap-2">
@@ -1311,8 +1334,8 @@ export default function BlurPage() {
         : {
             kind: 'region',
             selector: '.conv-anchor-input-main',
-            x: currentSwStep.x,
-            y: currentSwStep.y,
+            x: currentRegion?.x ?? currentSwStep.x,
+            y: currentRegion?.y ?? currentSwStep.y,
             size: kernelSize,
             imageWidth,
             imageHeight,
@@ -1360,8 +1383,8 @@ export default function BlurPage() {
       : {
           kind: 'region',
           selector: '.conv-anchor-input-main',
-          x: currentStep.x,
-          y: currentStep.y,
+          x: currentRegion?.x ?? currentStep.x,
+          y: currentRegion?.y ?? currentStep.y,
           size: kernelSize,
           imageWidth,
           imageHeight,
@@ -1395,7 +1418,7 @@ export default function BlurPage() {
         to: { kind: 'element', selector: '.blur-anchor-output-node' },
       },
     ];
-  }, [currentStep, currentSwStep, method, imageType, kernelSize, imageWidth, imageHeight]);
+  }, [currentStep, currentSwStep, currentRegion, method, imageType, kernelSize, imageWidth, imageHeight]);
 
   const visualOverlay = visualOverlayPaths.length > 0 ? (
     <AnchoredOverlay paths={visualOverlayPaths} />
@@ -1545,10 +1568,26 @@ export default function BlurPage() {
       currentStep={
         method === 'sidewindow'
           ? currentSwStep
-            ? { x: currentSwStep.x, y: currentSwStep.y, kernelSize }
+            ? imageType === 'lena'
+              ? { x: currentSwStep.x, y: currentSwStep.y, kernelSize }
+              : {
+                  x: currentSwStep.x,
+                  y: currentSwStep.y,
+                  kernelSize,
+                  regionX: currentRegion?.x ?? currentSwStep.x,
+                  regionY: currentRegion?.y ?? currentSwStep.y,
+                }
             : null
           : currentStep
-            ? { x: currentStep.x, y: currentStep.y, kernelSize }
+            ? imageType === 'lena'
+              ? { x: currentStep.x, y: currentStep.y, kernelSize }
+              : {
+                  x: currentStep.x,
+                  y: currentStep.y,
+                  kernelSize,
+                  regionX: currentRegion?.x ?? currentStep.x,
+                  regionY: currentRegion?.y ?? currentStep.y,
+                }
             : null
       }
       stepInfo={

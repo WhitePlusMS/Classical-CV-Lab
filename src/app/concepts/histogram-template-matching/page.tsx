@@ -32,6 +32,7 @@ import {
   loadImageAsGrayscale,
   resizeGrayscaleImage,
 } from '@/lib/utils/imageProcessing';
+import { resolveAssetPath } from '@/lib/utils/assetPath';
 
 type TeachingSection = 'template' | 'histogram';
 type ControlTarget = 'template' | 'current' | 'candidate';
@@ -53,7 +54,7 @@ const COMPARE_HIST_CODE = `function compareHist(templateHist, candidateHist, met
 const MATCH_TEMPLATE_CODE = `function matchTemplate(image, template, method) {
   for (let y = 0; y <= image.height - template.height; y++) {
     for (let x = 0; x <= image.width - template.width; x++) {
-      response[y][x] = method === 'SSD'
+      response[y][x] = method === 'ssd'
         ? sum((template - imageWindow(x, y)) ** 2)
         : sum(abs(template - imageWindow(x, y)));
     }
@@ -160,6 +161,30 @@ function histogramFormulaMathML(
     intersection: 'Inter',
     bhattacharyya: 'Bhatta',
   }[method];
+
+  // For correlation, show full normalized formula instead of per-bin expansion
+  if (method === 'correlation') {
+    return buildInlineMathML(`
+      <mrow>
+        <mi>${name}</mi><mo>(</mo><msub><mi>H</mi><mi>T</mi></msub><mo>,</mo><msub><mi>H</mi><mi>C</mi></msub><mo>)</mo>
+        <mo>=</mo>
+        <mfrac>
+          <mrow><msub><mo>∑</mo><mi>i</mi></msub><mo>(</mo><msub><mi>h</mi><mi>T</mi></msub><mo>(</mo><mi>i</mi><mo>)</mo><mo>-</mo><msub><mi>μ</mi><mi>T</mi></msub><mo>)</mo><mo>(</mo><msub><mi>h</mi><mi>C</mi></msub><mo>(</mo><mi>i</mi><mo>)</mo><mo>-</mo><msub><mi>μ</mi><mi>C</mi></msub><mo>)</mo></mrow>
+          <mrow>
+            <msqrt>
+              <mrow>
+                <msub><mo>∑</mo><mi>i</mi></msub><msup><mrow><mo>(</mo><msub><mi>h</mi><mi>T</mi></msub><mo>(</mo><mi>i</mi><mo>)</mo><mo>-</mo><msub><mi>μ</mi><mi>T</mi></msub><mo>)</mo></mrow><mn>2</mn></msup>
+                <mo>·</mo>
+                <msub><mo>∑</mo><mi>i</mi></msub><msup><mrow><mo>(</mo><msub><mi>h</mi><mi>C</mi></msub><mo>(</mo><mi>i</mi><mo>)</mo><mo>-</mo><msub><mi>μ</mi><mi>C</mi></msub><mo>)</mo></mrow><mn>2</mn></msup>
+              </mrow>
+            </msqrt>
+          </mrow>
+        </mfrac>
+        <mo>=</mo><mn>${formatScore(score)}</mn>
+      </mrow>
+    `);
+  }
+
   const terms = contributions.map(item => {
     const template = item.template.toFixed(3);
     const candidate = item.candidate.toFixed(3);
@@ -285,7 +310,7 @@ function CourseImage({ src, label }: { src: string; label: string }) {
   return (
     <figure>
       <div className="flex h-44 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-950">
-        <img src={src} alt={label} className="h-full w-full object-contain" />
+        <img src={resolveAssetPath(src)} alt={label} className="h-full w-full object-contain" />
       </div>
       <figcaption className="mt-2 text-center text-xs font-semibold text-slate-600">{label}</figcaption>
     </figure>
@@ -749,7 +774,7 @@ export default function HistogramTemplateMatchingPage() {
   return (
     <ConceptLayout
       title="直方图匹配与模板匹配"
-      subtitle="Histogram Matching & Template Matching - 基于特征匹配的目标检测"
+      subtitle="Histogram Matching & Template Matching - 基于模板匹配的目标定位"
       operationLabel={section === 'template' ? '模板响应' : '直方图比较'}
       parameterIntro="调整模板大小和当前控制对象，观察窗口移动时响应图、直方图和公式代入如何同步变化。"
       originalImage={sourceImage}

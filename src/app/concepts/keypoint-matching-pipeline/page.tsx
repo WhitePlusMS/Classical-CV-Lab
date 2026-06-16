@@ -104,7 +104,7 @@ const TABLE_ROWS = [
       '特征邻域对 Haar wavelet 的最大响应方向',
       '无',
       '使用 Intensity centroid 方法来确定方向',
-      '使用邻域随机抽样点对，对远点对做梯度确定方向',
+      '使用预定义采样点对，对远点对做梯度确定方向',
     ],
   },
   {
@@ -123,7 +123,7 @@ const TABLE_ROWS = [
       '4×4 sub-region 八方向梯度，128 维',
       '4×4 sub-region Haar 响应四值，64 维',
       '随机点对强度比较，256 位二进制串',
-      '贪心法抽取正态分布随机点对，同 BRIEF',
+      '贪心法抽取正态分布随机点对（与 BRIEF 纯随机不同）',
       '短距离点对强度匹配，512 位二进制串',
     ],
   },
@@ -885,7 +885,7 @@ export default function KeypointMatchingPipelinePage() {
           <div className="rounded-2xl border border-slate-200 bg-white/95 px-4 py-4 shadow-sm">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
-                <div className="text-xs font-semibold text-slate-800">局部 patch</div>
+                <div className="text-xs font-semibold text-slate-800">局部图像块（Patch）</div>
                 <p className="mt-1 text-xs leading-5 text-slate-500">
                   固定同一个关键点，观察换方法后局部结构如何被不同方式编码。
                 </p>

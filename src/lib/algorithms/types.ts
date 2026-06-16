@@ -26,6 +26,7 @@ export interface StepResult {
   y: number;
   inputRegion: number[][];
   kernel: number[][];
+  displayKernel: number[][];
   outputValue: number;
   formula: string;
 }

@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { resolveAssetPath } from '@/lib/utils/assetPath';
 const taskTypes = [
   { title: '识别', detail: '对象类别' },
   { title: '检测', detail: '目标区域' },
@@ -346,7 +347,7 @@ export default function ApplicationsOverviewPage() {
                   <article key={item.title} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                     <div className="relative aspect-[16/9] overflow-hidden bg-slate-100">
                       <img
-                        src={item.imageUrl}
+                        src={resolveAssetPath(item.imageUrl)}
                         alt={item.alt}
                         width={item.imageWidth}
                         height={item.imageHeight}
@@ -433,7 +434,7 @@ export default function ApplicationsOverviewPage() {
             <div className="mt-5 overflow-hidden rounded-2xl border border-rose-100 bg-rose-50/50">
               <div className="relative aspect-[16/9] overflow-hidden bg-slate-100">
                 <img
-                  src="/assets/applications-overview/remote-aster-etna.jpg"
+                  src={resolveAssetPath('/assets/applications-overview/remote-aster-etna.jpg')}
                   alt="ASTER 遥感传感器生成的埃特纳火山假彩色三维影像"
                   width={1152}
                   height={870}
@@ -462,7 +463,7 @@ export default function ApplicationsOverviewPage() {
               <div className={`mt-5 overflow-hidden rounded-2xl border ${index === 0 ? 'border-emerald-100 bg-emerald-50/50' : 'border-sky-100 bg-sky-50/50'}`}>
                 <div className="relative aspect-[16/9] overflow-hidden bg-slate-100">
                   <img
-                    src={group.imageUrl}
+                    src={resolveAssetPath(group.imageUrl)}
                     alt={group.imageAlt}
                     width={group.imageWidth}
                     height={group.imageHeight}
@@ -484,7 +485,7 @@ export default function ApplicationsOverviewPage() {
             <div className="mt-5 overflow-hidden rounded-2xl border border-amber-100 bg-amber-50/50">
               <div className="relative aspect-[16/9] overflow-hidden bg-slate-100">
                 <img
-                  src="/assets/applications-overview/medical-thermal-body.jpg"
+                  src={resolveAssetPath('/assets/applications-overview/medical-thermal-body.jpg')}
                   alt="人体背部热成像图和温度标注"
                   width={760}
                   height={480}
@@ -507,7 +508,7 @@ export default function ApplicationsOverviewPage() {
             <div className="grid gap-0 lg:grid-cols-[0.9fr_1.1fr] lg:items-stretch">
               <div className="relative min-h-[240px] overflow-hidden bg-slate-100">
                 <img
-                  src="/assets/applications-overview/autonomous-cruise-lidar.optimized.jpg"
+                  src={resolveAssetPath('/assets/applications-overview/autonomous-cruise-lidar.optimized.jpg')}
                   alt="搭载车顶激光雷达和多传感器的 Cruise 自动驾驶车辆"
                   width={1400}
                   height={788}

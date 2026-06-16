@@ -21,8 +21,9 @@ import {
 } from '@/lib/algorithms/simpleBackground';
 import { GrayscaleImage } from '@/lib/algorithms/types';
 import { useGridNavigation } from '@/hooks/useGridNavigation';
+import { resolveAssetPath } from '@/lib/utils/assetPath';
 
-const FRAME_CODE_TS = `function frameDifference(frames, t, threshold) {
+const FRAME_CODE_TS = `function frameDifference(frames, t, threshold, mode) {
   const previous = frames[t - 1];
   const current = frames[t];
   const next = frames[t + 1];
@@ -190,7 +191,7 @@ function CourseImage({
   return (
     <figure className="space-y-2">
       <div className={`flex items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-950 ${className}`}>
-        <img src={src} alt={label} className="h-full w-full object-contain" />
+        <img src={resolveAssetPath(src)} alt={label} className="h-full w-full object-contain" />
       </div>
       <figcaption className="text-center text-xs font-semibold text-slate-700">{label}</figcaption>
     </figure>
@@ -368,7 +369,7 @@ export default function FrameDifferenceMotionPage() {
         </div>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-3">
+      <div className={`grid gap-3 ${method === 'twoFrame' ? 'lg:grid-cols-2' : 'lg:grid-cols-3'}`}>
         <FrameImageCard
           title={`前一帧 I(t-1) / t=${result.previousIndex + 1}`}
           note={`I(t-1)(${currentPosition.x},${currentPosition.y}) = ${previousGray}`}
@@ -385,17 +386,19 @@ export default function FrameDifferenceMotionPage() {
           selectedRegion={selectedPixelRegion}
           onSelect={handlePixelSelect}
         />
-        <FrameImageCard
-          title={`后一帧 I(t+1) / t=${result.nextIndex + 1}`}
-          note={`I(t+1)(${currentPosition.x},${currentPosition.y}) = ${nextGray}`}
-          image={result.next}
-          tone="slate"
-          selectedRegion={selectedPixelRegion}
-          onSelect={handlePixelSelect}
-        />
+        {method !== 'twoFrame' && (
+          <FrameImageCard
+            title={`后一帧 I(t+1) / t=${result.nextIndex + 1}`}
+            note={`I(t+1)(${currentPosition.x},${currentPosition.y}) = ${nextGray}`}
+            image={result.next}
+            tone="slate"
+            selectedRegion={selectedPixelRegion}
+            onSelect={handlePixelSelect}
+          />
+        )}
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-4">
+      <div className={`grid gap-3 ${method === 'twoFrame' ? 'lg:grid-cols-3' : 'lg:grid-cols-4'}`}>
         <FrameImageCard
           title="前向差分 |I(t)-I(t-1)|"
           note={`差值 = |${currentGray} - ${previousGray}| = ${previousDiffGray}`}
@@ -404,14 +407,16 @@ export default function FrameDifferenceMotionPage() {
           selectedRegion={selectedPixelRegion}
           onSelect={handlePixelSelect}
         />
-        <FrameImageCard
-          title="后向差分 |I(t+1)-I(t)|"
-          note={`差值 = |${nextGray} - ${currentGray}| = ${nextDiffGray}`}
-          image={result.nextDifference}
-          tone="amber"
-          selectedRegion={selectedPixelRegion}
-          onSelect={handlePixelSelect}
-        />
+        {method !== 'twoFrame' && (
+          <FrameImageCard
+            title="后向差分 |I(t+1)-I(t)|"
+            note={`差值 = |${nextGray} - ${currentGray}| = ${nextDiffGray}`}
+            image={result.nextDifference}
+            tone="amber"
+            selectedRegion={selectedPixelRegion}
+            onSelect={handlePixelSelect}
+          />
+        )}
         <FrameImageCard
           title={method === 'twoFrame' ? '二值运动掩膜' : '两次差分交集'}
           note={`原始判定 D = ${rawMaskValue}，T = ${threshold}`}
@@ -430,14 +435,14 @@ export default function FrameDifferenceMotionPage() {
         />
       </div>
 
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className={`grid gap-3 ${method === 'twoFrame' ? 'md:grid-cols-4' : 'md:grid-cols-4'}`}>
         <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
           <div className="text-xs text-slate-500">当前位置</div>
           <div className="mt-1 font-mono text-lg font-semibold text-slate-800">({currentPosition.x}, {currentPosition.y})</div>
         </div>
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
           <div className="text-xs text-amber-700">当前差值</div>
-          <div className="mt-1 font-mono text-lg font-semibold text-amber-800">{previousDiffGray} / {nextDiffGray}</div>
+          <div className="mt-1 font-mono text-lg font-semibold text-amber-800">{previousDiffGray}{method !== 'twoFrame' && <span> / {nextDiffGray}</span>}</div>
         </div>
         <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3">
           <div className="text-xs text-sky-700">运动像素数量</div>
@@ -498,7 +503,8 @@ export default function FrameDifferenceMotionPage() {
           <FlowNode tone="red">
             <div className="text-xs font-semibold text-red-700">选中像素</div>
             <p className="mt-2 text-xs leading-5 text-slate-600">
-              当前查看 ({currentPosition.x}, {currentPosition.y})，三帧灰度为 {previousGray} / {currentGray} / {nextGray}。
+              当前查看 ({currentPosition.x}, {currentPosition.y})，
+            {method === 'twoFrame' ? `两帧灰度为 ${previousGray} / ${currentGray}` : `三帧灰度为 ${previousGray} / ${currentGray} / ${nextGray}`}。
             </p>
           </FlowNode>
         </FlowColumn>
@@ -506,7 +512,7 @@ export default function FrameDifferenceMotionPage() {
           <FlowNode tone="amber">
             <div className="text-xs font-semibold text-amber-700">差分与阈值</div>
             <p className="mt-2 text-xs leading-5 text-slate-600">
-              前向差分 {previousDiffGray}，后向差分 {nextDiffGray}，当前阈值 T = {threshold}。
+              前向差分 {previousDiffGray}{method !== 'twoFrame' && <span>，后向差分 {nextDiffGray}</span>}，当前阈值 T = {threshold}。
             </p>
           </FlowNode>
         </FlowColumn>
@@ -639,7 +645,7 @@ export default function FrameDifferenceMotionPage() {
       currentStep={{ x: currentPosition.x, y: currentPosition.y, kernelSize: 1 }}
       stepInfo={{ current: currentStepIndex, total: totalPixels }}
       imageLabels={{ input: '当前帧', output: '运动掩膜' }}
-      imageHints={{ input: '点击像素查看三帧灰度变化', output: '阈值化与形态学清理后的运动区域' }}
+      imageHints={{ input: method === 'twoFrame' ? '点击像素查看两帧灰度变化' : '点击像素查看三帧灰度变化', output: '阈值化与形态学清理后的运动区域' }}
       showOriginalGrid={false}
       originalRegionMarker="dot"
       singlePageScroll

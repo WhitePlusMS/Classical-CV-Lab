@@ -843,11 +843,15 @@ export default function EdgeDetectionPage() {
                 <div className="space-y-2 text-xs">
                   <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
                     <span className="text-slate-500">高阈值: </span>
-                    <span className="font-mono font-semibold text-slate-700">{highThreshold}/255</span>
+                    <span className="font-mono font-semibold text-slate-700">
+                      {highThreshold}（归一化 {((highThreshold / 255)).toFixed(3)}）
+                    </span>
                   </div>
                   <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
                     <span className="text-slate-500">低阈值: </span>
-                    <span className="font-mono font-semibold text-slate-700">{lowThreshold}/255</span>
+                    <span className="font-mono font-semibold text-slate-700">
+                      {lowThreshold}（归一化 {((lowThreshold / 255)).toFixed(3)}）
+                    </span>
                   </div>
                   <div className="rounded-xl bg-amber-50 px-3 py-2 text-amber-800">
                     先只做分类：强边缘、弱边缘候选和非边缘。弱边缘是否保留交给下一步判断。

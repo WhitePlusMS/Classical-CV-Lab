@@ -160,7 +160,8 @@ export function getColorSpaceStepAt(
   y: number,
   mode: ColorDisplayMode,
   thresholdDegrees: number,
-  binCount: number
+  binCount: number,
+  targetHue: number | null = null
 ): ColorSpaceStep | null {
   const height = rgbImage.length;
   const width = rgbImage[0]?.length ?? 0;
@@ -186,6 +187,6 @@ export function getColorSpaceStepAt(
     channel,
     channelValue,
     histogramBin: getHistogramBin(channelValue, safeBinCount),
-    thresholdHit: hueDistance(hsv.h, hsv.h) <= clamp(thresholdDegrees, 0, 180),
+    thresholdHit: hueDistance(hsv.h, targetHue ?? hsv.h) <= clamp(thresholdDegrees, 0, 180),
   };
 }

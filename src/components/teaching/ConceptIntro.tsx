@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import { resolveAssetPath } from '@/lib/utils/assetPath';
 
 export interface ConceptIntroImage {
   src: string;
@@ -455,7 +456,7 @@ export function ConceptIntro({
             aria-label={`放大查看：${image.alt}`}
           >
             <img
-              src={image.src}
+              src={resolveAssetPath(image.src)}
               alt={image.alt}
               className="aspect-[16/9] w-full rounded-xl border border-slate-200 bg-slate-50 object-contain"
               loading="lazy"
@@ -514,7 +515,7 @@ export function ConceptIntro({
               关闭
             </button>
             <img
-              src={image.src}
+              src={resolveAssetPath(image.src)}
               alt={image.alt}
               className="max-h-[82vh] max-w-full rounded-lg bg-white object-contain shadow-2xl"
               width={1280}

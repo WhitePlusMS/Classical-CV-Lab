@@ -350,11 +350,11 @@ export default function PixelMatrixPage() {
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div>
                 <div className="text-xs font-semibold text-emerald-700">
-                  当前 {getWindowSizeLabel(windowSize)} 窗口矩阵
-                </div>
-                <div className="mt-1 text-[11px] text-slate-500">
-                  整个方阵都是当前窗口；绿色描边只标出
-                  {neighborhoodType === '4' ? '四邻域' : '八邻域'}的方向集合。
+                当前 {getWindowSizeLabel(windowSize)} 邻域窗口
+              </div>
+              <div className="mt-1 text-[11px] text-slate-500">
+                整个方阵都是当前窗口内的像素；绿色高亮标出
+                {neighborhoodType === '4' ? '四邻域' : '八邻域'}的方向集合。
                 </div>
               </div>
               <PixelColorSwatch color={color} className="h-9 w-9 rounded-lg" />
@@ -418,7 +418,7 @@ export default function PixelMatrixPage() {
             <div className="mt-2">
               中心像素位于第 {row + 1} 行、第 {col + 1} 列，即数学坐标
               <span className="font-mono text-slate-800"> (x={col}, y={row})</span>。
-              当前窗口向四周各扩展 {half} 格，得到 {getWindowSizeLabel(windowSize)} 局部矩阵；窗口内所有格子都属于当前局部范围。
+              当前窗口向四周各扩展 {half} 格，得到 {getWindowSizeLabel(windowSize)} 邻域窗口；窗口内所有格子都属于当前局部范围。
             </div>
             <div className="mt-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
               {neighborhoodType === '4'
@@ -615,7 +615,7 @@ export default function PixelMatrixPage() {
         {/* 4. 邻域窗口矩阵 */}
         <TeachingCard>
           <h3 className="text-sm font-semibold text-emerald-700">
-            {getWindowSizeLabel(ws)} 邻域窗口矩阵
+            {getWindowSizeLabel(ws)} 邻域窗口
             <span className="ml-2 text-[11px] font-normal text-emerald-500">
               （中心红框 = image[{row}][{col}]）
             </span>
@@ -749,7 +749,7 @@ export default function PixelMatrixPage() {
                 ))}
               </div>
               <p className="text-[11px] text-red-500 mt-1">
-                当前边界处理使用 Clamp 策略：越界坐标被限制到最近的有效边界位置，窗口不会真正“越界”。
+                当前边界处理使用 Clamp 策略（灰显策略为本页未实现的常见方案，仅作知识扩展参考）。
               </p>
             </div>
           </TeachingCard>

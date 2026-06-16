@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AnchoredOverlay,
   type AnchoredOverlayPath,
@@ -73,7 +73,8 @@ svm->save("svm_model.xml");
 float response = svm->predict(windowFeature);
 Mat supportVectors = svm->getSupportVectors();`;
 
-const TEACHING_DETECTION_CODE = `function scanImage(image) {
+const TEACHING_DETECTION_CODE = `// 教学简化：各级 Cascade 使用同一特征值 |V|，实际 Cascade 各阶段特征类型、数量和阈值均不同
+function scanImage(image) {
   const candidates = [];
 
   for (const window of slidingWindows(image)) {
@@ -508,14 +509,20 @@ export default function ClassifierDetectionPipelinePage() {
     return () => window.clearInterval(timer);
   }, [autoScan, progress.total, taskStage]);
 
+  const prevTaskStage = useRef<TaskStage>(taskStage);
+
   const goStage = useCallback((stage: TaskStage) => {
     setTaskStage(stage);
-    if (stage === 'scan' && taskStage !== 'scan') {
-      setScanIndex(0);
-    }
     if (stage !== 'scan') {
       setAutoScan(false);
     }
+  }, []);
+
+  useEffect(() => {
+    if (taskStage === 'scan' && prevTaskStage.current !== 'scan') {
+      setScanIndex(0);
+    }
+    prevTaskStage.current = taskStage;
   }, [taskStage]);
 
   const goPrevious = useCallback(() => {
@@ -872,6 +879,10 @@ export default function ClassifierDetectionPipelinePage() {
                       <p className="mt-2 leading-5">背景窗口，用来告诉分类器“这类外观应拒绝”。</p>
                     </div>
                   </div>
+                ) : taskStage === 'intro' ? (
+                  <p className="text-xs leading-5 text-slate-600">
+                    从原图提取一个窗口区域，通过特征提取和分类器判定来判断是否包含目标。
+                  </p>
                 ) : currentWindowStep ? (
                   <div>
                     <ImageCanvas image={currentWindowStep.inputRegion} maxDisplaySize={150} showGrid />
@@ -886,7 +897,7 @@ export default function ClassifierDetectionPipelinePage() {
             <FlowColumn align="center">
               <FlowNode tone="amber">
                 <div className="mb-2 text-[11px] font-semibold uppercase text-amber-800">Haar 特征</div>
-                {currentWindowStep ? (
+                {currentWindowStep && taskStage !== 'intro' ? (
                   <div className="grid grid-cols-2 gap-2">
                     <MetricCard label="黑区和" value={String(currentWindowStep.haarStep?.blackSum ?? 0)} />
                     <MetricCard label="白区和" value={String(currentWindowStep.haarStep?.whiteSum ?? 0)} />
@@ -902,7 +913,13 @@ export default function ClassifierDetectionPipelinePage() {
 
               <FlowNode tone="sky">
                 <div className="mb-2 text-[11px] font-semibold uppercase text-sky-700">级联分类器</div>
-                <CascadeStageList step={currentScanStep} />
+                {currentScanStep && taskStage !== 'intro' ? (
+                  <CascadeStageList step={currentScanStep} />
+                ) : (
+                  <p className="text-xs leading-5 text-slate-600">
+                    多个级联阶段逐级过滤窗口，前级快速拒绝大量背景，后级只处理少量疑似目标。
+                  </p>
+                )}
               </FlowNode>
             </FlowColumn>
 

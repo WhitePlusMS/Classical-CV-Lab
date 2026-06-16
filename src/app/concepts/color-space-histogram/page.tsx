@@ -27,6 +27,7 @@ import {
   createHueMask,
   extractColorChannel,
   getColorSpaceStepAt,
+  rgbToHsv,
 } from '@/lib/algorithms/colorSpaceHistogram';
 import { GrayscaleImage } from '@/lib/algorithms/types';
 import { useGridNavigation } from '@/hooks/useGridNavigation';
@@ -611,9 +612,10 @@ function HsvConeDiagram({ step }: { step: ColorSpaceStep }) {
 }
 
 export default function ColorSpaceHistogramPage() {
-  const [displayMode, setDisplayMode] = useState<ColorDisplayMode>('mask');
+  const [displayMode, setDisplayMode] = useState<ColorDisplayMode>('rgb');
   const [currentPosition, setCurrentPosition] = useState({ x: 38, y: 44 });
   const [threshold, setThreshold] = useState(DEFAULT_THRESHOLD);
+  const [referenceHue, setReferenceHue] = useState<number | null>(null);
   const [loadedRgbImage, setLoadedRgbImage] = useState<RgbPixel[][] | null>(null);
   const fallbackRgbImage = useMemo(() => createFallbackRgbImage(), []);
 
@@ -647,9 +649,11 @@ export default function ColorSpaceHistogramPage() {
   };
 
   const currentStep = useMemo(
-    () => getColorSpaceStepAt(rgbImage, safePosition.x, safePosition.y, displayMode, threshold, BIN_COUNT),
-    [displayMode, rgbImage, safePosition.x, safePosition.y, threshold]
+    () => getColorSpaceStepAt(rgbImage, safePosition.x, safePosition.y, displayMode, threshold, BIN_COUNT, referenceHue),
+    [displayMode, rgbImage, safePosition.x, safePosition.y, threshold, referenceHue]
   );
+
+  const effectiveReferenceHue = referenceHue ?? currentStep?.hsv.h ?? 0;
 
   const histogram = useMemo(
     () => computeColorHistogram(rgbImage, displayMode, BIN_COUNT),
@@ -658,8 +662,8 @@ export default function ColorSpaceHistogramPage() {
 
   const maskImage = useMemo(() => {
     if (!currentStep) return baseImage;
-    return createHueMask(rgbImage, currentStep.hsv.h, threshold);
-  }, [baseImage, currentStep, rgbImage, threshold]);
+    return createHueMask(rgbImage, effectiveReferenceHue, threshold);
+  }, [baseImage, currentStep, effectiveReferenceHue, rgbImage, threshold]);
 
   const resultImage = useMemo<GrayscaleImage>(() => {
     if (displayMode === 'rgb') return baseImage;
@@ -674,11 +678,16 @@ export default function ColorSpaceHistogramPage() {
 
   const handlePixelSelect = useCallback((x: number, y: number) => {
     if (width === 0 || height === 0) return;
-    setCurrentPosition({
-      x: Math.max(0, Math.min(x, width - 1)),
-      y: Math.max(0, Math.min(y, height - 1)),
-    });
-  }, [height, width]);
+    const newX = Math.max(0, Math.min(x, width - 1));
+    const newY = Math.max(0, Math.min(y, height - 1));
+    setCurrentPosition({ x: newX, y: newY });
+    // Set referenceHue from the clicked pixel for thresholdHit comparison
+    if (rgbImage[newY]?.[newX]) {
+      const [r, g, b] = rgbImage[newY][newX];
+      const hsv = rgbToHsv(r, g, b);
+      setReferenceHue(hsv.h);
+    }
+  }, [height, width, rgbImage]);
 
   const handleDirectionMove = useGridNavigation({
     current: currentStep ? { x: currentStep.x, y: currentStep.y } : null,
@@ -786,7 +795,7 @@ export default function ColorSpaceHistogramPage() {
               <div className="mb-2 text-xs font-semibold text-emerald-700">颜色范围提取</div>
               <div className="grid gap-2 text-xs leading-5 text-emerald-800">
                 <div className="rounded-xl border border-emerald-200 bg-white px-3 py-2">
-                  目标色调 H0 = {currentStep.hsv.h.toFixed(1)}°，阈值 T = {threshold}°
+                  目标色调 H0 = {effectiveReferenceHue.toFixed(1)}°，阈值 T = {threshold}°
                 </div>
                 <div className="rounded-xl bg-emerald-50 px-3 py-2">
                   当前 mask 共选中 {maskPixelCount} / {totalSteps} 个像素。
@@ -800,7 +809,7 @@ export default function ColorSpaceHistogramPage() {
         </FlowColumns>
       </ProcessRail>
     );
-  }, [currentStep, histogram, maskPixelCount, threshold, totalSteps]);
+  }, [currentStep, histogram, maskPixelCount, threshold, totalSteps, effectiveReferenceHue]);
 
   const stepDetails = useMemo(() => {
     if (!currentStep) return null;
@@ -849,7 +858,7 @@ export default function ColorSpaceHistogramPage() {
           <FormulaCard
             className="mt-4"
             label="Hue 阈值判定"
-            mathML={buildMaskFormula(currentStep, currentStep.hsv.h, threshold)}
+            mathML={buildMaskFormula(currentStep, effectiveReferenceHue, threshold)}
             note={`当前阈值选中 ${maskPixelCount} 个像素，占整幅图 ${formatPercent(maskPixelCount / Math.max(1, totalSteps))}。`}
           />
         </TeachingCard>
@@ -867,7 +876,7 @@ export default function ColorSpaceHistogramPage() {
         </TeachingCard>
       </div>
     );
-  }, [currentStep, histogram, maskPixelCount, threshold, totalSteps]);
+  }, [currentStep, histogram, maskPixelCount, threshold, totalSteps, effectiveReferenceHue]);
 
   const parameters = (
     <div className="space-y-4">
@@ -925,7 +934,7 @@ export default function ColorSpaceHistogramPage() {
       title="颜色空间与颜色直方图"
       subtitle="Color Space & Histogram - 基于颜色特征的目标检测"
       operationLabel={operationLabel(displayMode)}
-      parameterIntro="切换颜色通道或 HSV mask；当前像素会同步驱动公式代入、当前直方图 bin 和颜色范围提取证据。"
+      parameterIntro="切换显示模式查看不同颜色通道或 HSV 颜色提取结果；当前像素会同步驱动公式代入、当前直方图 bin 和颜色范围提取结果。"
       originalImage={baseImage}
       originalRgbImage={rgbImage}
       resultImage={resultImage}

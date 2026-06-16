@@ -233,7 +233,7 @@ function buildMainFormulaMathML(x: number, y: number, outputValue: number): stri
       <munderover><mo>&#8721;</mo><mi>j</mi><mi></mi></munderover>
       <mi>f</mi><mo>(</mo><mn>${x}</mn><mo>+</mo><mi>i</mi><mo>,</mo><mn>${y}</mn><mo>+</mo><mi>j</mi><mo>)</mo>
       <mo>&#x22C5;</mo>
-      <mi>g</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo>
+      <mi>g</mi><mo>(</mo><mo>-</mo><mi>i</mi><mo>,</mo><mo>-</mo><mi>j</mi><mo>)</mo>
       <mo>=</mo>
       <mn>${outputValue.toFixed(2)}</mn>
     </mrow>
@@ -251,7 +251,7 @@ function buildInputFormulaMathML(x: number, y: number): string {
 function buildKernelFormulaMathML(): string {
   return buildInlineMathML(`
     <mrow>
-      <mi>g</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo>
+      <mi>g</mi><mo>(</mo><mo>-</mo><mi>i</mi><mo>,</mo><mo>-</mo><mi>j</mi><mo>)</mo>
     </mrow>
   `);
 }
@@ -261,7 +261,7 @@ function buildProductFormulaMathML(x: number, y: number): string {
     <mrow>
       <mi>f</mi><mo>(</mo><mn>${x}</mn><mo>+</mo><mi>i</mi><mo>,</mo><mn>${y}</mn><mo>+</mo><mi>j</mi><mo>)</mo>
       <mo>&#x22C5;</mo>
-      <mi>g</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo>
+      <mi>g</mi><mo>(</mo><mo>-</mo><mi>i</mi><mo>,</mo><mo>-</mo><mi>j</mi><mo>)</mo>
     </mrow>
   `);
 }
@@ -328,14 +328,18 @@ export default function ConvolutionPage() {
     return newKernel;
   }, [kernelSize, kernel]);
 
-  const resultImage = useMemo(() => {
+  const convolutionResult = useMemo(() => {
     if (!originalImage || originalImage.length === 0 || !originalImage[0]) return [];
-    const result = convolve2D(originalImage, kernelObj, { padding: 0 });
-    return normalizeImage(result);
+    return convolve2D(originalImage, kernelObj, { padding: 0 });
   }, [originalImage, kernelObj]);
 
-  const outputWidth = resultImage[0]?.length ?? 0;
-  const outputHeight = resultImage.length;
+  const resultImage = useMemo(
+    () => normalizeImage(convolutionResult),
+    [convolutionResult]
+  );
+
+  const outputWidth = convolutionResult[0]?.length ?? 0;
+  const outputHeight = convolutionResult.length;
   const totalSteps = outputWidth * outputHeight;
 
   const safeCurrentPosition = {
@@ -464,6 +468,7 @@ export default function ConvolutionPage() {
     const { x, y, inputRegion, kernel: stepKernel, outputValue } = currentStep;
     const matrixCellClass = getMatrixCellClass(kernelSize);
     const termMatrixCellClass = getTermMatrixCellClass(kernelSize);
+    const { displayKernel } = currentStep;
     const center = Math.floor(kernelSize / 2);
     const showCompactTerms = kernelSize >= 7;
     const termMatrixRows = inputRegion.map((row, ry) =>
@@ -511,14 +516,14 @@ export default function ConvolutionPage() {
               。
             </p>
             <p>
-              黄色卷积核提供
+              黄色卷积核先展示参数区输入的核模板，真正参与卷积求和的是它关于中心翻转后的权重
               {' '}
               <MathText mathML={kernelFormulaMathML} className="align-middle [&_math]:inline-block" />
-              ；蓝色乘积矩阵给出
+              。蓝色乘积矩阵给出
               {' '}
               <MathText mathML={productFormulaMathML} className="align-middle [&_math]:inline-block" />
               的逐项结果，对全部 {kernelSize * kernelSize} 项求和后，得到当前输出值 {outputValue.toFixed(2)}，
-              并写入结果图第 {y + 1} 行、第 {x + 1} 列。
+              对应结果图第 {y + 1} 行、第 {x + 1} 列的原始卷积值。右侧主图为了方便比较不同核的响应强弱，显示的是整张结果图归一化后的亮度版本。
             </p>
           </div>
         </TeachingCard>
@@ -574,12 +579,39 @@ export default function ConvolutionPage() {
             </div>
 
             <div className="rounded-2xl border border-amber-200 bg-amber-50/55 p-3">
-              <div className="text-sm font-semibold text-amber-800">
-                卷积核 <MathText mathML={kernelFormulaMathML} className="align-middle [&_math]:inline-block" />
-              </div>
-              <div className="mt-1 text-[11px] text-amber-700">与左侧逐项对应</div>
+              <div className="text-sm font-semibold text-amber-800">参数区输入核</div>
+              <div className="mt-1 text-[11px] text-amber-700">这是未翻转前的模板</div>
               <div className="mt-2 text-xs leading-5 text-amber-800">
-                第 `(i, j)` 个权重与输入窗口中同一位置的像素相乘。
+                先保留你输入的原始核矩阵，方便和参数区保持一致；真正参与卷积求和的翻转核在右侧单独展开。
+              </div>
+              <div
+                className="mt-3 inline-grid gap-1"
+                style={{ gridTemplateColumns: `repeat(${kernelSize}, minmax(0, 1fr))` }}
+              >
+                {displayKernel.map((row, ry) =>
+                  row.map((val, rx) => (
+                    <div
+                      key={`display-kernel-expanded-${ry}-${rx}`}
+                      className={`${matrixCellClass} flex items-center justify-center rounded border font-mono ${
+                        rx === center && ry === center
+                          ? 'border-amber-400 bg-white text-amber-800'
+                          : 'border-amber-200 bg-white/90 text-slate-700'
+                      }`}
+                    >
+                      {val}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-amber-200 bg-amber-50/55 p-3">
+              <div className="text-sm font-semibold text-amber-800">
+                卷积使用的翻转核 <MathText mathML={kernelFormulaMathML} className="align-middle [&_math]:inline-block" />
+              </div>
+              <div className="mt-1 text-[11px] text-amber-700">与左侧输入窗口逐项对应</div>
+              <div className="mt-2 text-xs leading-5 text-amber-800">
+                真正的卷积会先把核关于中心翻转，再和当前输入窗口逐项相乘。
               </div>
               <div
                 className="mt-3 inline-grid gap-1"
@@ -650,12 +682,12 @@ export default function ConvolutionPage() {
                 输出结果 <MathText mathML={outputFormulaMathML} className="align-middle [&_math]:inline-block" />
               </div>
               <div className="mt-2 rounded-xl border border-emerald-200 bg-white px-3 py-3">
-                <div className="text-[11px] text-emerald-600">求和结果</div>
+                <div className="text-[11px] text-emerald-600">原始卷积和</div>
                 <div className="mt-1 font-mono text-2xl font-bold text-emerald-700">
                   {productSum.toFixed(2)}
                 </div>
                 <div className="mt-2 text-xs leading-5 text-slate-500">
-                  这一数值由乘积矩阵的全部元素求和得到，并写入结果图第 {y + 1} 行、第 {x + 1} 列。
+                  这一数值由乘积矩阵的全部元素求和得到。右侧主图显示的是整张卷积结果归一化后的亮度图，不直接等于这个原始数值。
                 </div>
               </div>
             </div>
@@ -932,14 +964,14 @@ export default function ConvolutionPage() {
           <FlowColumn align="center">
             <FlowNode tone="amber" className="conv-anchor-kernel-node">
               <div className="mb-2 flex items-center justify-between gap-3">
-                <span className="text-[11px] font-semibold uppercase text-amber-800">卷积核计算</span>
+                <span className="text-[11px] font-semibold uppercase text-amber-800">翻转核计算</span>
                 <span className="font-mono text-[11px] text-amber-700">逐格对齐</span>
               </div>
               {kernelSize >= 7 ? (
                 <div className="grid gap-2 text-xs">
                   <div className="rounded-xl bg-amber-50 px-3 py-2 text-amber-800">
-                    中心格先用于帮助定位。真正参与计算的是整张 {kernelSize}×{kernelSize}
-                    卷积核，完整权重见下方矩阵区。
+                    中心格先用于帮助定位。真正参与计算的是参数区输入核关于中心翻转后的
+                    {kernelSize}×{kernelSize} 卷积核，完整权重见下方矩阵区。
                   </div>
                   <div className="rounded-xl border border-amber-200 bg-white px-3 py-2 text-amber-700">
                     计算顺序：对齐位置 → 逐格相乘 → 把全部乘积求和。
@@ -1017,7 +1049,7 @@ export default function ConvolutionPage() {
           <FlowColumn align="end">
             <FlowNode tone="emerald" className="conv-anchor-output-node min-w-[12.75rem]">
               <div className="mb-2 flex items-center justify-between gap-3">
-                <span className="text-[11px] font-semibold uppercase text-emerald-700">写回结果图</span>
+                <span className="text-[11px] font-semibold uppercase text-emerald-700">结果图定位</span>
                 <span className="text-[11px] text-emerald-700">第 {y + 1} 行 / 第 {x + 1} 列</span>
               </div>
               <div className="grid gap-2">
@@ -1029,12 +1061,12 @@ export default function ConvolutionPage() {
                   <div className="mt-1 font-mono text-[11px] text-emerald-600">坐标 ({x}, {y})</div>
                 </div>
                 <div>
-                  <div className="text-xs text-slate-500">写入的卷积和</div>
+                  <div className="text-xs text-slate-500">原始卷积和</div>
                   <div className="font-mono text-lg font-bold text-emerald-700">
                     {outputValue.toFixed(2)}
                   </div>
                   <div className="mt-1 text-[10px] leading-4 text-slate-500">
-                    这一步把全部 {kernelSize * kernelSize} 项乘积的总和写到这个位置。
+                    这一步先得到该位置的原始卷积和；右侧主图显示的是整张结果图归一化后的亮度版本。
                   </div>
                 </div>
               </div>
@@ -1165,7 +1197,7 @@ export default function ConvolutionPage() {
       title="卷积运算"
       subtitle="Convolution - 图像处理的核心操作"
       operationLabel="卷积计算"
-      parameterIntro="先观察右侧三层链路，再结合参数调整；当前窗口、卷积核权重和输出像素是一条连续证据链。"
+      parameterIntro="先观察右侧三层链路，再结合参数调整；当前窗口、翻转核权重和原始卷积和是一条连续证据链，主图结果为归一化后的亮度显示。"
       originalImage={originalImage}
       resultImage={resultImage}
       parameters={parameters}

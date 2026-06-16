@@ -138,13 +138,16 @@ export default function DistortionCorrectionPage() {
       <div>
         <div className="text-sm font-semibold text-slate-800">畸变校正的本质：坐标重映射</div>
         <p className="mt-1 text-sm leading-6 text-slate-600">
-          镜头畸变会把本应保持笔直的结构压弯或拉弯。标定得到的畸变系数并不直接修改亮度，而是先计算每个输出像素应当回到原畸变图中的哪个坐标，再由
+          镜头畸变会把本应保持笔直的结构扭曲或弯曲。标定得到的畸变系数并不直接修改亮度，而是先计算每个输出像素应当回到原畸变图中的哪个坐标，再由
           <code className="mx-1 rounded bg-slate-100 px-1 py-0.5 text-xs">remap</code>
           完成采样。
         </p>
       </div>
       <div className="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-800">
         当前模式：{distortionMode === 'barrel' ? '桶形畸变校正' : '枕形畸变校正'}
+          <div className="mt-1 text-[11px] leading-4 text-violet-600">
+            桶形（k₁&lt;0）使直线向外鼓出，枕形（k₁&gt;0）使直线向内凹陷。
+          </div>
       </div>
     </div>
   );
@@ -156,7 +159,7 @@ export default function DistortionCorrectionPage() {
           <FlowNode tone="red">
             <div className="text-[11px] font-semibold uppercase text-red-700">1. 畸变图中的采样位置</div>
             <p className="mt-2 text-xs leading-5 text-slate-600">
-              左图是已经被镜头畸变拉弯后的观测图像。当前输出像素不会直接复制左图同坐标，而是先查询
+              畸变图是已经被镜头畸变扭曲后的观测图像。当前输出像素不会直接复制畸变图同坐标，而是先查询
               <MathText className="mx-1" mathML={math('<mi>mapx</mi><mo>,</mo><mi>mapy</mi>')} />
               给出的源位置。
             </p>
@@ -193,7 +196,7 @@ export default function DistortionCorrectionPage() {
           <FlowNode tone="emerald">
             <div className="text-[11px] font-semibold uppercase text-emerald-700">3. remap 写回校正图</div>
             <p className="mt-2 text-xs leading-5 text-slate-600">
-              右图的当前像素位于 ({selectedPixel.x}, {selectedPixel.y})，它显示的是左图源坐标采样后的结果，因此校正后直线会重新接近笔直。
+              校正图的当前像素位于 ({selectedPixel.x}, {selectedPixel.y})，它显示的是畸变图源坐标采样后的结果（使用双线性插值），因此校正后直线会重新接近笔直。
             </p>
             <div className="mt-3 space-y-1 border-t border-emerald-100 pt-3 text-xs leading-5">
               <div className="font-medium text-emerald-800">
@@ -226,7 +229,7 @@ export default function DistortionCorrectionPage() {
           <FormulaCard
             label="径向畸变"
             mathML={math('<msub><mi>x</mi><mi>d</mi></msub><mo>=</mo><mi>x</mi><mi>s</mi><mo>,</mo><msub><mi>y</mi><mi>d</mi></msub><mo>=</mo><mi>y</mi><mi>s</mi><mo>,</mo><mi>s</mi><mo>=</mo><mn>1</mn><mo>+</mo><msub><mi>k</mi><mn>1</mn></msub><msup><mi>r</mi><mn>2</mn></msup><mo>+</mo><msub><mi>k</mi><mn>2</mn></msub><msup><mi>r</mi><mn>4</mn></msup>')}
-            note="x 和 y 都乘同一个径向比例项；桶形和枕形的差别，主要体现在径向项系数的正负。"
+            note="x 和 y 都乘同一个径向比例项；桶形和枕形的差别，主要体现在一阶径向系数 k₁ 的正负。"
             tone="embedded"
           />
         </div>
@@ -238,7 +241,7 @@ export default function DistortionCorrectionPage() {
           <FormulaCard
             label="输出像素的归一化坐标"
             mathML={math(`<mi>x</mi><mo>=</mo><mfrac><mrow><mo>(</mo><msup><mi>u</mi><mo>&prime;</mo></msup><mo>-</mo><msub><mi>c</mi><mi>x</mi></msub><mo>)</mo></mrow><msub><mi>f</mi><mi>x</mi></msub></mfrac><mo>=</mo><mfrac><mrow><mo>(</mo><mn>${selectedPixel.x}</mn><mo>-</mo><mn>${(width / 2).toFixed(0)}</mn><mo>)</mo></mrow><mn>${(width / 2).toFixed(0)}</mn></mfrac><mo>=</mo><mn>${normalizedX}</mn><mo>,</mo><mi>y</mi><mo>=</mo><mfrac><mrow><mo>(</mo><msup><mi>v</mi><mo>&prime;</mo></msup><mo>-</mo><msub><mi>c</mi><mi>y</mi></msub><mo>)</mo></mrow><msub><mi>f</mi><mi>y</mi></msub></mfrac><mo>=</mo><mfrac><mrow><mo>(</mo><mn>${selectedPixel.y}</mn><mo>-</mo><mn>${(height / 2).toFixed(0)}</mn><mo>)</mo></mrow><mn>${(height / 2).toFixed(0)}</mn></mfrac><mo>=</mo><mn>${normalizedY}</mn>`)}
-            note="将图像中心视为光轴附近的参考点。"
+            note="此处简化假设主点在图像中心（cₓ=w/2）且焦距等于半宽（fₓ=w/2），实际标定中这些值来自内参矩阵。"
             tone="embedded"
           />
           <FormulaCard
@@ -256,7 +259,7 @@ export default function DistortionCorrectionPage() {
           <FormulaCard
             label="写回后的像素值"
             mathML={math(`<msup><mi>I</mi><mo>&prime;</mo></msup><mo>(</mo><msup><mi>u</mi><mo>&prime;</mo></msup><mo>,</mo><msup><mi>v</mi><mo>&prime;</mo></msup><mo>)</mo><mo>=</mo><mi>I</mi><mo>(</mo><msub><mi>u</mi><mi>s</mi></msub><mo>,</mo><msub><mi>v</mi><mi>s</mi></msub><mo>)</mo><mo>=</mo><mi>I</mi><mo>(</mo><mn>${currentSource.x.toFixed(2)}</mn><mo>,</mo><mn>${currentSource.y.toFixed(2)}</mn><mo>)</mo><mo>=</mo><mn>${correctedValue.toFixed(3)}</mn>`)}
-            note="双线性插值会综合附近 4 个源像素，因此结果更平滑。"
+            note="双线性插值会综合附近 4 个源像素，因此比最近邻采样的结果更平滑。"
             tone="embedded"
           />
         </div>
@@ -273,7 +276,7 @@ export default function DistortionCorrectionPage() {
           <div className="border-l-4 border-violet-300 pl-4 text-sm leading-7 text-violet-900">
             <div className="font-semibold">学习检查</div>
             <div className="mt-2">
-              畸变校正的核心不是”改亮度”，而是”用标定参数把输出像素重新映射回原图中的正确采样位置”。
+              畸变校正的核心不是「改亮度」，而是「用标定参数把输出像素重新映射回原图中的正确采样位置」。
             </div>
           </div>
         </div>
@@ -304,7 +307,7 @@ export default function DistortionCorrectionPage() {
         onChange={setStrength}
       />
       <div className="border-t border-slate-200 pt-3 text-xs leading-6 text-slate-600">
-        左图显示镜头畸变后的观测图像，右图显示按照当前系数执行坐标校正后的结果。当前解释对象是右图绿色框输出像素如何反向映射回左图采样位置；请优先观察直线边界是否恢复。
+        畸变图显示镜头畸变后的观测图像，校正图显示按照当前系数执行坐标校正后的结果。当前解释对象是校正图绿色框输出像素如何反向映射回畸变图采样位置；请优先观察直线边界是否恢复。
       </div>
     </div>
   );
@@ -327,8 +330,8 @@ export default function DistortionCorrectionPage() {
       showOriginalGrid={false}
       imageLabels={{ input: '畸变图', output: '校正图' }}
       imageHints={{
-        output: '右图绿色框是当前正在解释的校正后输出像素。',
-      }}      currentStep={{
+        output: '校正图绿色框是当前正在解释的校正后输出像素。',
+      }} currentStep={{
         x: selectedPixel.x,
         y: selectedPixel.y,
         kernelSize: 1,

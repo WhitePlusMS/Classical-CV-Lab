@@ -116,7 +116,7 @@ const SAMPLING_OPTIONS: { value: SamplingMethod; label: string; desc: string }[]
   { value: 'GII', label: 'GII - 高斯分布', desc: 'X、Y 更集中在 Patch 中心，常用于让描述子更关注关键点附近结构。' },
   { value: 'GIII', label: 'GIII - X 中心取 Y', desc: '先取 X，再在 X 附近取 Y，点对更偏向局部纹理关系。' },
   { value: 'GIV', label: 'GIV - 极坐标量化', desc: '按极坐标半径和角度取点，便于理解方向归一化。' },
-  { value: 'GV', label: 'GV - 中心固定极坐标遍历', desc: 'X 固定在中心，Y 沿周围采样，适合观察中心与邻域的亮暗关系。' },
+  { value: 'GV', label: 'GV - 中心固定极坐标遍历', desc: '中心固定（X=Y=Patch 中心），采样点沿周围分布，适合观察中心与邻域的亮暗关系。' },
 ];
 
 const PAIR_OPTIONS: { value: number; label: string }[] = [
@@ -494,6 +494,9 @@ export default function BinaryFeatureDescriptorsPage() {
       if (stage === 'brisk') {
         return 512;
       }
+      if (stage === 'brief' && prev === 512) {
+        return DEFAULT_PAIR_COUNTS.brief;
+      }
       if (stage === 'orb' && prev === 512) {
         return DEFAULT_PAIR_COUNTS.orb;
       }
@@ -654,7 +657,7 @@ export default function BinaryFeatureDescriptorsPage() {
   const handleDirectionMove = (direction: 'up' | 'down' | 'left' | 'right') => {
     if (!canInteractWithPatch) return;
 
-    setPatchSource('image');
+    setPatchSource(prev => prev === 'synthetic' ? prev : 'image');
     setPatchCenter(prev => {
       const dx = direction === 'left' ? -1 : direction === 'right' ? 1 : 0;
       const dy = direction === 'up' ? -1 : direction === 'down' ? 1 : 0;
@@ -715,7 +718,7 @@ export default function BinaryFeatureDescriptorsPage() {
                 label="Intensity Centroid 方向"
                 mathML={ORB_CENTROID_FORMULA}
                 tone="embedded"
-                note={`当前 m10=${centroid.m10}，m01=${centroid.m01}，θ≈${centroid.degrees}°。`}
+                note={`当前 m10=${centroid.m10}，m01=${centroid.m01}，θ≈${centroid.degrees}°。这里用标准 ORB 图像矩公式，代码实现中将坐标原点平移至 Patch 中心以匹配局部计算。`}
               />
             </TeachingCard>
           )}

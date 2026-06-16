@@ -307,7 +307,7 @@ export default function ImageRegistrationPage() {
           <FlowNode tone="red">
             <div className="text-[11px] font-semibold uppercase text-red-700">1. 建立图像对应关系</div>
             <p className="mt-2 text-xs leading-5 text-slate-600">
-              特征点匹配先比较描述子距离，再判断几何关系是否一致。当前匹配点对应
+              关键点匹配先比较描述子距离，再判断几何关系是否一致。当前匹配点对应
               <MathText className="mx-1" mathML={math('<mi>D</mi><mo>=</mo><msqrt><munderover><mo>&Sigma;</mo><mi>k</mi><mi>n</mi></munderover><msup><mrow><mo>(</mo><msub><mi>X</mi><mi>ik</mi></msub><mo>-</mo><msub><mi>X</mi><mi>jk</mi></msub><mo>)</mo></mrow><mn>2</mn></msup></msqrt>')} />
               的一个候选最近邻。
             </p>
@@ -353,7 +353,7 @@ export default function ImageRegistrationPage() {
             </p>
             <div className="mt-3 grid gap-2 text-xs">
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-800">
-                当前内点平均残差：{formatRegistrationValue(scenario.activeEstimate.meanResidual, 2)} px
+                当前{scenario.activeEstimate.inlierCount > 0 ? '内点' : '匹配'}平均残差：{formatRegistrationValue(scenario.activeEstimate.meanResidual, 2)} px
               </div>
               <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-700">
                 叠加强度误差：{formatRegistrationValue(scenario.activeEstimate.meanIntensityError, 3)}
@@ -379,7 +379,7 @@ export default function ImageRegistrationPage() {
             左图参考点：{formatPoint(activeMatch.source)}
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-700">
-            右图真实点：{formatPoint(activeMatch.observedTarget)}
+            右图观测点：{formatPoint(activeMatch.observedTarget)}
           </div>
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-800">
             模型预测点：{formatPoint(activeMatch.predictedTarget)}
@@ -437,7 +437,7 @@ export default function ImageRegistrationPage() {
             </div>
             <div className={`rounded-2xl border px-4 py-3 text-sm leading-6 ${residualTone(activeMatch)}`}>
               残差定义为
-              <MathText className="mx-1" mathML={math('<mi>e</mi><mo>=</mo><mroot><mrow><msup><mrow><mo>(</mo><msup><mi>x</mi><mo>&prime;</mo></msup><mo>-</mo><msup><mover><mi>x</mi><mo>^</mo></mover><mo>&prime;</mo></msup><mo>)</mo></mrow><mn>2</mn></msup><mo>+</mo><msup><mrow><mo>(</mo><msup><mi>y</mi><mo>&prime;</mo></msup><mo>-</mo><msup><mover><mi>y</mi><mo>^</mo></mover><mo>&prime;</mo></msup><mo>)</mo></mrow><mn>2</mn></msup></mrow><mn>2</mn></mroot>')} />
+              <MathText className="mx-1" mathML={math('<mi>e</mi><mo>=</mo><msqrt><msup><mrow><mo>(</mo><msup><mi>x</mi><mo>&prime;</mo></msup><mo>-</mo><msup><mover><mi>x</mi><mo>^</mo></mover><mo>&prime;</mo></msup><mo>)</mo></mrow><mn>2</mn></msup><mo>+</mo><msup><mrow><mo>(</mo><msup><mi>y</mi><mo>&prime;</mo></msup><mo>-</mo><msup><mover><mi>y</mi><mo>^</mo></mover><mo>&prime;</mo></msup><mo>)</mo></mrow><mn>2</mn></msqrt>')} />
               ，当前值为 {formatRegistrationValue(activeMatch.residual, 2)} px。
             </div>
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
@@ -532,7 +532,7 @@ export default function ImageRegistrationPage() {
 
       <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-5 text-slate-600">
         {scenario.modelInfo.label} 至少需要 {scenario.modelInfo.minimumPairs} 对点；
-        当前策略保留了 {scenario.activeEstimate.inlierCount} 对内点，内点平均残差为 {formatRegistrationValue(scenario.activeEstimate.meanResidual, 2)} px。
+        当前策略保留了 {scenario.activeEstimate.inlierCount} 对内点，{scenario.activeEstimate.inlierCount > 0 ? '内点' : '匹配'}平均残差为 {formatRegistrationValue(scenario.activeEstimate.meanResidual, 2)} px。
       </div>
 
       <div className={`rounded-2xl border px-3 py-3 text-xs leading-5 ${activeMatch ? residualTone(activeMatch) : 'border-slate-200 bg-slate-50 text-slate-600'}`}>

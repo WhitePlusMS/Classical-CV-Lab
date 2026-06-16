@@ -1,4 +1,5 @@
 import { GrayscaleImage } from '../algorithms/types';
+import { resolveAssetPath } from './assetPath';
 
 export function create2DArray(height: number, width: number, fill: number = 0): number[][] {
   return Array.from({ length: height }, () =>
@@ -155,14 +156,15 @@ export async function loadImageAsRgb(src: string): Promise<number[][][]> {
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.decoding = 'async';
-  image.crossOrigin = 'anonymous';
+    image.crossOrigin = 'anonymous';
+    const resolvedSrc = resolveAssetPath(src);
 
     image.onload = () => {
       const width = image.naturalWidth;
       const height = image.naturalHeight;
 
       if (!width || !height) {
-        reject(new Error(`无法读取图像尺寸: ${src}`));
+        reject(new Error(`无法读取图像尺寸: ${resolvedSrc}`));
         return;
       }
 
@@ -196,8 +198,8 @@ export async function loadImageAsRgb(src: string): Promise<number[][][]> {
       resolve(rgbImage);
     };
 
-    image.onerror = () => reject(new Error(`图像加载失败: ${src}`));
-    image.src = src;
+    image.onerror = () => reject(new Error(`图像加载失败: ${resolvedSrc}`));
+    image.src = resolvedSrc;
   });
 }
 
@@ -205,14 +207,15 @@ export async function loadImageAsGrayscale(src: string): Promise<GrayscaleImage>
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.decoding = 'async';
-  image.crossOrigin = 'anonymous';
+    image.crossOrigin = 'anonymous';
+    const resolvedSrc = resolveAssetPath(src);
 
     image.onload = () => {
       const width = image.naturalWidth;
       const height = image.naturalHeight;
 
       if (!width || !height) {
-        reject(new Error(`无法读取图像尺寸: ${src}`));
+        reject(new Error(`无法读取图像尺寸: ${resolvedSrc}`));
         return;
       }
 
@@ -243,7 +246,7 @@ export async function loadImageAsGrayscale(src: string): Promise<GrayscaleImage>
       resolve(grayscale);
     };
 
-    image.onerror = () => reject(new Error(`图像加载失败: ${src}`));
-    image.src = src;
+    image.onerror = () => reject(new Error(`图像加载失败: ${resolvedSrc}`));
+    image.src = resolvedSrc;
   });
 }

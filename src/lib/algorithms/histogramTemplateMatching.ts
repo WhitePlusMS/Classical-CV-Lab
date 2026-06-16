@@ -300,13 +300,25 @@ function createHistogramContributions(
   const length = Math.min(templateHistogram.length, candidateHistogram.length);
   const contributions: HistogramBinContribution[] = [];
 
+  // For correlation, precompute means for de-meaned per-bin contributions
+  let meanT = 0;
+  let meanC = 0;
+  let meanComputed = false;
+  if (method === 'correlation' && length > 0) {
+    meanT = templateHistogram.reduce((s, v) => s + v, 0) / length;
+    meanC = candidateHistogram.reduce((s, v) => s + v, 0) / length;
+    meanComputed = true;
+  }
+
   for (let i = 0; i < Math.min(length, limit); i++) {
     const template = templateHistogram[i];
     const candidate = candidateHistogram[i];
     let contribution = 0;
 
     if (method === 'correlation') {
-      contribution = template * candidate;
+      contribution = meanComputed
+        ? (template - meanT) * (candidate - meanC)
+        : template * candidate;
     } else if (method === 'chi-square') {
       contribution = (template - candidate) ** 2 / Math.max(EPSILON, template + candidate);
     } else if (method === 'intersection') {
