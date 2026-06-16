@@ -673,11 +673,11 @@ export default function BinaryFeatureDescriptorsPage() {
           <TeachingCard>
             <h2 className="mb-3 text-sm font-semibold text-slate-800">从像素块到二进制描述子</h2>
             <p className="text-xs leading-6 text-slate-600">
-              局部特征匹配不直接保存整块原始像素，而是把关键点附近的
-              <TeachingTerm term="Patch" explanation="围绕关键点截取的小图像块，描述子只编码这个局部区域的结构。" className="mx-1" />
+              局部特征匹配通常不会直接逐像素保存整块原始图像，而是把局部位置附近的
+              <TeachingTerm term="局部图像块（Patch）" explanation="围绕某个局部位置截取的小图像块；真实系统里这个位置通常来自关键点检测，本页则允许直接手动选择。" className="mx-1" />
               转成更稳定、更容易比较的
               <TeachingTerm term="描述子" explanation="描述子是局部图像结构的编码。二进制描述子使用 0/1 串，适合用位运算快速匹配。" className="mx-1" />
-              。BRIEF、ORB、BRISK 都利用像素点对的亮暗关系生成 bit；其中 ORB 额外补入方向对齐，BRISK 进一步补入方向与尺度稳定性，因此它们比原始 BRIEF 更适合应对旋转或尺度变化。
+              。BRIEF、ORB、BRISK 都利用像素点对的亮暗关系生成 bit；其中 ORB 在点对比较前补入方向对齐，标准 BRISK 则把方向估计与尺度空间稳定性一起纳入整套方法，因此它们通常比原始 BRIEF 更能适应旋转或尺度变化，但也不意味着在所有视角或噪声条件下都一定稳定。
             </p>
           </TeachingCard>
           <TeachingCard>
@@ -685,15 +685,15 @@ export default function BinaryFeatureDescriptorsPage() {
             <div className="grid gap-3 md:grid-cols-3">
               <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
                 <div className="text-xs font-semibold text-slate-700">BRIEF</div>
-                <p className="mt-2 text-xs leading-5 text-slate-600">最基础的二进制描述子。按采样策略选取 Patch 内点对并比较灰度大小生成 0/1 串，极快，但原始形式不具备旋转和尺度不变性。</p>
+                <p className="mt-2 text-xs leading-5 text-slate-600">最基础的二进制描述子。按采样策略选取局部图像块内点对并比较灰度大小生成 0/1 串，极快，但原始形式对旋转和尺度变化较敏感。</p>
               </div>
               <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
                 <div className="text-xs font-semibold text-slate-700">ORB</div>
-                <p className="mt-2 text-xs leading-5 text-slate-600">在 BRIEF 基础上加入灰度质心方向估计，将点对按主方向旋转后再比较，大幅改善旋转适应性。</p>
+                <p className="mt-2 text-xs leading-5 text-slate-600">在 BRIEF 基础上补入灰度质心方向估计，将点对按主方向旋转后再比较，因此通常比原始 BRIEF 更能适应图像旋转。</p>
               </div>
               <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
                 <div className="text-xs font-semibold text-slate-700">BRISK</div>
-                <p className="mt-2 text-xs leading-5 text-slate-600">使用长短点对分工：长点对估计整体方向，短点对编码局部细节。在尺度空间中寻找稳定关键点。</p>
+                <p className="mt-2 text-xs leading-5 text-slate-600">使用长短点对分工：长点对估计整体方向，短点对编码局部亮暗关系；完整 BRISK 流程还会在尺度空间里寻找更容易重复检测到的关键点。</p>
               </div>
             </div>
           </TeachingCard>
@@ -706,9 +706,9 @@ export default function BinaryFeatureDescriptorsPage() {
             <TeachingCard>
               <h2 className="mb-3 text-sm font-semibold text-slate-800">ORB：方向让 BRIEF 更稳定</h2>
               <p className="mb-3 text-xs leading-6 text-slate-600">
-                ORB 不是另起炉灶，而是把 FAST 角点、Harris 筛选和旋转 BRIEF 串起来。当前 Patch 中亮暗分布的重心给出方向
+                ORB 不是另起炉灶，而是在常见实现里先用 FAST 找候选关键点，再用 Harris 响应帮助保留更稳定的点，最后对这些点计算带方向的 BRIEF。当前局部图像块会先根据亮度分布估计一个主方向
                 <InlineMath mathML={inlineMath('<mi>θ</mi>')} className="mx-1" />
-                ，点对按这个方向旋转后再比较；这样图像发生旋转时，描述子的采样关系仍尽量对齐同一局部结构。
+                ，点对按这个方向旋转后再比较；这样图像发生旋转时，描述子的采样关系更有机会继续对齐相似局部结构。
               </p>
               <FormulaCard
                 label="Intensity Centroid 方向"
@@ -723,7 +723,7 @@ export default function BinaryFeatureDescriptorsPage() {
             <TeachingCard>
               <h2 className="mb-3 text-sm font-semibold text-slate-800">BRISK：长点对定方向，短点对做编码</h2>
               <p className="mb-3 text-xs leading-6 text-slate-600">
-                BRISK 的教学模型把采样点对分成两类：距离较远的点对更能反映局部结构的整体朝向，距离较近的点对更适合记录细节。它还会在尺度空间中寻找稳定位置，提升同一局部结构在成像尺度变化时的重复检测稳定性。
+                在标准 BRISK 里，采样点对分成长短两类：距离较远的点对更适合估计局部结构的整体朝向，距离较近的点对更适合编码局部亮暗关系。完整算法还会结合尺度空间，让同一物体在看起来更大或更小时，系统仍更有机会在相近位置再次找到对应关键点。
               </p>
               <FormulaCard
                 label="BRISK 主方向"
@@ -746,7 +746,7 @@ export default function BinaryFeatureDescriptorsPage() {
               <div className="space-y-3">
                 <p className="text-xs leading-6 text-slate-600">
                   当前第 {currentPairIndex + 1} 对采样点为 x=({cx1},{cy1})、y=({cx2},{cy2})。
-                  比较两个位置的灰度值即可得到一个
+                  本页采用“若 p(x) &lt; p(y) 则记 1，否则记 0”的二值测试，因此比较两个位置的灰度值就能得到一个
                   <TeachingTerm term="bit" explanation="一次点对比较只输出 0 或 1；很多 bit 顺序排列后就是描述子。" className="mx-1" />
                   。
                 </p>
@@ -763,7 +763,10 @@ export default function BinaryFeatureDescriptorsPage() {
           <TeachingCard>
             <h2 className="mb-3 text-sm font-semibold text-slate-800">描述子编码与汉明距离</h2>
             <p className="mb-3 text-xs leading-6 text-slate-600">
-              当前页面把前 {currentPairIndex + 1} 次点对比较串成二进制描述子。数学上也可以把这串 bit 看成按 2 的幂加权得到的整数编码，但本页教学重点是“逐位如何生成”，所以界面始终按 bit 串顺序展示。输出图中深色表示 bit=1，浅色表示 bit=0，中灰色表示两条描述子在该位不同，当前位用更深色标出。
+              完整描述子在真实算法里通常会一次生成很多位；本页为了教学，把它拆成前 {currentPairIndex + 1} 次点对比较按顺序逐位展开。数学上也可以把这串 bit 看成按 2 的幂加权得到的整数编码，但本页教学重点是“每一位怎样产生”，所以界面始终按 bit 串顺序展示。输出图中深色表示 bit=1，浅色表示 bit=0，中灰色表示两条描述子在该位不同，当前位用更深色标出。
+            </p>
+            <p className="mb-3 text-xs leading-6 text-slate-600">
+              这里用于比较的第二条描述子仍来自当前 Patch，只是采样点对或方向略有变化，目的是单独观察“bit 差异如何累计成汉明距离”。真实匹配时，被比较的两条描述子通常来自两个候选关键点，而不一定来自同一个 Patch。
             </p>
             <div className="grid gap-3 lg:grid-cols-2">
               <FormulaCard
@@ -776,7 +779,7 @@ export default function BinaryFeatureDescriptorsPage() {
                 label="汉明距离"
                 mathML={HAMMING_FORMULA}
                 tone="embedded"
-                note={`当前两条描述子已比较 ${binaryString.length} 位，差异 bit 数为 ${hammingDist}。`}
+                note={`当前这两条教学示例描述子已比较 ${binaryString.length} 位，差异 bit 数为 ${hammingDist}。`}
               />
             </div>
             <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50">
@@ -814,7 +817,7 @@ export default function BinaryFeatureDescriptorsPage() {
         <TeachingCard>
           <h2 className="mb-3 text-sm font-semibold text-slate-800">三种二进制描述子的差异</h2>
           <p className="mb-3 text-xs leading-6 text-slate-600">
-            对比阶段使用统一口径避免隐藏参数污染：BRIEF 与 ORB 固定展示 256 bit，BRISK 固定展示 512 bit；BRIEF 采用 GI 采样基线。这里比较的是“描述子编码方式”本身，不额外展开各自的外部检测器差异。
+            对比阶段使用统一口径避免隐藏参数污染：BRIEF 与 ORB 固定展示 256 bit，BRISK 固定展示 512 bit；BRIEF 采用 GI 采样基线。这里聚焦“描述子编码链路”本身，不额外展开各自依赖的外部检测器差异。
           </p>
           <div className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50">
             <table className="w-full text-left text-xs">
@@ -831,19 +834,19 @@ export default function BinaryFeatureDescriptorsPage() {
                   <td className="px-3 py-2 font-semibold text-slate-700">BRIEF</td>
                   <td className="px-3 py-2 text-slate-600">直接比较 Patch 点对</td>
                   <td className="px-3 py-2 text-slate-600">极快、存储小</td>
-                  <td className="px-3 py-2 text-slate-600">旋转和尺度变化下更敏感</td>
+                  <td className="px-3 py-2 text-slate-600">原始形式对旋转和尺度变化更敏感</td>
                 </tr>
                 <tr>
                   <td className="px-3 py-2 font-semibold text-slate-700">ORB</td>
                   <td className="px-3 py-2 text-slate-600">FAST/Harris + 灰度质心 + 旋转 BRIEF</td>
                   <td className="px-3 py-2 text-slate-600">速度快，旋转适应性更好</td>
-                  <td className="px-3 py-2 text-slate-600">大尺度变化和重复纹理仍可能不稳</td>
+                  <td className="px-3 py-2 text-slate-600">大尺度变化和重复纹理下仍可能不稳</td>
                 </tr>
                 <tr>
                   <td className="px-3 py-2 font-semibold text-slate-700">BRISK</td>
                   <td className="px-3 py-2 text-slate-600">尺度空间 + 长点对方向 + 短点对编码</td>
                   <td className="px-3 py-2 text-slate-600">兼顾尺度、方向和二进制匹配速度</td>
-                  <td className="px-3 py-2 text-slate-600">512 位常更重，复杂场景仍需几何筛选</td>
+                  <td className="px-3 py-2 text-slate-600">描述子更长，匹配与存储开销通常更高</td>
                 </tr>
               </tbody>
             </table>
@@ -858,10 +861,10 @@ export default function BinaryFeatureDescriptorsPage() {
       <FlowColumns>
         <FlowColumn align="start">
           <FlowNode tone="red" className="max-w-xs">
-            <div className="mb-3 text-xs font-semibold text-red-600">当前 Patch</div>
+            <div className="mb-3 text-xs font-semibold text-red-600">当前局部图像块（Patch）</div>
             {taskStage === 'intro' ? (
               <p className="text-xs leading-5 text-slate-600">
-                选择一个局部图像块（Patch），后续步骤会把它编码成二进制描述子。
+                真实系统里通常会围绕关键点截取一个局部图像块（Patch）；本页为了教学，也允许你直接手动选一个局部区域来观察编码过程。
               </p>
             ) : (
               <>
@@ -876,7 +879,7 @@ export default function BinaryFeatureDescriptorsPage() {
                   )))}
                 </div>
                 <p className="mt-2 text-xs leading-5 text-slate-600">
-                  Patch 中保留的是局部结构，不是整张原图；描述子会把这些亮暗关系压缩成 bit 串。
+                  这个局部图像块中保留的是小区域里的局部亮暗结构，不是整张原图；描述子会把这些关系压缩成 bit 串。
                 </p>
               </>
             )}
@@ -888,7 +891,7 @@ export default function BinaryFeatureDescriptorsPage() {
             <div className="mb-3 text-xs font-semibold text-amber-700">点对采样与方向</div>
             {taskStage === 'intro' ? (
               <p className="text-xs leading-5 text-slate-600">
-                不同算法使用不同的点对采样策略和方向估计方法，影响描述子的旋转不变性。
+                不同算法使用不同的点对采样策略和方向估计方法，因此对旋转变化的适应程度不同；完整 BRISK 流程还会额外考虑尺度变化。
               </p>
             ) : (
               <div className="grid gap-2">
@@ -910,7 +913,7 @@ export default function BinaryFeatureDescriptorsPage() {
                     {taskStage === 'orb'
                       ? `灰度质心方向 θ=${centroid.degrees}°`
                       : taskStage === 'brisk'
-                        ? `长点对方向 θ=${briskDirection.degrees}°`
+                        ? `长点对累计方向 θ=${briskDirection.degrees}°`
                         : taskStage === 'brief'
                           ? '原始 BRIEF 不估计主方向'
                           : directionInfo}
@@ -948,10 +951,10 @@ export default function BinaryFeatureDescriptorsPage() {
 
         <FlowColumn align="end">
           <FlowNode tone="emerald" className="max-w-xs">
-            <div className="mb-3 text-xs font-semibold text-emerald-700">汉明距离匹配</div>
+            <div className="mb-3 text-xs font-semibold text-emerald-700">汉明距离观察</div>
             {taskStage === 'intro' ? (
               <p className="text-xs leading-5 text-slate-600">
-                通过比较两条描述子的汉明距离（不同 bit 的数量）来判断是否为同一局部结构。
+                通过比较两条描述子的汉明距离（不同 bit 的数量），可以快速估计它们是否更可能对应相似局部结构。
               </p>
             ) : (
               <div className="grid gap-2">
@@ -974,7 +977,7 @@ export default function BinaryFeatureDescriptorsPage() {
       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-3">
         <div className="text-xs font-semibold text-emerald-800">课堂任务</div>
         <p className="mt-2 text-xs leading-5 text-emerald-800">
-          用二进制描述子快速编码局部结构，通过汉明距离实现高效匹配。
+          用二进制描述子把局部亮暗关系压缩成 bit 串，再用汉明距离做快速比较。
         </p>
       </div>
 
@@ -1108,7 +1111,7 @@ export default function BinaryFeatureDescriptorsPage() {
       title="二进制特征描述子"
       subtitle="BRIEF / ORB / BRISK - 基于像素比较的快速特征编码"
       operationLabel="描述子编码"
-      parameterIntro="按阶段推进，点击主图选择 Patch，并拖动点对编号观察 bit 如何逐步构成描述子。"
+      parameterIntro="按阶段推进；在算法阶段可点击主图选择 Patch，并拖动点对编号观察 bit 如何逐步构成描述子。"
       parameters={parameters}
       analysisPreview={analysisPreview}
       stepDetails={stepDetails}

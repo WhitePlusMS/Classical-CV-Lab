@@ -177,8 +177,8 @@ const BRISK_DIRECTION_FORMULA = buildInlineMathML(
 
 const METHOD_PRINCIPLES: Record<FeatureMethod, MethodPrinciple> = {
   sift: {
-    title: 'SIFT：尺度空间中的稳定梯度特征',
-    definition: 'SIFT 是尺度不变局部特征变换算子，用于在不同大小、方向和亮度条件下提取可重复匹配的局部特征。',
+    title: 'SIFT：尺度空间中的局部梯度特征',
+    definition: 'SIFT 是面向尺度与旋转变化设计的局部特征算子，用于在不同大小、方向和一定亮度变化条件下提取较稳定、可重复匹配的局部特征。',
     purpose: '当同一目标在两幅图像中出现缩放、旋转或局部光照变化时，SIFT 用稳定关键点和梯度描述子建立对应关系。',
     coreIdea: '局部结构若在连续尺度空间中仍表现为极值，并且邻域梯度分布稳定，则该位置更可能在另一幅图像中被再次检测到。SIFT 先找到这类位置，再把局部坐标旋转到主方向，最后用梯度直方图描述邻域形状。',
     operatorSummary: '尺度空间极值检测、主方向归一化和 128 维梯度直方图共同构成 SIFT 的核心算子链。',
@@ -191,11 +191,11 @@ const METHOD_PRINCIPLES: Record<FeatureMethod, MethodPrinciple> = {
     ],
     formulaReading: [
       '先看 D = L(kσ) - L(σ)：它把相邻尺度的平滑结果相减，用来突出在该尺度上亮暗变化更明显的位置。',
-      '再看 m 和 θ：m 表示边缘强不强，θ 表示边缘朝哪个方向。',
+      '再看 m 和 θ：m 可以理解为局部灰度变化有多强，θ 表示变化的主要方向。',
       '128 维描述子不必背公式，只要理解为 4×4 个小区域分别统计 8 个方向梯度。',
     ],
     formulas: [
-      { label: 'DoG 差分空间', mathML: SIFT_DOG_FORMULA, note: '两个尺度相减后，局部极值点就是候选关键点。', stage: 'detection' },
+      { label: 'DoG 差分空间', mathML: SIFT_DOG_FORMULA, note: '两个尺度相减后，可把局部极值位置视作候选关键点，再结合后续条件继续筛选。', stage: 'detection' },
       { label: '梯度方向与幅值', mathML: SIFT_GRADIENT_FORMULA, note: '梯度幅值和主方向共同决定局部结构的描述方式。', stage: 'description' },
     ],
     strengths: ['尺度和旋转鲁棒性强，适合目标大小和姿态变化明显的场景。', '梯度直方图对局部亮度漂移有一定稳定性。'],
@@ -205,7 +205,7 @@ const METHOD_PRINCIPLES: Record<FeatureMethod, MethodPrinciple> = {
   },
   surf: {
     title: 'SURF：用积分图和 Hessian 近似加速',
-    definition: 'SURF 是加速鲁棒特征算子，用积分图、盒式滤波器和近似 Hessian 响应快速检测局部显著点。',
+    definition: 'SURF 是加速型局部特征算子，用积分图、盒式滤波器和近似 Hessian 响应快速检测局部显著位置。',
     purpose: 'SURF 解决 SIFT 计算较重的问题，在保留尺度和旋转鲁棒性的同时提高检测与描述速度。',
     coreIdea: '局部亮暗结构会在二阶导数响应中形成明显极值。SURF 不直接使用昂贵的高斯二阶导数卷积，而是用盒式滤波近似 Hessian，并用积分图快速求矩形区域和。',
     operatorSummary: '积分图快速求和、近似 Hessian 检测和 Haar 响应统计是 SURF 的核心。',
@@ -218,12 +218,12 @@ const METHOD_PRINCIPLES: Record<FeatureMethod, MethodPrinciple> = {
     ],
     formulaReading: [
       '积分图只表达一件事：提前累计左上角到当前位置的灰度和，之后求任意矩形区域和会很快。',
-      'Hessian 行列式可以粗略理解为局部二阶结构变化是否足够明显，值越突出越可能是稳定兴趣点。',
+      'Hessian 行列式可以粗略理解为局部二阶结构变化是否足够明显；响应越突出，该位置越值得作为候选关键点继续观察。',
       'SURF 的学习重点不是背矩阵，而是理解它如何把 SIFT 类思想加速。',
     ],
     formulas: [
       { label: '积分图', mathML: SURF_INTEGRAL_FORMULA, note: '积分图让 SURF 能快速计算盒式滤波响应。', stage: 'detection' },
-      { label: '近似 Hessian 行列式', mathML: SURF_HESSIAN_FORMULA, note: '行列式越突出，该位置越可能是稳定兴趣点。', stage: 'detection' },
+      { label: '近似 Hessian 行列式', mathML: SURF_HESSIAN_FORMULA, note: '行列式越突出，该位置越可能成为稳定关键点。', stage: 'detection' },
     ],
     strengths: ['速度通常高于 SIFT，适合需要较快局部特征提取的任务。', '64 维描述子比 SIFT 更短，匹配成本更低。'],
     limits: ['盒式滤波是近似计算，细节表达不如完整梯度统计精细。', '在低纹理或重复结构中仍需要后续几何一致性筛选。'],
@@ -231,25 +231,25 @@ const METHOD_PRINCIPLES: Record<FeatureMethod, MethodPrinciple> = {
     recommendedDistance: '欧氏距离或 L2 距离',
   },
   brief: {
-    title: 'BRIEF：patch 内点对比较形成二进制串',
-    definition: 'BRIEF 是基于局部 patch 灰度点对比较的二进制描述子算子，本身通常不负责检测关键点。',
+    title: 'BRIEF：局部图像块内点对比较形成二进制串',
+    definition: 'BRIEF 是基于局部图像块（Patch）灰度点对比较的二进制描述子算子，本身通常不负责检测关键点。',
     purpose: 'BRIEF 用极低成本把关键点邻域编码为二进制串，使描述子匹配可以通过异或和位计数快速完成。',
-    coreIdea: '如果两个局部邻域对应同一物理结构，那么多个采样点对的灰度大小关系应当大体一致。BRIEF 直接比较点对灰度，把每次比较写成 0 或 1。',
-    operatorSummary: 'BRIEF 的核心是 patch 点对灰度比较，它把局部纹理关系压缩成可快速匹配的二进制串。',
+    coreIdea: '如果两个局部邻域来自相似局部结构，那么多个采样点对的灰度大小关系往往会保持一定一致性。BRIEF 直接比较点对灰度，把每次比较写成 0 或 1。',
+    operatorSummary: 'BRIEF 的核心是局部图像块内的点对灰度比较，它把局部结构关系压缩成可快速匹配的二进制串。',
     pipelineStages: [
       { label: '检测', body: 'BRIEF 通常接收外部关键点，不单独完成关键点检测。' },
       { label: '尺度', body: '原始 BRIEF 不显式估计尺度，目标尺度变化明显时稳定性较弱。' },
       { label: '方向', body: '原始 BRIEF 不分配主方向，因此对旋转较敏感。' },
-      { label: '描述', body: '在 patch 中选取 N 组点对，比较每组灰度大小，得到 N 位二进制描述子。' },
+      { label: '描述', body: '在局部图像块中选取 N 组点对，比较每组灰度大小，得到 N 位二进制描述子。' },
       { label: '匹配', body: '用汉明距离统计两个二进制串对应位不同的个数，距离越小越相似。' },
     ],
     formulaReading: [
-      'τ 测试就是一次判断：patch 里 x 点的灰度是否小于 y 点。',
+      'τ 测试就是一次判断：局部图像块里 x 点的灰度是否小于 y 点。',
       '很多次 τ 测试排成一串 0/1，就得到 BRIEF 描述子。',
       '汉明距离只数两个二进制串有多少位不同，因此速度很快。',
     ],
     formulas: [
-      { label: 'BRIEF τ 测试', mathML: TAU_FORMULA, note: '每个 τ 测试比较 patch 内两个采样点的灰度关系，并输出一个二进制位。', stage: 'description' },
+      { label: 'BRIEF τ 测试', mathML: TAU_FORMULA, note: '每个 τ 测试比较局部图像块内两个采样点的灰度关系，并输出一个二进制位。', stage: 'description' },
       { label: '汉明距离', mathML: HAMMING_FORMULA, note: '二进制描述子的差异通过异或后统计不同位数得到。', stage: 'matching' },
     ],
     strengths: ['描述和匹配速度快，适合实时任务。', '二进制串存储成本低，便于硬件和大规模匹配。'],
@@ -266,12 +266,12 @@ const METHOD_PRINCIPLES: Record<FeatureMethod, MethodPrinciple> = {
     pipelineStages: [
       { label: '检测', body: 'FAST 比较候选点周围圆环像素，快速找出亮暗变化明显的角点候选。' },
       { label: '尺度', body: '常用图像金字塔扩展多尺度检测，但基础 ORB 描述子仍偏向快速二进制匹配。' },
-      { label: '方向', body: '用 Intensity Centroid 计算 patch 灰度质心方向，使描述子具备旋转对齐能力。' },
+      { label: '方向', body: '用 Intensity Centroid 计算局部图像块的灰度质心方向，使描述子具备旋转对齐能力。' },
       { label: '描述', body: '按照主方向旋转 BRIEF 采样点对，再执行二进制灰度比较。' },
       { label: '匹配', body: '生成的二进制描述子使用汉明距离匹配，适合实时目标检测。' },
     ],
     formulaReading: [
-      'ORB 的方向来自 patch 的灰度重心：灰度分布相对偏向哪里，主方向就指向哪里。',
+      'ORB 的方向来自局部图像块的灰度重心：灰度分布相对偏向哪里，主方向就指向哪里。',
       'm10 更关注水平方向的灰度偏移，m01 更关注垂直方向的灰度偏移。',
       'θ 算出来后，BRIEF 的点对会按这个方向旋转，再进行 0/1 比较。',
     ],
@@ -287,8 +287,8 @@ const METHOD_PRINCIPLES: Record<FeatureMethod, MethodPrinciple> = {
   brisk: {
     title: 'BRISK：多尺度关键点与长短点对描述',
     definition: 'BRISK 是 Binary Robust Invariant Scalable Keypoints 算子，使用多尺度关键点检测和二进制点对描述。',
-    purpose: 'BRISK 用二进制描述子保持匹配速度，同时通过尺度空间和方向估计提高尺度、旋转与噪声鲁棒性。',
-    coreIdea: '局部采样点对按距离分成两类：长距离点对更适合估计整体方向，短距离点对更适合描述局部灰度细节。先确定方向，再用短点对编码，可让二进制描述子更稳定。',
+    purpose: 'BRISK 用二进制描述子保持匹配速度，同时借助尺度空间与方向估计提升对尺度、旋转和一定噪声扰动的适应性。',
+    coreIdea: '局部采样点对按距离分成两类：长距离点对更适合估计整体方向，短距离点对更适合描述局部灰度细节。先确定方向，再用短点对编码，通常能让二进制描述子更稳定。',
     operatorSummary: '多尺度 FAST/AGAST 检测、长距离点对定向和短距离点对编码是 BRISK 的核心。',
     pipelineStages: [
       { label: '检测', body: '在尺度空间中使用 FAST 或 AGAST 检测候选关键点，并通过非极大值抑制确定稳定位置。' },
@@ -1082,7 +1082,7 @@ export default function KeypointMatchingPipelinePage() {
           <div className="mb-3 text-xs font-semibold text-slate-800">特征点匹配流程</div>
           <PipelineFlowDiagram />
           <p className="mt-2 text-xs text-slate-500">
-            特征点匹配流程：提取关键点 → 附加描述信息 → 特征匹配 → 结果筛选
+            特征点匹配流程：提取关键点 → 生成描述子 → 特征匹配 → 结果筛选
           </p>
         </div>
       );
@@ -1159,10 +1159,10 @@ export default function KeypointMatchingPipelinePage() {
           <FlowColumns>
             <FlowColumn align="start">
               <FlowNode tone="red">
-                <div className="mb-2 text-xs font-semibold uppercase text-red-700">局部 patch</div>
+                <div className="mb-2 text-xs font-semibold uppercase text-red-700">局部图像块（Patch）</div>
                 <ImageCanvas image={demo.selectedPatch} maxDisplaySize={116} showGrid />
                 <div className="mt-2 text-xs leading-5 text-red-700">
-                  关键点 {demo.selectedKeypoint.label}，以同一 patch 比较不同方法的编码策略。
+                  关键点 {demo.selectedKeypoint.label}，以同一局部图像块比较不同方法的编码策略。
                 </div>
               </FlowNode>
             </FlowColumn>
@@ -1284,7 +1284,7 @@ export default function KeypointMatchingPipelinePage() {
             高精度浮点描述子 + 欧氏距离
           </div>
           <p className="mt-3 text-xs leading-6 text-slate-600">
-            128/64 维梯度描述子，尺度与旋转鲁棒性强。适合精度优先、目标变化大的场景。
+            128/64 维梯度描述子，通常对尺度与旋转变化更稳。适合精度优先、目标变化较大的场景。
           </p>
         </TeachingCard>
         <TeachingCard>
@@ -1302,7 +1302,7 @@ export default function KeypointMatchingPipelinePage() {
             多尺度二进制描述子 + 汉明距离
           </div>
           <p className="mt-3 text-xs leading-6 text-slate-600">
-            512 位二进制串，长点对定方向、短点对编码。兼顾尺度/旋转鲁棒性与二进制匹配速度。
+            512 位二进制串，长点对定方向、短点对编码。通常能较好兼顾尺度/旋转变化适应性与二进制匹配速度。
           </p>
         </TeachingCard>
       </div>
@@ -1334,7 +1334,7 @@ export default function KeypointMatchingPipelinePage() {
             <h2 className="mb-3 text-sm font-semibold text-slate-800">为什么模板匹配不够用</h2>
             <p className="text-xs leading-6 text-slate-600">
               固定模板比较整块像素，遇到旋转、缩放、光照变化时很容易失效。特征点方法先寻找可重复出现的局部显著位置，
-              再为每个位置生成描述子。匹配时比较描述子的相似度，把整图对齐问题转化为局部结构对应问题。
+              再为每个位置生成描述子。匹配时比较描述子的相似度，把“整块像素直接硬对齐”改成“先找局部对应，再组合判断整体关系”。
             </p>
           </TeachingCard>
         </div>
@@ -1441,8 +1441,8 @@ export default function KeypointMatchingPipelinePage() {
           <TeachingCard>
             <h2 className="mb-3 text-sm font-semibold text-slate-800">描述子是什么</h2>
             <p className="text-xs leading-6 text-slate-600">
-              描述子负责把关键点附近的局部外观压缩成可比数值。浮点描述子通常记录梯度统计，
-              二进制描述子通常记录点对灰度比较结果。匹配时并不直接比较原始 patch，而是比较这些编码后的描述子。
+              描述子负责把关键点邻域中的局部结构压缩成可比数值。浮点描述子通常记录梯度统计，
+              二进制描述子通常记录点对灰度比较结果。匹配时并不直接比较原始局部图像块，而是比较这些编码后的描述子。
             </p>
           </TeachingCard>
           <TeachingCard>
@@ -1529,8 +1529,8 @@ export default function KeypointMatchingPipelinePage() {
           <TeachingCard>
             <h2 className="mb-3 text-sm font-semibold text-slate-800">为什么只看最近邻不够</h2>
             <p className="text-xs leading-6 text-slate-600">
-              最近邻只告诉“最像谁”，但不告诉“像得多明显”。如果最近邻和次近邻距离接近，说明描述子缺乏区分度。
-              ratio test 要求最近邻显著优于次近邻，确保这个匹配不只是勉强排第一，而是真的更像。
+              最近邻只告诉“最像谁”，但不告诉“像得多明显”。如果最近邻和次近邻距离接近，说明描述子区分度不够。
+              ratio test 要求最近邻显著优于次近邻，避免把“只是勉强排第一”的候选点过早当成可靠匹配。
             </p>
           </TeachingCard>
           <TeachingCard>
@@ -1566,9 +1566,9 @@ export default function KeypointMatchingPipelinePage() {
         <TeachingCard>
           <h2 className="mb-3 text-sm font-semibold text-slate-800">选型建议</h2>
           <ul className="list-inside list-disc space-y-2 text-xs leading-6 text-slate-600">
-            <li><span className="font-semibold">精度优先</span>：选择 SIFT 或 SURF，适合目标大小、角度变化更明显的场景。</li>
+            <li><span className="font-semibold">精度优先</span>：优先考虑 SIFT；若更看重速度且任务仍需要较强局部特征，可再考虑 SURF。</li>
             <li><span className="font-semibold">速度优先</span>：优先选择 ORB；若系统里已有外部关键点检测器，也可用 BRIEF 作为极简描述子方案。</li>
-            <li><span className="font-semibold">平衡型</span>：选择 BRISK，兼顾尺度/旋转鲁棒性与二进制匹配速度。</li>
+            <li><span className="font-semibold">平衡型</span>：选择 BRISK，通常能在尺度/旋转变化适应性与二进制匹配速度之间取得较平衡的效果。</li>
           </ul>
         </TeachingCard>
       </div>
@@ -1778,9 +1778,9 @@ export default function KeypointMatchingPipelinePage() {
     <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
       <div>
         <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-600">任务目标</div>
-        <h2 className="mt-2 text-xl font-semibold text-slate-900">在两张图像间建立局部结构对应关系</h2>
+        <h2 className="mt-2 text-xl font-semibold text-slate-900">在两张图像间建立关键点对应关系</h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">
-          检测可重复的局部显著位置，为每个位置生成描述子，通过距离比较和 ratio test 建立可靠的特征点匹配。
+          检测可重复的关键点，为每个关键点邻域生成描述子，通过距离比较和 ratio test 建立可靠的关键点匹配。
         </p>
       </div>
       <div className="grid grid-cols-3 gap-2 text-center text-xs">
@@ -1790,7 +1790,7 @@ export default function KeypointMatchingPipelinePage() {
         </div>
         <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sky-700">
           <div className="font-semibold">描述</div>
-          <div className="mt-1">邻域编码</div>
+          <div className="mt-1">邻域生成描述子</div>
         </div>
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-700">
           <div className="font-semibold">匹配</div>
