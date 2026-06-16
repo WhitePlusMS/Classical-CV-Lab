@@ -4,6 +4,10 @@
 
 > An interactive learning workbench for classical computer vision. It decomposes core CV algorithms into observable, parameter-tunable, step-by-step experiments — making abstract math and algorithmic pipelines直观可见.
 
+🌐 **Live Demo:** [https://whiteplusms.github.io/Classical-CV-Lab/](https://whiteplusms.github.io/Classical-CV-Lab/)
+
+*© 2026 WhitePlusMS*
+
 ## Overview
 
 31 interactive concept pages across four teaching chapters:

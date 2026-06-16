@@ -4,6 +4,10 @@
 
 > 面向计算机视觉课程的交互式学习工作台。将传统计算机视觉的核心算法拆解为可观察、可调参、可推演的实验模块，让抽象的数学公式和算法流程变得直观可见。
 
+🌐 **在线体验：** [https://whiteplusms.github.io/Classical-CV-Lab/](https://whiteplusms.github.io/Classical-CV-Lab/)
+
+*© 2026 WhitePlusMS*
+
 ## 项目概览
 
 31 个交互式概念页面，覆盖四大教学章节：
