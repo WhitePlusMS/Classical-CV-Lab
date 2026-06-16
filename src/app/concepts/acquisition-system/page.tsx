@@ -1,7 +1,8 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { ConceptIntro, CONCEPT_INTRO_CONTENT, type ConceptIntroProps } from '@/components/teaching';
+import { usePathname } from 'next/navigation';
+import { CHAPTER_LABELS, NEXT_CONCEPT_MAP } from '@/components/ConceptLayout';
+import { ConceptIntro, CONCEPT_INTRO_CONTENT } from '@/components/teaching';
 import { resolveAssetPath } from '@/lib/utils/assetPath';
 const systemChain = [
   { title: '光源', desc: '提供照明、克服环境光干扰、形成稳定成像条件', impact: '影响后续阈值、边缘和缺陷检测是否稳定。' },
@@ -127,47 +128,41 @@ const lensSelectionPrinciples = [
   { title: '光圈与接口', desc: '按光照条件选光圈大小，按相机接口匹配镜头接口类型' },
 ] as const;
 
-function BackIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M19 12H5M12 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
 export default function AcquisitionSystemPage() {
-const [conceptIntro, setConceptIntro] = useState<ConceptIntroProps | null>(null);
-  useEffect(() => {
-    import('@/components/teaching/ConceptIntro').then(mod => {
-      setConceptIntro(mod.CONCEPT_INTRO_CONTENT['/concepts/acquisition-system']);
-    });
-  }, []);
+  const pathname = usePathname();
+  const chapterLabel = CHAPTER_LABELS[pathname ?? ''];
+  const nextConcept = NEXT_CONCEPT_MAP[pathname ?? ''];
+  const conceptIntroContent = CONCEPT_INTRO_CONTENT['/concepts/acquisition-system'];
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900">
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
+      <header className="sticky top-0 z-30 h-14 shrink-0 border-b border-slate-200 bg-white/95 backdrop-blur">
+        <div className="flex h-full w-full items-center justify-between px-4">
           <div className="flex items-center gap-3">
-            <Link href="/" className="flex items-center gap-1.5 text-sm text-slate-500 transition hover:text-slate-800">
-              <BackIcon />
-              返回
+            <Link href="/" className="flex items-center gap-1.5 text-slate-500 transition-colors hover:text-slate-700">
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M19 12H5M12 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span className="text-sm">返回</span>
             </Link>
             <div className="h-4 w-px bg-slate-200" />
-            <div>
+            <div className="flex items-baseline gap-2">
               <h1 className="text-base font-semibold text-slate-900">图像采集处理系统</h1>
-              <p className="text-xs text-slate-400">Acquisition System</p>
+              <span className="text-xs text-slate-400">Acquisition System</span>
             </div>
           </div>
-          <span className="rounded-full border border-cyan-100 bg-cyan-50 px-3 py-1 text-xs font-medium text-cyan-700">
-            第一章 / 课程导入
-          </span>
+          {chapterLabel && (
+            <span className="rounded-full border border-cyan-100 bg-cyan-50 px-3 py-1 text-xs font-medium text-cyan-700">
+              {chapterLabel}
+            </span>
+          )}
         </div>
       </header>
 
       <main className="mx-auto max-w-6xl px-6 py-10">
-        {conceptIntro && (
+        {conceptIntroContent && (
           <div className="mb-6 overflow-hidden rounded-2xl border border-slate-200/80 bg-white/92 px-4 py-4 shadow-sm">
-            <ConceptIntro {...conceptIntro} />
+            <ConceptIntro {...conceptIntroContent} />
           </div>
         )}
 
@@ -526,12 +521,32 @@ const [conceptIntro, setConceptIntro] = useState<ConceptIntroProps | null>(null)
             </section>
           </div>
         </section>
+
+        {nextConcept && (
+          <nav className="mt-8 rounded-xl border border-slate-200 bg-white shadow-sm">
+            <Link
+              href={nextConcept.href}
+              className="group flex items-center justify-between px-6 py-5 transition hover:bg-slate-50"
+            >
+              <div>
+                <div className="text-[11px] font-medium text-slate-400">下一节</div>
+                <div className="mt-0.5 text-sm font-semibold text-slate-800 group-hover:text-blue-700">
+                  {nextConcept.title}
+                </div>
+              </div>
+              <svg
+                className="h-5 w-5 shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5 group-hover:text-blue-500"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </Link>
+          </nav>
+        )}
       </main>
     </div>
   );
 }
-
-
-
-
-

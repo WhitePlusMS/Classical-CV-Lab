@@ -1,5 +1,7 @@
 'use client';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { CHAPTER_LABELS, NEXT_CONCEPT_MAP } from '@/components/ConceptLayout';
 import { resolveAssetPath } from '@/lib/utils/assetPath';
 const taskTypes = [
   { title: '识别', detail: '对象类别' },
@@ -233,14 +235,6 @@ const keyTechGroups = [
   },
 ] as const;
 
-function ArrowIcon() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
 type DetailItem = {
   title: string;
   detail: string;
@@ -272,27 +266,32 @@ function DetailItemGrid({ items, accentClass, columnsClass = 'sm:grid-cols-2', c
 }
 
 export default function ApplicationsOverviewPage() {
+  const pathname = usePathname();
+  const chapterLabel = CHAPTER_LABELS[pathname ?? ''];
+  const nextConcept = NEXT_CONCEPT_MAP[pathname ?? ''];
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900">
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
+      <header className="sticky top-0 z-30 h-14 shrink-0 border-b border-slate-200 bg-white/95 backdrop-blur">
+        <div className="flex h-full w-full items-center justify-between px-4">
           <div className="flex items-center gap-3">
-            <Link href="/" className="flex items-center gap-1.5 text-sm text-slate-500 transition hover:text-slate-800">
+            <Link href="/" className="flex items-center gap-1.5 text-slate-500 transition-colors hover:text-slate-700">
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M19 12H5M12 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              返回
+              <span className="text-sm">返回</span>
             </Link>
             <div className="h-4 w-px bg-slate-200" />
-            <div>
+            <div className="flex items-baseline gap-2">
               <h1 className="text-base font-semibold text-slate-900">应用与发展现状</h1>
-              <p className="text-xs text-slate-400">Applications & Trends</p>
+              <span className="text-xs text-slate-400">Applications & Trends</span>
             </div>
           </div>
-          <span className="rounded-full border border-cyan-100 bg-cyan-50 px-3 py-1 text-xs font-medium text-cyan-700">
-            第一章 / 图像采集与处理
-          </span>
+          {chapterLabel && (
+            <span className="rounded-full border border-cyan-100 bg-cyan-50 px-3 py-1 text-xs font-medium text-cyan-700">
+              {chapterLabel}
+            </span>
+          )}
         </div>
       </header>
 
@@ -330,7 +329,9 @@ export default function ApplicationsOverviewPage() {
                   <div className="mt-1 text-xs leading-5 text-slate-500">{step.detail}</div>
                   {index < applicationFlow.length - 1 ? (
                     <div className="absolute -right-3 top-1/2 hidden text-slate-300 md:block">
-                      <ArrowIcon />
+                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
                     </div>
                   ) : null}
                 </div>
@@ -531,7 +532,9 @@ export default function ApplicationsOverviewPage() {
             <DetailItemGrid items={platformSensors} accentClass="bg-indigo-400" className="" />
 
             <div className="hidden text-slate-300 lg:block">
-              <ArrowIcon />
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
@@ -571,19 +574,32 @@ export default function ApplicationsOverviewPage() {
             ))}
           </div>
         </section>
+
+        {nextConcept && (
+          <nav className="mt-8 rounded-xl border border-slate-200 bg-white shadow-sm">
+            <Link
+              href={nextConcept.href}
+              className="group flex items-center justify-between px-6 py-5 transition hover:bg-slate-50"
+            >
+              <div>
+                <div className="text-[11px] font-medium text-slate-400">下一节</div>
+                <div className="mt-0.5 text-sm font-semibold text-slate-800 group-hover:text-blue-700">
+                  {nextConcept.title}
+                </div>
+              </div>
+              <svg
+                className="h-5 w-5 shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5 group-hover:text-blue-500"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </Link>
+          </nav>
+        )}
       </main>
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-

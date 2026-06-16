@@ -59,12 +59,139 @@ interface ConceptLayoutProps {
   showInputSelection?: boolean;
   showNavigationBar?: boolean;
   showNavigationControls?: boolean;
+  /** 章节标签，如 "第一章 / 图像采集与处理" */
+  chapterLabel?: string;
+}
+
+/** 概念路径 → 章节标签映射 */
+export const CHAPTER_LABELS: Record<string, string> = {
+  // 第一章：课程导入
+  '/concepts/applications-overview': '第一章 / 课程导入',
+  '/concepts/acquisition-system': '第一章 / 课程导入',
+  // 第二章：图像预处理与几何校正
+  '/concepts/grayscale': '第二章 / 图像预处理',
+  '/concepts/pixel-matrix': '第二章 / 图像预处理',
+  '/concepts/histogram': '第二章 / 图像预处理',
+  '/concepts/histogram-equalization': '第二章 / 图像预处理',
+  '/concepts/image-sharpening': '第二章 / 图像预处理',
+  '/concepts/convolution': '第二章 / 图像预处理',
+  '/concepts/blur': '第二章 / 图像预处理',
+  '/concepts/edge-detection': '第二章 / 图像预处理',
+  '/concepts/morphology': '第二章 / 图像预处理',
+  '/concepts/camera-model': '第二章 / 摄像机标定',
+  '/concepts/calibration-pattern': '第二章 / 摄像机标定',
+  '/concepts/zhang-calibration': '第二章 / 摄像机标定',
+  '/concepts/distortion-correction': '第二章 / 图像校正',
+  '/concepts/geometric-transform': '第二章 / 图像校正',
+  '/concepts/perspective-transform': '第二章 / 图像校正',
+  '/concepts/image-registration': '第二章 / 图像校正',
+  // 第三章：目标检测
+  '/concepts/threshold-auto-threshold': '第三章 / 简单背景方法',
+  '/concepts/otsu': '第三章 / 简单背景方法',
+  '/concepts/frame-difference-motion': '第三章 / 简单背景方法',
+  '/concepts/background-modeling-subtraction': '第三章 / 简单背景方法',
+  '/concepts/keypoint-matching-pipeline': '第三章 / 特征点方法',
+  '/concepts/sift-surf-scale-features': '第三章 / 特征点方法',
+  '/concepts/binary-feature-descriptors': '第三章 / 特征点方法',
+  '/concepts/color-space-histogram': '第三章 / 特征明显方法',
+  '/concepts/lbp-gabor-texture': '第三章 / 特征明显方法',
+  '/concepts/histogram-template-matching': '第三章 / 特征明显方法',
+  '/concepts/hog-feature': '第三章 / 机器学习方法',
+  '/concepts/haar-lbp-feature-vector': '第三章 / 机器学习方法',
+  '/concepts/classifier-detection-pipeline': '第三章 / 检测流程',
+};
+
+/** 按学习顺序排列的所有概念路径 */
+const CONCEPT_ORDER: string[] = [
+  '/concepts/applications-overview',
+  '/concepts/acquisition-system',
+  '/concepts/grayscale',
+  '/concepts/pixel-matrix',
+  '/concepts/histogram',
+  '/concepts/histogram-equalization',
+  '/concepts/image-sharpening',
+  '/concepts/convolution',
+  '/concepts/blur',
+  '/concepts/edge-detection',
+  '/concepts/morphology',
+  '/concepts/camera-model',
+  '/concepts/calibration-pattern',
+  '/concepts/zhang-calibration',
+  '/concepts/distortion-correction',
+  '/concepts/geometric-transform',
+  '/concepts/perspective-transform',
+  '/concepts/image-registration',
+  '/concepts/threshold-auto-threshold',
+  '/concepts/otsu',
+  '/concepts/frame-difference-motion',
+  '/concepts/background-modeling-subtraction',
+  '/concepts/keypoint-matching-pipeline',
+  '/concepts/sift-surf-scale-features',
+  '/concepts/binary-feature-descriptors',
+  '/concepts/color-space-histogram',
+  '/concepts/lbp-gabor-texture',
+  '/concepts/histogram-template-matching',
+  '/concepts/hog-feature',
+  '/concepts/haar-lbp-feature-vector',
+  '/concepts/classifier-detection-pipeline',
+];
+
+export interface NextConcept {
+  href: string;
+  title: string;
+}
+
+/** 路径 → 展示标题映射 */
+const CONCEPT_TITLES: Record<string, string> = {
+  '/concepts/applications-overview': '应用与发展现状',
+  '/concepts/acquisition-system': '图像采集处理系统',
+  '/concepts/grayscale': '图像灰度化',
+  '/concepts/pixel-matrix': '像素矩阵与邻域窗口',
+  '/concepts/histogram': '灰度直方图',
+  '/concepts/histogram-equalization': '直方图均衡化',
+  '/concepts/image-sharpening': '图像锐化',
+  '/concepts/convolution': '卷积',
+  '/concepts/blur': '图像滤波',
+  '/concepts/edge-detection': '边缘检测',
+  '/concepts/morphology': '形态学操作',
+  '/concepts/camera-model': '成像模型与内外参数',
+  '/concepts/calibration-pattern': '标定板与角点检测',
+  '/concepts/zhang-calibration': '张正友标定与参数求解',
+  '/concepts/distortion-correction': '畸变校正',
+  '/concepts/geometric-transform': '几何变换',
+  '/concepts/perspective-transform': '透视变换',
+  '/concepts/image-registration': '图像配准',
+  '/concepts/threshold-auto-threshold': '阈值分割与自动阈值',
+  '/concepts/otsu': 'OTSU 阈值',
+  '/concepts/frame-difference-motion': '帧差法与运动检测',
+  '/concepts/background-modeling-subtraction': '背景建模与背景减除',
+  '/concepts/keypoint-matching-pipeline': '特征点检测与匹配流程',
+  '/concepts/sift-surf-scale-features': 'SIFT / SURF 尺度特征',
+  '/concepts/binary-feature-descriptors': 'ORB / BRIEF / BRISK 二进制特征',
+  '/concepts/color-space-histogram': '颜色空间与颜色直方图',
+  '/concepts/lbp-gabor-texture': 'LBP 与 Gabor 纹理特征',
+  '/concepts/histogram-template-matching': '直方图匹配与模板匹配',
+  '/concepts/hog-feature': 'HOG 特征',
+  '/concepts/haar-lbp-feature-vector': 'Haar / LBP 特征向量',
+  '/concepts/classifier-detection-pipeline': '分类器与检测流程',
+};
+
+/** 路径 → 下一节信息 */
+export const NEXT_CONCEPT_MAP: Record<string, NextConcept> = {};
+for (let i = 0; i < CONCEPT_ORDER.length - 1; i++) {
+  const current = CONCEPT_ORDER[i];
+  const nextPath = CONCEPT_ORDER[i + 1];
+  NEXT_CONCEPT_MAP[current] = {
+    href: nextPath,
+    title: CONCEPT_TITLES[nextPath] ?? nextPath.split('/').pop() ?? '',
+  };
 }
 
 export default function ConceptLayout({
   title,
   subtitle,
   contentHeader,
+  chapterLabel,
   originalImage,
   resultImage,
   originalRgbImage,
@@ -99,6 +226,8 @@ export default function ConceptLayout({
   const [showCode, setShowCode] = useState(false);
   const [showParameters, setShowParameters] = useState(true);
   const conceptIntroContent = CONCEPT_INTRO_CONTENT[pathname ?? ''];
+  const resolvedChapterLabel = chapterLabel || CHAPTER_LABELS[pathname ?? ''];
+  const resolvedNextConcept = NEXT_CONCEPT_MAP[pathname ?? ''];
   const mergedContentHeader = conceptIntroContent || contentHeader ? (
     <div className="space-y-4">
       {conceptIntroContent && <ConceptIntro {...conceptIntroContent} />}
@@ -261,16 +390,23 @@ export default function ConceptLayout({
             </div>
           </div>
 
-          <button
-            onClick={() => setShowCode(!showCode)}
-            className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
-              showCode
-                ? 'border-slate-800 bg-slate-800 text-white'
-                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-            }`}
-          >
-            {showCode ? '隐藏代码' : '查看代码'}
-          </button>
+          <div className="flex items-center gap-3">
+            {resolvedChapterLabel && (
+              <span className="rounded-full border border-cyan-100 bg-cyan-50 px-3 py-1 text-xs font-medium text-cyan-700">
+                {resolvedChapterLabel}
+              </span>
+            )}
+            <button
+              onClick={() => setShowCode(!showCode)}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
+                showCode
+                  ? 'border-slate-800 bg-slate-800 text-white'
+                  : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+              }`}
+            >
+              {showCode ? '隐藏代码' : '查看代码'}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -491,6 +627,31 @@ export default function ConceptLayout({
             ) : (
               <div className="flex min-h-[320px] max-h-[46vh] flex-col border-t border-slate-200 bg-white xl:max-h-[44vh]">
                 <div className="flex-1 overflow-y-auto p-4">{stepDetails}</div>
+              </div>
+            )}
+
+            {resolvedNextConcept && (
+              <div className="border-t border-slate-200/80 bg-white px-4 py-4 xl:px-6 xl:py-5">
+                <Link
+                  href={resolvedNextConcept.href}
+                  className="group flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-5 py-4 transition hover:border-blue-300 hover:bg-blue-50/50"
+                >
+                  <div>
+                    <div className="text-[11px] font-medium text-slate-400">下一节</div>
+                    <div className="mt-0.5 text-sm font-semibold text-slate-800 group-hover:text-blue-700">
+                      {resolvedNextConcept.title}
+                    </div>
+                  </div>
+                  <svg
+                    className="h-5 w-5 shrink-0 text-slate-400 transition-transform group-hover:translate-x-0.5 group-hover:text-blue-500"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </Link>
               </div>
             )}
           </div>
