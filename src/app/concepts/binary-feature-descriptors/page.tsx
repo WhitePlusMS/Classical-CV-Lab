@@ -673,11 +673,12 @@ export default function BinaryFeatureDescriptorsPage() {
           <TeachingCard>
             <h2 className="mb-3 text-sm font-semibold text-slate-800">从像素块到二进制描述子</h2>
             <p className="text-xs leading-6 text-slate-600">
-              局部特征匹配通常不会直接逐像素保存整块原始图像，而是把局部位置附近的
+              讲二进制描述子时，可以先抓住一条主线：先从图像里取出一小块局部区域，再把这块区域里的亮暗关系编码成 bit 串，最后再比较两串 bit 有多少位不同。
+              这里的局部区域就是
               <TeachingTerm term="局部图像块（Patch）" explanation="围绕某个局部位置截取的小图像块；真实系统里这个位置通常来自关键点检测，本页则允许直接手动选择。" className="mx-1" />
-              转成更稳定、更容易比较的
+              ，编码结果就是
               <TeachingTerm term="描述子" explanation="描述子是局部图像结构的编码。二进制描述子使用 0/1 串，适合用位运算快速匹配。" className="mx-1" />
-              。BRIEF、ORB、BRISK 都利用像素点对的亮暗关系生成 bit；其中 ORB 在点对比较前补入方向对齐，标准 BRISK 则把方向估计与尺度空间稳定性一起纳入整套方法，因此它们通常比原始 BRIEF 更能适应旋转或尺度变化，但也不意味着在所有视角或噪声条件下都一定稳定。
+              。BRIEF、ORB、BRISK 都是在做这件事，只是补强的方式不同：BRIEF 直接比较点对亮暗，ORB 在比较前先对齐方向，BRISK 进一步把方向和尺度变化一起纳入考虑。所以后两者通常比原始 BRIEF 更能适应旋转或尺度变化，但也不意味着在所有视角或噪声条件下都一定稳定。
             </p>
           </TeachingCard>
           <TeachingCard>
@@ -685,15 +686,15 @@ export default function BinaryFeatureDescriptorsPage() {
             <div className="grid gap-3 md:grid-cols-3">
               <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
                 <div className="text-xs font-semibold text-slate-700">BRIEF</div>
-                <p className="mt-2 text-xs leading-5 text-slate-600">最基础的二进制描述子。按采样策略选取局部图像块内点对并比较灰度大小生成 0/1 串，极快，但原始形式对旋转和尺度变化较敏感。</p>
+                <p className="mt-2 text-xs leading-5 text-slate-600">先选点对，再比较亮暗，直接生成 0/1 串。它的优点是快，代价是原始形式对旋转和尺度变化较敏感。</p>
               </div>
               <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
                 <div className="text-xs font-semibold text-slate-700">ORB</div>
-                <p className="mt-2 text-xs leading-5 text-slate-600">在 BRIEF 基础上补入灰度质心方向估计，将点对按主方向旋转后再比较，因此通常比原始 BRIEF 更能适应图像旋转。</p>
+                <p className="mt-2 text-xs leading-5 text-slate-600">先估一个主方向，再按这个方向旋转点对，最后继续做 BRIEF 比较。因此它通常比原始 BRIEF 更能适应图像旋转。</p>
               </div>
               <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
                 <div className="text-xs font-semibold text-slate-700">BRISK</div>
-                <p className="mt-2 text-xs leading-5 text-slate-600">使用长短点对分工：长点对估计整体方向，短点对编码局部亮暗关系；完整 BRISK 流程还会在尺度空间里寻找更容易重复检测到的关键点。</p>
+                <p className="mt-2 text-xs leading-5 text-slate-600">先用长点对看整体朝向，再用短点对记局部亮暗关系；完整流程还会在尺度空间里找更容易重复检测到的关键点。</p>
               </div>
             </div>
           </TeachingCard>
@@ -706,9 +707,9 @@ export default function BinaryFeatureDescriptorsPage() {
             <TeachingCard>
               <h2 className="mb-3 text-sm font-semibold text-slate-800">ORB：方向让 BRIEF 更稳定</h2>
               <p className="mb-3 text-xs leading-6 text-slate-600">
-                ORB 不是另起炉灶，而是在常见实现里先用 FAST 找候选关键点，再用 Harris 响应帮助保留更稳定的点，最后对这些点计算带方向的 BRIEF。当前局部图像块会先根据亮度分布估计一个主方向
+                可以把 ORB 理解成“先找点，再定方向，再做 BRIEF”。在常见实现里，它先用 FAST 找候选关键点，再用 Harris 响应帮助保留更稳定的点，最后对这些点计算带方向的 BRIEF。当前局部图像块会先根据亮度分布估计一个主方向
                 <InlineMath mathML={inlineMath('<mi>θ</mi>')} className="mx-1" />
-                ，点对按这个方向旋转后再比较；这样图像发生旋转时，描述子的采样关系更有机会继续对齐相似局部结构。
+                ，再把点对按这个方向旋转后去比较；这样图像发生旋转时，描述子的采样关系更有机会继续对齐相似局部结构。
               </p>
               <FormulaCard
                 label="Intensity Centroid 方向"
@@ -723,7 +724,7 @@ export default function BinaryFeatureDescriptorsPage() {
             <TeachingCard>
               <h2 className="mb-3 text-sm font-semibold text-slate-800">BRISK：长点对定方向，短点对做编码</h2>
               <p className="mb-3 text-xs leading-6 text-slate-600">
-                在标准 BRISK 里，采样点对分成长短两类：距离较远的点对更适合估计局部结构的整体朝向，距离较近的点对更适合编码局部亮暗关系。完整算法还会结合尺度空间，让同一物体在看起来更大或更小时，系统仍更有机会在相近位置再次找到对应关键点。
+                讲 BRISK 时，也可以抓住一句话：远点对用来看方向，近点对用来记细节。在标准 BRISK 里，采样点对分成长短两类：距离较远的点对更适合估计局部结构的整体朝向，距离较近的点对更适合编码局部亮暗关系。完整算法还会结合尺度空间，让同一物体在看起来更大或更小时，系统仍更有机会在相近位置再次找到对应关键点。
               </p>
               <FormulaCard
                 label="BRISK 主方向"
@@ -745,8 +746,8 @@ export default function BinaryFeatureDescriptorsPage() {
               />
               <div className="space-y-3">
                 <p className="text-xs leading-6 text-slate-600">
-                  当前第 {currentPairIndex + 1} 对采样点为 x=({cx1},{cy1})、y=({cx2},{cy2})。
-                  本页采用“若 p(x) &lt; p(y) 则记 1，否则记 0”的二值测试，因此比较两个位置的灰度值就能得到一个
+                  这一位是由当前第 {currentPairIndex + 1} 对采样点决定的，坐标分别是 x=({cx1},{cy1})、y=({cx2},{cy2})。
+                  规则很简单：若 p(x) &lt; p(y) 就记 1，否则记 0。这样比较两个位置的灰度值，就能得到一个
                   <TeachingTerm term="bit" explanation="一次点对比较只输出 0 或 1；很多 bit 顺序排列后就是描述子。" className="mx-1" />
                   。
                 </p>
@@ -763,10 +764,10 @@ export default function BinaryFeatureDescriptorsPage() {
           <TeachingCard>
             <h2 className="mb-3 text-sm font-semibold text-slate-800">描述子编码与汉明距离</h2>
             <p className="mb-3 text-xs leading-6 text-slate-600">
-              完整描述子在真实算法里通常会一次生成很多位；本页为了教学，把它拆成前 {currentPairIndex + 1} 次点对比较按顺序逐位展开。数学上也可以把这串 bit 看成按 2 的幂加权得到的整数编码，但本页教学重点是“每一位怎样产生”，所以界面始终按 bit 串顺序展示。输出图中深色表示 bit=1，浅色表示 bit=0，中灰色表示两条描述子在该位不同，当前位用更深色标出。
+              真实算法里，完整描述子通常会一次生成很多位。本页把前 {currentPairIndex + 1} 次点对比较按顺序逐位展开。数学上也可以把这串 bit 看成按 2 的幂加权得到的整数编码，但这里先把重点放在“每一位怎样产生”。输出图中深色表示 bit=1，浅色表示 bit=0，中灰色表示两条描述子在该位不同，当前位用更深色标出。
             </p>
             <p className="mb-3 text-xs leading-6 text-slate-600">
-              这里用于比较的第二条描述子仍来自当前 Patch，只是采样点对或方向略有变化，目的是单独观察“bit 差异如何累计成汉明距离”。真实匹配时，被比较的两条描述子通常来自两个候选关键点，而不一定来自同一个 Patch。
+              这里用于比较的第二条描述子仍来自当前局部图像块，只是采样点对或方向略有变化，目的是单独观察“bit 差异怎样累计成汉明距离”。真实匹配时，被比较的两条描述子通常来自两个候选关键点，而不一定来自同一个局部图像块。
             </p>
             <div className="grid gap-3 lg:grid-cols-2">
               <FormulaCard
@@ -817,7 +818,7 @@ export default function BinaryFeatureDescriptorsPage() {
         <TeachingCard>
           <h2 className="mb-3 text-sm font-semibold text-slate-800">三种二进制描述子的差异</h2>
           <p className="mb-3 text-xs leading-6 text-slate-600">
-            对比阶段使用统一口径避免隐藏参数污染：BRIEF 与 ORB 固定展示 256 bit，BRISK 固定展示 512 bit；BRIEF 采用 GI 采样基线。这里聚焦“描述子编码链路”本身，不额外展开各自依赖的外部检测器差异。
+            为了让三种方法能按同一标准对比，这里固定使用统一口径：BRIEF 与 ORB 展示 256 bit，BRISK 展示 512 bit，BRIEF 采用 GI 采样基线。这个阶段只比较“描述子是怎样编码出来的”，不额外展开它们依赖的外部检测器差异。
           </p>
           <div className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50">
             <table className="w-full text-left text-xs">
@@ -864,7 +865,7 @@ export default function BinaryFeatureDescriptorsPage() {
             <div className="mb-3 text-xs font-semibold text-red-600">当前局部图像块（Patch）</div>
             {taskStage === 'intro' ? (
               <p className="text-xs leading-5 text-slate-600">
-                真实系统里通常会围绕关键点截取一个局部图像块（Patch）；本页为了教学，也允许你直接手动选一个局部区域来观察编码过程。
+                真实系统里，局部图像块通常围绕关键点截取；本页为了把编码过程讲清楚，也允许你直接手动选一个局部区域来观察。
               </p>
             ) : (
               <>
@@ -879,7 +880,7 @@ export default function BinaryFeatureDescriptorsPage() {
                   )))}
                 </div>
                 <p className="mt-2 text-xs leading-5 text-slate-600">
-                  这个局部图像块中保留的是小区域里的局部亮暗结构，不是整张原图；描述子会把这些关系压缩成 bit 串。
+                  这个局部图像块里保留的是一小块区域的亮暗关系，不是整张原图；描述子会把这些关系压缩成 bit 串。
                 </p>
               </>
             )}
@@ -943,7 +944,7 @@ export default function BinaryFeatureDescriptorsPage() {
                 {binaryString.slice(0, Math.min(32, binaryString.length))}
               </div>
               <div className="mt-2 text-xs text-sky-600">
-                已生成 {binaryString.length} bit{highlightedBitIndex >= 0 ? `，当前位为 ${tauResult}，bit 图会随已生成位逐步展开` : '，当前展示完整描述子总览'}
+                已生成 {binaryString.length} bit{highlightedBitIndex >= 0 ? `，当前这一位是 ${tauResult}，bit 图会随已生成位逐步展开` : '，当前展示完整描述子总览'}
               </div>
             </div>
           </FlowNode>
@@ -977,7 +978,7 @@ export default function BinaryFeatureDescriptorsPage() {
       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-3">
         <div className="text-xs font-semibold text-emerald-800">课堂任务</div>
         <p className="mt-2 text-xs leading-5 text-emerald-800">
-          用二进制描述子把局部亮暗关系压缩成 bit 串，再用汉明距离做快速比较。
+          先把局部亮暗关系编码成 bit 串，再看两串 bit 有多少位不同。
         </p>
       </div>
 
