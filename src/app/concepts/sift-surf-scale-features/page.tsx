@@ -1829,7 +1829,7 @@ export default function SiftSurfScaleFeaturesPage() {
                 <p className="mt-2 text-xs leading-6 text-slate-600">
                   SIFT 通过降采样构建高斯金字塔，不同八度（octave）的图像尺寸不同。
                   SURF 则保持原图尺寸不变，仅通过增大盒子滤波器模板来模拟更大尺度的卷积。
-                  两者都实现了"从精细到粗糙"的多尺度分析，只是实现路径不同。
+                  两者都实现了“从精细到粗糙”的多尺度分析，只是实现路径不同。
                 </p>
               </TeachingCard>
             )}
