@@ -1,0 +1,1 @@
+(globalThis.TURBOPACK||(globalThis.TURBOPACK=[])).push(["object"==typeof document?document.currentScript:void 0,9821,t=>{"use strict";var e=t.i(18749);t.s(["ImageCanvas",()=>e.default])}]);
