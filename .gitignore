@@ -56,6 +56,14 @@ docs/
 # IDE / editor config
 .claude/
 
+# project-level AI configs & internal docs
+/CLAUDE.md
+/AGENTS.md
+/TECH_DEBT_AUDIT.md
+/CONVOLUTION_VISUAL_LAYER.md
+/DEBUG_MEMORY.md
+/UPDATE_LOG.md
+
 # temp artifacts
 /tmp/
 .playwright-mcp
