@@ -50,6 +50,9 @@ dev-server.err.log
 # local course materials
 cv 课程北理工/
 
+# design docs (not part of source code)
+docs/
+
 # temp artifacts
 /tmp/
 .playwright-mcp
