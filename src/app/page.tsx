@@ -692,11 +692,56 @@ const totalConceptCount = learningChapters.reduce(
 );
 
 const moduleCount = learningChapters.reduce((total, chapter) => total + chapter.modules.length, 0);
+const primaryEntryHref = chapterOneCards.applicationsOverview.href;
 
-function ConceptCardView({ concept, index }: { concept: ConceptCard; index: number }) {
+// 首屏统计区控制为三项核心信息，避免信息块过多再次打散视觉重心。
+const heroMetrics = [
+  {
+    label: '章节',
+    value: learningChapters.length,
+    accentClassName: 'text-sky-200',
+    description: '从课程导入到目标检测，形成递进式学习路径。',
+  },
+  {
+    label: '模块',
+    value: moduleCount,
+    accentClassName: 'text-cyan-200',
+    description: '按 Part 组织实验主题，便于课堂讲解与课后复习。',
+  },
+  {
+    label: '知识点',
+    value: totalConceptCount,
+    accentClassName: 'text-emerald-200',
+    description: '每张卡片都对应一个可进入的交互式概念页面。',
+  },
+] as const;
+
+// 顶部色带按整张首页的阅读顺序走彩虹色，统一所有章节的浏览节奏。
+const chapterRainbowStripeClasses = [
+  'from-rose-500 to-orange-400',
+  'from-amber-500 to-yellow-400',
+  'from-lime-500 to-emerald-400',
+  'from-cyan-500 to-sky-400',
+  'from-blue-500 to-indigo-400',
+  'from-violet-500 to-fuchsia-400',
+] as const;
+
+function getChapterRainbowStripeClass(order: number) {
+  return chapterRainbowStripeClasses[(order - 1) % chapterRainbowStripeClasses.length];
+}
+
+function ConceptCardView({
+  concept,
+  index,
+  stripeClassName,
+}: {
+  concept: ConceptCard;
+  index: number;
+  stripeClassName: string;
+}) {
   const inner = (
     <>
-      <div className={`h-1 bg-gradient-to-r ${concept.color}`} />
+      <div className={`h-1 bg-gradient-to-r ${stripeClassName}`} />
       <div className="p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div className={`inline-flex h-11 w-11 items-center justify-center rounded-lg ${concept.bgLight} ${concept.textColor} transition-transform duration-300 group-hover:scale-105`}>
@@ -740,7 +785,7 @@ function ConceptCardView({ concept, index }: { concept: ConceptCard; index: numb
     </>
   );
 
-  const className = 'group relative overflow-hidden rounded-lg border border-slate-200/80 bg-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md hover:shadow-slate-200/60';
+  const className = 'group relative overflow-hidden rounded-lg border border-slate-200 bg-white hover:border-blue-300 transition-colors duration-150';
 
   if (concept.href) {
     return (
@@ -758,130 +803,204 @@ function ConceptCardView({ concept, index }: { concept: ConceptCard; index: numb
 }
 
 export default function Home() {
+  /** 根据章节/模块索引计算该模块首个概念的全局序号（1-based） */
+  function getModuleGlobalStart(chapterIdx: number, moduleIdx: number): number {
+    let count = 0;
+    for (let c = 0; c < chapterIdx; c++) {
+      for (const m of learningChapters[c].modules) {
+        count += m.concepts.length;
+      }
+    }
+    for (let m = 0; m < moduleIdx; m++) {
+      count += learningChapters[chapterIdx].modules[m].concepts.length;
+    }
+    return count + 1; // 1-based
+  }
+
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Hero Section */}
-      <header className="relative border-b border-slate-200 bg-white">
-        <a
-          href="https://github.com/WhitePlusMS/Classical-CV-Lab"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="absolute right-5 top-10 text-slate-400 transition-colors hover:text-slate-700"
-          aria-label="GitHub"
-        >
-          <svg className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-          </svg>
-        </a>
-        <div className="mx-auto flex max-w-6xl flex-col gap-8 px-5 py-10 sm:px-8 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-3xl">
-            <h1 className="text-3xl font-bold leading-tight tracking-tight text-slate-950 sm:text-4xl">
-              视界实验室
-            </h1>
-            <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600">
-              面向计算机视觉课程的交互式学习工作台，把图像采集、预处理、几何校正与目标检测拆成可观察、可调参、可推演的算法实验。
-            </p>
-            <div className="mt-3 flex items-center gap-2 text-sm text-slate-500">
-              <span className="font-semibold text-slate-800">{learningChapters.length}</span><span>章</span>
-              <span className="text-slate-300">·</span>
-              <span className="font-semibold text-slate-800">{moduleCount}</span><span>模块</span>
-              <span className="text-slate-300">·</span>
-              <span className="font-semibold text-slate-800">{totalConceptCount}</span><span>卡片</span>
-            </div>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen">
+      {/* ===== HERO ===== */}
+      <div className="relative overflow-hidden bg-[linear-gradient(135deg,#091120_0%,#102742_54%,#163a5d_100%)] text-white">
+        {/* 背景纹理保持技术感，但降低对比度，避免和标题争视觉注意力。 */}
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            backgroundImage:
+              'linear-gradient(rgba(255,255,255,.028) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.028) 1px, transparent 1px)',
+            backgroundSize: '56px 56px',
+          }}
+        />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,.16),transparent_38%),radial-gradient(circle_at_85%_22%,rgba(59,130,246,.18),transparent_34%),radial-gradient(circle_at_50%_100%,rgba(20,184,166,.12),transparent_28%)]" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-b from-transparent to-slate-950/24" />
 
-      <main className="mx-auto max-w-6xl px-5 py-10 sm:px-8 sm:py-12">
-        {/* Section Title
-        <div className="mb-8 flex items-center gap-3">
-          <div className="h-6 w-1 rounded-full bg-blue-600" />
-          <h2 className="text-lg font-semibold text-slate-800">按课程顺序开始学习</h2>
-          <div className="ml-4 h-px flex-1 bg-slate-200" />
-        </div> */}
-
-        {/* Concept Chapters */}
-        <div className="space-y-14">
-          {learningChapters.map(chapter => (
-            <section key={chapter.title}>
-              <div className="mb-7 flex flex-col gap-2 border-b border-slate-200 pb-4 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  {chapter.chapter ? (
-                    <p className="text-xs font-semibold tracking-wide text-blue-600">{chapter.chapter}</p>
-                  ) : null}
-                  <h3 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">{chapter.title}</h3>
-                </div>
-                {chapter.subtitle ? (
-                  <p className="text-sm text-slate-500">{chapter.subtitle}</p>
-                ) : null}
-              </div>
-
-              <div className="space-y-10">
-                {chapter.modules.map(module => (
-                  <div key={`${chapter.title}-${module.title}`}>
-                    <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex items-center gap-3">
-                        <span className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600">
-                          {module.eyebrow}
-                        </span>
-                        <h4 className="text-xl font-bold tracking-tight text-slate-900">{module.title}</h4>
-                      </div>
-                      <div>
-                        {module.source ? (
-                          <p className="text-sm text-slate-500">{module.source}</p>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                      {module.concepts.map((concept, conceptIndex) => (
-                        <ConceptCardView key={`${module.title}-${concept.title}`} concept={concept} index={conceptIndex} />
-                      ))}
-                    </div>
-                  </div>
-                ))}
-
-              </div>
-            </section>
-          ))}
-        </div>
-
-        {/* Info Section */}
-        <div className="mt-10 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-4">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50">
-                <svg className="w-5 h-5 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 16v-4M12 8h.01" strokeLinecap="round" />
-                </svg>
-              </div>
+        {/* 顶栏 */}
+        <div className="relative z-10 border-b border-white/10">
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-5">
+            <div>
               <div>
-                <h3 className="text-base font-semibold text-slate-800">课程路线</h3>
-                <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
-                  首页按章节与 Part 顺序组织入口；点击任一卡片进入对应概念页，查看参数、图像、公式与计算过程的联动演示。
-                </p>
+                <div className="text-[15px] font-semibold tracking-[0.01em] text-white">视界实验室</div>
+                <div className="mt-0.5 text-[11px] uppercase tracking-[0.16em] text-white/42">
+                  Classical-CV-Lab
+                </div>
               </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <a
+                href="https://github.com/WhitePlusMS/Classical-CV-Lab"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-full border border-white/14 bg-white/5 px-4 py-2 text-[13px] font-medium text-white/72 backdrop-blur-sm hover:border-white/24 hover:bg-white/8 hover:text-white"
+              >
+                <svg className="h-[15px] w-[15px]" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+                </svg>
+                GitHub
+              </a>
+              <Link
+                href={primaryEntryHref}
+                className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-[13px] font-semibold text-slate-950 shadow-[0_14px_40px_rgba(255,255,255,0.16)] hover:bg-sky-50"
+              >
+                开始学习
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </Link>
             </div>
           </div>
         </div>
-      </main>
-      {/* Footer */}
-      <footer className="border-t border-slate-200 bg-white">
-        <div className="mx-auto max-w-6xl px-8 py-6">
-          <p className="text-xs text-slate-400 text-center">
-          <a
-              href="https://github.com/WhitePlusMS/Classical-CV-Lab"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs text-slate-400 transition-colors hover:text-slate-600"
-            >
-              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+
+        {/* Hero 内容 */}
+        <div className="relative z-10 mx-auto max-w-6xl px-6 pb-16 pt-16 lg:pb-20 lg:pt-18">
+          <div className="max-w-3xl">
+            <h1 className="text-[44px] font-extrabold leading-[1.04] tracking-[-0.045em] text-white sm:text-[56px] lg:text-[64px]">
+              从像素到
+              <span className="bg-gradient-to-r from-sky-200 via-cyan-300 to-blue-300 bg-clip-text text-transparent">
+                计算机视觉
+              </span>
+            </h1>
+            <p className="mt-3 text-[28px] font-medium leading-[1.18] tracking-[-0.03em] text-white/72 sm:text-[34px]">
+              交互式学习实验台
+            </p>
+            <p className="mt-6 max-w-[620px] text-[16px] leading-7 text-white/64 sm:text-[17px]">
+              将图像采集、预处理、几何校正与目标检测整理成可观察、可调参、可推演的交互实验，
+              让课堂知识和页面中的真实反馈形成一条连续的学习路径。
+            </p>
+
+            <div className="mt-10 grid gap-3 sm:grid-cols-3">
+              {heroMetrics.map((metric) => (
+                <div
+                  key={metric.label}
+                  className="rounded-2xl border border-white/10 bg-white/[0.055] px-4 py-4 shadow-[0_16px_42px_rgba(8,15,31,0.18)] backdrop-blur-sm"
+                >
+                  <div className={`text-[34px] font-extrabold leading-none tracking-[-0.05em] ${metric.accentClassName}`}>
+                    {metric.value}
+                  </div>
+                  <div className="mt-2 text-[12px] font-semibold uppercase tracking-[0.16em] text-white/48">
+                    {metric.label}
+                  </div>
+                  <p className="mt-3 text-[13px] leading-6 text-white/56">{metric.description}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ===== CONTENT ===== */}
+      <div className="bg-white">
+        <main className="max-w-6xl mx-auto px-6 py-10">
+
+          {/* 章节 */}
+          <div className="space-y-14">
+            {learningChapters.map((chapter, ci) => {
+              const num = ci + 1;
+              return (
+                <section key={chapter.title}>
+                  <div className="flex items-center gap-4 mb-7">
+                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-blue-50 text-blue-600 text-[13px] font-bold shrink-0">
+                      {num}
+                    </span>
+                    <h2 className="text-xl font-bold text-slate-900">{chapter.title}</h2>
+                    <span className="flex-1 h-px bg-slate-100" />
+                  </div>
+
+                  <div className="space-y-10">
+                    {chapter.modules.map((mod, mi) => {
+                      const orderedConcepts = mod.concepts.map((concept, conceptIndex) => {
+                        const globalOrder = getModuleGlobalStart(ci, mi) + conceptIndex;
+
+                        return {
+                          concept,
+                          conceptIndex,
+                          stripeClassName: getChapterRainbowStripeClass(globalOrder),
+                        };
+                      });
+
+                      return (
+                        <div key={`${chapter.title}-${mod.title}`}>
+                          <div className="flex items-center gap-3 mb-4">
+                            <span className="text-[11px] font-semibold uppercase tracking-[.06em] text-slate-400">
+                              {mod.eyebrow} · {mod.title}
+                            </span>
+                            <span className="flex-1 h-px bg-slate-100" />
+                          </div>
+                          <h3 className="text-base font-semibold text-slate-800 mb-4">{mod.title}</h3>
+
+                          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                            {orderedConcepts.map(({ concept, conceptIndex, stripeClassName }) => (
+                              <ConceptCardView
+                                key={`${mod.title}-${concept.title}`}
+                                concept={concept}
+                                index={conceptIndex}
+                                stripeClassName={stripeClassName}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+
+          {/* 信息条 */}
+          <div className="mt-10 flex gap-5 p-[18px_22px] bg-slate-50 border border-slate-200 rounded-xl items-start">
+            <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+              <svg className="w-[18px] h-[18px] text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 16v-4M12 8h.01" strokeLinecap="round" />
               </svg>
-              Classical-CV-Lab / 视界实验室 · WhitePlusMS &copy; 2026
-            </a>
-          </p>
+            </div>
+            <div>
+              <h4 className="text-sm font-semibold text-slate-900">课程路线</h4>
+              <p className="text-[13px] text-slate-400 mt-0.5 leading-relaxed">
+                首页按章节与 Part 顺序组织入口；点击卡片进入对应的概念教学页，支持调参与推演。
+              </p>
+              <div className="flex gap-2 mt-2">
+                <span className="text-[11px] font-medium text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full">{learningChapters.length} 章节</span>
+                <span className="text-[11px] font-medium text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full">{moduleCount} 模块</span>
+                <span className="text-[11px] font-medium text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full">交互式实验</span>
+              </div>
+            </div>
+          </div>
+
+        </main>
+      </div>
+
+      {/* ===== FOOTER ===== */}
+      <footer className="border-t border-slate-200 bg-slate-50">
+        <div className="max-w-6xl mx-auto px-6 py-6 flex items-center justify-between">
+          <a href="https://github.com/WhitePlusMS/Classical-CV-Lab" target="_blank" rel="noopener noreferrer"
+            className="text-xs text-slate-400 hover:text-slate-500 inline-flex items-center gap-1.5">
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+            </svg>
+            Classical-CV-Lab / 视界实验室
+          </a>
+          <span className="text-xs text-slate-300">&copy; 2026 WhitePlusMS</span>
         </div>
       </footer>
     </div>
