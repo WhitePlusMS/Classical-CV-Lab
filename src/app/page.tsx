@@ -761,32 +761,32 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Hero Section */}
-      <header className="border-b border-slate-200 bg-white">
+      <header className="relative border-b border-slate-200 bg-white">
+        <a
+          href="https://github.com/WhitePlusMS/Classical-CV-Lab"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="absolute right-5 top-10 text-slate-400 transition-colors hover:text-slate-700"
+          aria-label="GitHub"
+        >
+          <svg className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+          </svg>
+        </a>
         <div className="mx-auto flex max-w-6xl flex-col gap-8 px-5 py-10 sm:px-8 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl">
-            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5">
-              <span className="h-2 w-2 rounded-full bg-blue-500" />
-              <span className="text-xs font-medium tracking-wide text-blue-700">交互式计算机视觉课程</span>
-            </div>
             <h1 className="text-3xl font-bold leading-tight tracking-tight text-slate-950 sm:text-4xl">
               视界实验室
             </h1>
             <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600">
               面向计算机视觉课程的交互式学习工作台，把图像采集、预处理、几何校正与目标检测拆成可观察、可调参、可推演的算法实验。
             </p>
-          </div>
-          <div className="grid w-full grid-cols-3 gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-center sm:w-auto sm:min-w-80">
-            <div className="rounded-md bg-white px-4 py-3 shadow-sm">
-              <div className="text-xl font-bold text-slate-900">{learningChapters.length}</div>
-              <div className="mt-1 text-xs text-slate-500">章节</div>
-            </div>
-            <div className="rounded-md bg-white px-4 py-3 shadow-sm">
-              <div className="text-xl font-bold text-slate-900">{moduleCount}</div>
-              <div className="mt-1 text-xs text-slate-500">模块</div>
-            </div>
-            <div className="rounded-md bg-white px-4 py-3 shadow-sm">
-              <div className="text-xl font-bold text-slate-900">{totalConceptCount}</div>
-              <div className="mt-1 text-xs text-slate-500">卡片</div>
+            <div className="mt-3 flex items-center gap-2 text-sm text-slate-500">
+              <span className="font-semibold text-slate-800">{learningChapters.length}</span><span>章</span>
+              <span className="text-slate-300">·</span>
+              <span className="font-semibold text-slate-800">{moduleCount}</span><span>模块</span>
+              <span className="text-slate-300">·</span>
+              <span className="font-semibold text-slate-800">{totalConceptCount}</span><span>卡片</span>
             </div>
           </div>
         </div>
@@ -870,7 +870,17 @@ export default function Home() {
       <footer className="border-t border-slate-200 bg-white">
         <div className="mx-auto max-w-6xl px-8 py-6">
           <p className="text-xs text-slate-400 text-center">
-            视界实验室 - 计算机视觉交互式教学平台
+          <a
+              href="https://github.com/WhitePlusMS/Classical-CV-Lab"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-slate-400 transition-colors hover:text-slate-600"
+            >
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+              </svg>
+              Classical-CV-Lab / 视界实验室 · WhitePlusMS &copy; 2026
+            </a>
           </p>
         </div>
       </footer>
