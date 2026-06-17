@@ -11,7 +11,6 @@ import {
   FlowNode,
   FormulaCard,
   ImageCanvas,
-  MathText,
   ProcessRail,
   SelectParam,
   TeachingCard,
@@ -20,6 +19,8 @@ import {
 } from '@/components';
 import {
   type GrayscaleImage,
+  HAAR_FEATURE_STEP_CODE_SNIPPET,
+  LBP_VECTOR_STEP_CODE_SNIPPET,
   type HaarFeatureStep,
   type HaarRegionResult,
   type HaarTemplateType,
@@ -88,62 +89,7 @@ const HAAR_TEMPLATE_NOTES: Record<HaarTemplateType, string> = {
   diagonal: '对角矩形分组比较，适合观察对角方向的明暗结构。',
 };
 
-const HAAR_CODE_TS = `export function getHaarFeatureStep(
-  image: number[][],
-  x: number,
-  y: number,
-  templateType: HaarTemplateType,
-  windowSize: number
-): HaarFeatureStep {
-  const regions = getHaarTemplateRegions(templateType, windowSize);
-  const integralImage = computeIntegralImage(image);
 
-  const regionSums = regions.map(region => {
-    const sum = rectSumByIntegral(integralImage, x + region.x, y + region.y, region.width, region.height);
-    return { ...region, sum };
-  });
-
-  const blackSum = regionSums
-    .filter(region => region.tone === 'black')
-    .reduce((total, region) => total + region.sum, 0);
-  const whiteSum = regionSums
-    .filter(region => region.tone === 'white')
-    .reduce((total, region) => total + region.sum, 0);
-
-  return {
-    x,
-    y,
-    regions: regionSums,
-    featureValue: blackSum - whiteSum,
-  };
-}`;
-
-const LBP_CODE_TS = `export function getLBPVectorStep(
-  image: number[][],
-  x: number,
-  y: number,
-  windowSize = 16,
-  cellSize = 4
-): LBPVectorStep {
-  const cellsPerSide = windowSize / cellSize;
-  const selectedCellX = Math.floor(cellsPerSide / 2);
-  const selectedCellY = Math.floor(cellsPerSide / 2);
-  const histogram = Array.from({ length: 256 }, () => 0);
-
-  for (let row = 0; row < cellSize; row++) {
-    for (let col = 0; col < cellSize; col++) {
-      const px = x + selectedCellX * cellSize + col;
-      const py = y + selectedCellY * cellSize + row;
-      const lbp = getLBPWindow(image, px, py).decimalValue;
-      histogram[lbp] += 1;
-    }
-  }
-
-  return {
-    vectorLength: cellsPerSide * cellsPerSide * 256,
-    histogram: histogram.map(count => count / (cellSize * cellSize)),
-  };
-}`;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -305,6 +251,8 @@ function IntegralMatrix({ matrix, x, y, windowSize }: { matrix: GrayscaleImage; 
   );
 }
 
+const LBP_BIT_LABELS = ['左上', '上', '右上', '右', '右下', '下', '左下', '左'];
+
 function LBPWindowMatrix({ step }: { step: LBPVectorStep }) {
   const sample = step.selectedCell.samplePixel;
 
@@ -332,14 +280,16 @@ function LBPWindowMatrix({ step }: { step: LBPVectorStep }) {
       </div>
       <div className="flex flex-wrap gap-1">
         {sample.binaryPattern.map((bit, index) => (
-          <span
-            key={`lbp-bit-${index}`}
-            className={`inline-flex h-7 w-7 items-center justify-center rounded font-mono text-[10px] font-semibold ${
-              bit === 1 ? 'bg-amber-200 text-amber-800' : 'bg-slate-200 text-slate-500'
-            }`}
-          >
-            {bit}
-          </span>
+          <div key={`lbp-bit-${index}`} className="flex flex-col items-center gap-0.5">
+            <span
+              className={`inline-flex h-7 w-7 items-center justify-center rounded font-mono text-[10px] font-semibold ${
+                bit === 1 ? 'bg-amber-200 text-amber-800' : 'bg-slate-200 text-slate-500'
+              }`}
+            >
+              {bit}
+            </span>
+            <span className="text-[9px] text-slate-500">{LBP_BIT_LABELS[index]}</span>
+          </div>
         ))}
       </div>
     </div>
@@ -430,7 +380,7 @@ export default function HaarLbpFeatureVectorPage() {
   const resultWidth = resultImage[0]?.length ?? 0;
   const resultHeight = resultImage.length;
   const samplePixel = lbpStep?.selectedCell.samplePixel;
-  const displayCurrentStep = mode === 'lbp-vector' && samplePixel
+  const displayCurrentStep = useMemo(() => mode === 'lbp-vector' && samplePixel
     ? {
         x: samplePixel.x,
         y: samplePixel.y,
@@ -450,7 +400,7 @@ export default function HaarLbpFeatureVectorPage() {
           regionWidth: HAAR_WINDOW_SIZE,
           regionHeight: HAAR_WINDOW_SIZE,
         }
-      : null;
+      : null, [mode, samplePixel, lbpStep, haarStep]);
   const currentStepIndex = validWidth > 0 ? safePosition.y * validWidth + safePosition.x : 0;
   const totalSteps = validWidth * validHeight;
 
@@ -900,7 +850,9 @@ export default function HaarLbpFeatureVectorPage() {
     </div>
   );
 
-  const codeTabContent = mode === 'lbp-vector' ? LBP_CODE_TS : HAAR_CODE_TS;
+  const codeTabContent = mode === 'lbp-vector'
+    ? LBP_VECTOR_STEP_CODE_SNIPPET
+    : HAAR_FEATURE_STEP_CODE_SNIPPET;
   const imageLabels = mode === 'lbp-vector'
     ? { input: lbpImageType === 'lenaOriginal' ? 'Lena 灰度图' : '纹理测试图', output: 'LBP 编码图' }
     : { input: haarImageType === 'lenaOriginal' ? 'Lena 灰度图' : 'Haar 教学图', output: 'Haar 响应图' };
@@ -911,7 +863,7 @@ export default function HaarLbpFeatureVectorPage() {
       }
     : {
         input: `红框为 ${HAAR_WINDOW_SIZE}x${HAAR_WINDOW_SIZE} Haar 检测窗口`,
-        output: '绿框为当前窗口在响应图中的位置',
+        output: '绿框为当前窗口；响应图显示归一化后的响应强度绝对值，正负号见上方公式',
       };
 
   return (

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Image from 'next/image';
 import {
   CodeViewer,
   ConceptLayout,
@@ -127,9 +128,8 @@ function templateFormulaMathML(
   const terms = [0, 1, 2, 3].map(index => {
     const x = index % 2;
     const y = Math.floor(index / 2);
-    const template = Math.round((templatePatch[y]?.[x] ?? 0) * 255);
-    const current = Math.round((currentPatch[y]?.[x] ?? 0) * 255);
-    const diff = Math.abs(template - current);
+    const template = (templatePatch[y]?.[x] ?? 0).toFixed(3);
+    const current = (currentPatch[y]?.[x] ?? 0).toFixed(3);
     return method === 'ssd'
       ? `<msup><mrow><mo>(</mo><mn>${template}</mn><mo>-</mo><mn>${current}</mn><mo>)</mo></mrow><mn>2</mn></msup>`
       : `<mo>|</mo><mn>${template}</mn><mo>-</mo><mn>${current}</mn><mo>|</mo>`;
@@ -185,6 +185,23 @@ function histogramFormulaMathML(
     `);
   }
 
+  // For bhattacharyya, show the full distance with outer sqrt(1 - coefficient)
+  if (method === 'bhattacharyya') {
+    const coefficientTerms = contributions.map(item => {
+      const template = item.template.toFixed(3);
+      const candidate = item.candidate.toFixed(3);
+      return `<msqrt><mrow><mn>${template}</mn><mo>·</mo><mn>${candidate}</mn></mrow></msqrt>`;
+    }).join('<mo>+</mo>');
+
+    return buildInlineMathML(`
+      <mrow>
+        <mi>${name}</mi><mo>(</mo><msub><mi>H</mi><mi>T</mi></msub><mo>,</mo><msub><mi>H</mi><mi>C</mi></msub><mo>)</mo>
+        <mo>=</mo><msqrt><mrow><mn>1</mn><mo>-</mo><mo>(</mo>${coefficientTerms}<mo>+</mo><mo>⋯</mo><mo>)</mo></mrow></msqrt>
+        <mo>=</mo><mn>${formatScore(score)}</mn>
+      </mrow>
+    `);
+  }
+
   const terms = contributions.map(item => {
     const template = item.template.toFixed(3);
     const candidate = item.candidate.toFixed(3);
@@ -193,9 +210,6 @@ function histogramFormulaMathML(
     }
     if (method === 'intersection') {
       return `<mo>min</mo><mo>(</mo><mn>${template}</mn><mo>,</mo><mn>${candidate}</mn><mo>)</mo>`;
-    }
-    if (method === 'bhattacharyya') {
-      return `<msqrt><mrow><mn>${template}</mn><mo>·</mo><mn>${candidate}</mn></mrow></msqrt>`;
     }
     return `<mn>${template}</mn><mo>·</mo><mn>${candidate}</mn>`;
   }).join('<mo>+</mo>');
@@ -310,7 +324,7 @@ function CourseImage({ src, label }: { src: string; label: string }) {
   return (
     <figure>
       <div className="flex h-44 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-950">
-        <img src={resolveAssetPath(src)} alt={label} className="h-full w-full object-contain" />
+        <Image src={resolveAssetPath(src)} alt={label} className="h-full w-full object-contain" />
       </div>
       <figcaption className="mt-2 text-center text-xs font-semibold text-slate-600">{label}</figcaption>
     </figure>
@@ -357,17 +371,6 @@ export default function HistogramTemplateMatchingPage() {
       cancelled = true;
     };
   }, []);
-
-  useEffect(() => {
-    setTemplateWindow(prev => ({ ...prev, width: templateSize, height: templateSize }));
-    setCurrentWindow(prev => ({ ...prev, width: templateSize, height: templateSize }));
-    setCandidateWindow(prev => ({ ...prev, width: templateSize, height: templateSize }));
-  }, [templateSize]);
-
-  useEffect(() => {
-    if (section === 'template' && activeControl === 'candidate') setActiveControl('current');
-    if (section === 'histogram' && activeControl === 'current') setActiveControl('candidate');
-  }, [activeControl, section]);
 
   const sourceImage = useMemo(() => {
     if (lenaImage.length > 0) return lenaImage;
@@ -433,6 +436,13 @@ export default function HistogramTemplateMatchingPage() {
     const nextSection = value as TeachingSection;
     setSection(nextSection);
     setActiveControl(nextSection === 'template' ? 'current' : 'candidate');
+  }, []);
+
+  const handleTemplateSizeChange = useCallback((nextSize: number) => {
+    setTemplateSize(nextSize);
+    setTemplateWindow(prev => ({ ...prev, width: nextSize, height: nextSize }));
+    setCurrentWindow(prev => ({ ...prev, width: nextSize, height: nextSize }));
+    setCandidateWindow(prev => ({ ...prev, width: nextSize, height: nextSize }));
   }, []);
 
   const sourceRegions: DisplayRegion[] = section === 'template'
@@ -655,14 +665,16 @@ export default function HistogramTemplateMatchingPage() {
           <FormulaCard
             label={templateMethod === 'ssd' ? 'SSD 平方差匹配' : 'SAD 绝对差匹配'}
             mathML={templateFormula}
-            note={`当前公式只代入模板 T 与当前窗口 Sxy：当前窗口 (${templateResult.currentWindow.x}, ${templateResult.currentWindow.y}) 的分数为 ${formatScore(templateResult.currentScore)}。${templateMethod === 'ssd' ? 'SSD' : 'SAD'} 越小表示当前窗口越接近模板；热力图最优参考分数为 ${formatScore(templateResult.bestScore)}。`}
+            note={`当前公式只代入模板 T 与当前窗口 Sxy：当前窗口 (${templateResult.currentWindow.x}, ${templateResult.currentWindow.y}) 的分数为 ${formatScore(templateResult.currentScore)}。公式中像素值已按 [0,1] 归一化展示，与算法内部口径一致；${templateMethod === 'ssd' ? 'SSD' : 'SAD'} 越小表示当前窗口越接近模板；热力图最优参考分数为 ${formatScore(templateResult.bestScore)}。`}
             tone="embedded"
           />
         ) : (
           <FormulaCard
             label={`${HIST_METHOD_OPTIONS.find(item => item.value === histMethod)?.label} 代表 bin 代入`}
             mathML={histFormula}
-            note={`上式只展开前 ${histogramResult.sampleContributions.length} 个 bin，完整分数使用 16 个 bin 汇总；该方法${scoreDirectionText(histMethod)}。`}
+            note={histMethod === 'bhattacharyya'
+              ? `上式展开的是巴氏系数的前 ${histogramResult.sampleContributions.length} 个根号项，完整巴氏距离 = sqrt(1 - 系数)，使用 16 个 bin 汇总；该方法${scoreDirectionText(histMethod)}。`
+              : `上式只展开前 ${histogramResult.sampleContributions.length} 个 bin，完整分数使用 16 个 bin 汇总；该方法${scoreDirectionText(histMethod)}。`}
             tone="embedded"
           />
         )}
@@ -713,7 +725,7 @@ export default function HistogramTemplateMatchingPage() {
       <SliderParam
         label="模板大小"
         value={templateSize}
-        onChange={setTemplateSize}
+        onChange={handleTemplateSizeChange}
         min={16}
         max={32}
         step={8}

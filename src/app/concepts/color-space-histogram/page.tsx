@@ -71,7 +71,9 @@ const CORE_CODE_TS = `function rgbToHsv(r, g, b) {
   };
 }
 
-function computeColorHistogram(rgbImage, channel, binCount) {
+function computeColorHistogram(rgbImage, mode, binCount) {
+  // 真实实现会根据显示模式归一化到对应通道（rgb/mask 默认统计 H）
+  const channel = (mode === 'rgb' || mode === 'mask') ? 'h' : mode;
   const bins = new Array(binCount).fill(0);
   for (const row of rgbImage) {
     for (const [r, g, b] of row) {
@@ -81,7 +83,8 @@ function computeColorHistogram(rgbImage, channel, binCount) {
         channel === 'v' ? hsv.v :
         channel === 'r' ? r :
         channel === 'g' ? g : b;
-      bins[Math.min(binCount - 1, Math.floor(value * binCount))] += 1;
+      const bin = Math.min(binCount - 1, Math.floor(Math.max(0, Math.min(1, value)) * binCount));
+      bins[bin] += 1;
     }
   }
   return bins;
@@ -168,13 +171,16 @@ function formatPercent(value: number): string {
 
 function buildRgbNormalizeFormula(step: ColorSpaceStep): string {
   const [r, g, b] = step.rgb255;
+  const nr = (r / 255).toFixed(3);
+  const ng = (g / 255).toFixed(3);
+  const nb = (b / 255).toFixed(3);
   return buildInlineMathML(`
     <mrow>
-      <msup><mi>R</mi><mo>&#8242;</mo></msup><mo>=</mo><mfrac><mn>${r}</mn><mn>255</mn></mfrac><mo>=</mo><mn>${step.rgb[0].toFixed(3)}</mn>
+      <msup><mi>R</mi><mo>&#8242;</mo></msup><mo>=</mo><mfrac><mn>${r}</mn><mn>255</mn></mfrac><mo>=</mo><mn>${nr}</mn>
       <mo>,</mo>
-      <msup><mi>G</mi><mo>&#8242;</mo></msup><mo>=</mo><mfrac><mn>${g}</mn><mn>255</mn></mfrac><mo>=</mo><mn>${step.rgb[1].toFixed(3)}</mn>
+      <msup><mi>G</mi><mo>&#8242;</mo></msup><mo>=</mo><mfrac><mn>${g}</mn><mn>255</mn></mfrac><mo>=</mo><mn>${ng}</mn>
       <mo>,</mo>
-      <msup><mi>B</mi><mo>&#8242;</mo></msup><mo>=</mo><mfrac><mn>${b}</mn><mn>255</mn></mfrac><mo>=</mo><mn>${step.rgb[2].toFixed(3)}</mn>
+      <msup><mi>B</mi><mo>&#8242;</mo></msup><mo>=</mo><mfrac><mn>${b}</mn><mn>255</mn></mfrac><mo>=</mo><mn>${nb}</mn>
     </mrow>
   `);
 }
@@ -314,7 +320,7 @@ function RgbCubeDiagram({ step }: { step: ColorSpaceStep }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-sm font-semibold text-slate-800">RGB 颜色立方体</div>
-          <p className="mt-1 text-xs leading-5 text-slate-500">三条彩色轴表示 R/G/B 强度，发光点是当前像素在立方体中的位置。</p>
+          <p className="mt-1 text-xs leading-5 text-slate-500">三条彩色轴表示 R/G/B 强度，发光点是目标像素在立方体中的位置。</p>
         </div>
         <PixelColorSwatch color={{ r: step.rgb[0], g: step.rgb[1], b: step.rgb[2] }} className="h-10 w-10" />
       </div>
@@ -436,7 +442,7 @@ function RgbCubeDiagram({ step }: { step: ColorSpaceStep }) {
         <circle cx={current.x} cy={current.y} r="14" fill="rgb(245 158 11)" fillOpacity="0.22" filter="url(#rgb-point-glow)" />
         <circle cx={current.x} cy={current.y} r="6" fill="rgb(245 158 11)" stroke="white" strokeWidth="2.4" />
         <text x={current.x + 10} y={current.y - 8} className="fill-amber-700 text-[10px] font-semibold">
-          当前像素
+          目标像素
         </text>
       </svg>
 
@@ -744,7 +750,7 @@ export default function ColorSpaceHistogramPage() {
         <FlowColumns>
           <FlowColumn align="start">
             <FlowNode tone="red" className="color-anchor-rgb-node">
-              <div className="mb-2 text-xs font-semibold text-red-700">当前像素 RGB</div>
+              <div className="mb-2 text-xs font-semibold text-red-700">目标像素 RGB</div>
               <div className="flex items-center gap-3">
                 <PixelColorSwatch
                   color={{ r: currentStep.rgb[0], g: currentStep.rgb[1], b: currentStep.rgb[2] }}
@@ -794,6 +800,11 @@ export default function ColorSpaceHistogramPage() {
             <FlowNode tone="emerald" className="color-anchor-mask-node">
               <div className="mb-2 text-xs font-semibold text-emerald-700">颜色范围提取</div>
               <div className="grid gap-2 text-xs leading-5 text-emerald-800">
+                {displayMode !== 'mask' && (
+                  <div className="rounded-xl bg-emerald-50/70 px-3 py-2 text-xs text-emerald-700">
+                    提示：颜色范围提取仅在“HSV 颜色提取”模式下生效；当前为 {modeLabel(displayMode)}，mask 统计仅供教学参考。
+                  </div>
+                )}
                 <div className="rounded-xl border border-emerald-200 bg-white px-3 py-2">
                   目标色调 H0 = {effectiveReferenceHue.toFixed(1)}°，阈值 T = {threshold}°
                 </div>
@@ -801,7 +812,7 @@ export default function ColorSpaceHistogramPage() {
                   当前 mask 共选中 {maskPixelCount} / {totalSteps} 个像素。
                 </div>
                 <div className="rounded-xl border border-emerald-200 bg-white px-3 py-2 font-semibold">
-                  当前像素：{currentStep.thresholdHit ? '命中目标色范围' : '未命中'}
+                  目标像素：{currentStep.thresholdHit ? '命中目标色范围' : '未命中'}
                 </div>
               </div>
             </FlowNode>
@@ -809,7 +820,7 @@ export default function ColorSpaceHistogramPage() {
         </FlowColumns>
       </ProcessRail>
     );
-  }, [currentStep, histogram, maskPixelCount, threshold, totalSteps, effectiveReferenceHue]);
+  }, [currentStep, displayMode, histogram, maskPixelCount, threshold, totalSteps, effectiveReferenceHue]);
 
   const stepDetails = useMemo(() => {
     if (!currentStep) return null;
@@ -819,7 +830,7 @@ export default function ColorSpaceHistogramPage() {
         <TeachingCard>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div className="text-sm font-semibold text-slate-800">当前像素的 RGB → HSV 代入</div>
+              <div className="text-sm font-semibold text-slate-800">目标像素的 RGB → HSV 代入</div>
               <p className="mt-1 text-xs leading-5 text-slate-500">
                 HSV 先把 RGB 归一化，再用最大值、最小值和差值决定色调、饱和度与明度。
               </p>
@@ -853,13 +864,13 @@ export default function ColorSpaceHistogramPage() {
         <TeachingCard>
           <div className="text-sm font-semibold text-slate-800">HSV 颜色范围提取</div>
           <p className="mt-1 text-xs leading-5 text-slate-500">
-            以当前像素的 H 作为目标色调 H0，在色调环上选择距离不超过阈值 T 的像素，得到右侧 mask。
+            以目标像素的 H 作为目标色调 H0，在色调环上按循环最短距离选择不超过阈值 T 的像素（0° 与 360° 相邻），得到右侧 mask。
           </p>
           <FormulaCard
             className="mt-4"
             label="Hue 阈值判定"
             mathML={buildMaskFormula(currentStep, effectiveReferenceHue, threshold)}
-            note={`当前阈值选中 ${maskPixelCount} 个像素，占整幅图 ${formatPercent(maskPixelCount / Math.max(1, totalSteps))}。`}
+            note={`Hue 距离按色相环的循环最短距离计算（0° 与 360° 相邻）。当前阈值选中 ${maskPixelCount} 个像素，占整幅图 ${formatPercent(maskPixelCount / Math.max(1, totalSteps))}。`}
           />
         </TeachingCard>
 
@@ -899,7 +910,7 @@ export default function ColorSpaceHistogramPage() {
       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-3">
         <div className="text-xs font-semibold text-emerald-800">阈值含义</div>
         <p className="mt-2 text-xs leading-5 text-emerald-800">
-          在 HSV 色调环上，以当前像素 H0 为中心，选择 H0 ± {threshold}° 范围内的像素作为目标颜色。
+          在 HSV 色调环上，以目标像素 H0 为中心，按 0°/360° 相邻的循环最短距离选择不超过 {threshold}° 的像素作为目标颜色。
         </p>
       </div>
 
@@ -912,7 +923,7 @@ export default function ColorSpaceHistogramPage() {
 
       {currentStep && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50/70 px-3 py-3">
-          <div className="text-xs font-semibold text-amber-800">当前像素</div>
+          <div className="text-xs font-semibold text-amber-800">目标像素</div>
           <div className="mt-2 flex items-center gap-3">
             <PixelColorSwatch
               color={{ r: currentStep.rgb[0], g: currentStep.rgb[1], b: currentStep.rgb[2] }}
@@ -934,7 +945,7 @@ export default function ColorSpaceHistogramPage() {
       title="颜色空间与颜色直方图"
       subtitle="Color Space & Histogram - 基于颜色特征的目标检测"
       operationLabel={operationLabel(displayMode)}
-      parameterIntro="切换显示模式查看不同颜色通道或 HSV 颜色提取结果；当前像素会同步驱动公式代入、当前直方图 bin 和颜色范围提取结果。"
+      parameterIntro="切换显示模式查看不同颜色通道或 HSV 颜色提取结果；目标像素会同步驱动公式代入、当前直方图 bin 和颜色范围提取结果。"
       originalImage={baseImage}
       originalRgbImage={rgbImage}
       resultImage={resultImage}

@@ -27,7 +27,6 @@ import {
   createClassifierTeachingImage,
   formatFeatureValue,
   formatGrayByte,
-  getDetectionWindowStep,
   getScanProgressAt,
 } from '@/lib/algorithms';
 
@@ -280,7 +279,7 @@ function CascadeStageList({ step }: { step: DetectionScanStep | null }) {
           </div>
           <p className="mt-1 leading-5">
             {stage.entered
-              ? `${stage.weakClassifierCount} 个弱分类器参与判断，结果：${stage.passed ? '通过' : '拒绝'}。`
+              ? `第 ${stage.stage} 级阈值判定（教学示意：真实级联由若干弱分类器组合而成），结果：${stage.passed ? '通过' : '拒绝'}。`
               : '前一级已经拒绝，后续级不再计算。'}
           </p>
         </div>
@@ -437,7 +436,7 @@ function RouteCompare() {
       name: 'LBP + SVM',
       role: '用局部纹理统计描述窗口',
       scene: '纹理差异明显的目标',
-      note: 'Haar/LBP 页学到的是窗口如何变成纹理直方图，分类器读取的是这些统计值。',
+      note: 'LBP 页学到的是窗口如何变成局部纹理统计；Haar 页学到的是矩形区域差值特征；分类器读取的是这些统计值。',
     },
   ];
 
@@ -682,14 +681,25 @@ export default function ClassifierDetectionPipelinePage() {
 
   const contentHeader = (
     <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
-      <div>
-        <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-600">任务目标</div>
-        <h2 className="mt-2 text-xl font-semibold text-slate-900">在图像中找出一个目标区域</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-600">
-          训练样本让分类器学会区分目标和背景；检测时，滑动窗口逐个检查图像位置，
-          每个窗口先提取 Haar 特征，再经过级联分类器过滤，最终保留候选检测框。
-        </p>
-      </div>
+      {taskStage === 'compare' ? (
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-600">路线对比</div>
+          <h2 className="mt-2 text-xl font-semibold text-slate-900">三条传统检测路线的特征与分类器组合</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            同样的滑动窗口检测流程，可以用不同的特征提取方法和分类器组合实现；
+            选择哪种路线取决于目标外观、速度和标注数据量。
+          </p>
+        </div>
+      ) : (
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-600">任务目标</div>
+          <h2 className="mt-2 text-xl font-semibold text-slate-900">在图像中找出一个目标区域</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            训练样本让分类器学会区分目标和背景；检测时，滑动窗口逐个检查图像位置，
+            每个窗口先提取 Haar 特征，再经过级联分类器过滤，最终保留候选检测框。
+          </p>
+        </div>
+      )}
       <div className="grid grid-cols-3 gap-2 text-center text-xs">
         <MetricCard label="主线特征" value="Haar" tone="amber" />
         <MetricCard label="主线分类器" value="Cascade" tone="emerald" />
@@ -699,8 +709,16 @@ export default function ClassifierDetectionPipelinePage() {
   );
 
   const mainVisual = useMemo(() => {
-    if (taskStage === 'feature' || taskStage === 'classifier' || taskStage === 'compare') {
+    if (taskStage === 'feature' || taskStage === 'classifier') {
       return null;
+    }
+
+    if (taskStage === 'compare') {
+      return (
+        <div className="rounded-2xl border border-slate-200 bg-white/95 px-4 py-4 shadow-sm">
+          <RouteCompare />
+        </div>
+      );
     }
 
     if (taskStage === 'training') {
@@ -735,7 +753,12 @@ export default function ClassifierDetectionPipelinePage() {
               <div className="mt-3">
                 <ImageCanvas image={positiveTrainingSample} maxDisplaySize={132} showGrid />
               </div>
-              <p className="mt-3 text-xs leading-5">标签 +1，用来告诉分类器这类外观应保留。</p>
+              <p className="mt-3 text-xs leading-5">
+                标签 +1，用来告诉分类器这类外观应保留。
+                <span className="block mt-1 text-[10px] text-emerald-700/80">
+                  提示：当前页面级联阈值是教学示意值，并非从这两个样本训练得到，因此该窗口不一定被当前分类器判为目标。
+                </span>
+              </p>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-700">
               <div className="text-sm font-semibold">负样本：背景窗口</div>
@@ -866,7 +889,12 @@ export default function ClassifierDetectionPipelinePage() {
                       <div className="mt-2 font-mono text-[10px]">
                         ({TRAINING_SAMPLE_WINDOWS.positive.x}, {TRAINING_SAMPLE_WINDOWS.positive.y})
                       </div>
-                      <p className="mt-2 leading-5">包含目标的窗口，用来告诉分类器“这类外观应保留”。</p>
+                      <p className="mt-2 leading-5">
+                        包含目标的窗口，用来告诉分类器“这类外观应保留”。
+                        <span className="block mt-1 text-[10px] text-emerald-700/80">
+                          提示：当前级联阈值是教学示意值，未从这两个样本训练得到。
+                        </span>
+                      </p>
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-slate-700">
                       <div className="font-semibold">负样本</div>
@@ -996,7 +1024,7 @@ export default function ClassifierDetectionPipelinePage() {
               <div className="mb-2 text-xs font-semibold text-emerald-700">正样本窗口</div>
               <ImageCanvas image={positiveTrainingSample} maxDisplaySize={130} showGrid />
               <p className="mt-2 text-xs leading-5 text-slate-600">
-                该窗口覆盖目标中心区域，标签为 +1。
+                该窗口覆盖目标中心区域，标签为 +1。当前级联阈值是教学示意值，并非从这两个样本训练得到，因此分类器行为可能与样本标签不完全一致。
               </p>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
@@ -1033,7 +1061,7 @@ export default function ClassifierDetectionPipelinePage() {
           <FormulaCard
             label="当前 Cascade 阶段判定"
             mathML={buildCascadeFormula(currentScanStep)}
-            note="任一级拒绝后，后续级不再计算；只有全部通过的窗口才进入候选集合。"
+            note="任一级拒绝后，后续级不再计算；只有全部通过的窗口才进入候选集合。当前级联阈值是教学示意值，未从上述训练样本学习得到。"
             tone="embedded"
           />
           </TeachingCard>
@@ -1128,7 +1156,7 @@ export default function ClassifierDetectionPipelinePage() {
       codeTab={
         <CodeViewer
           languages={[
-            { name: 'C++ (OpenCV)', code: OPENCV_SVM_CODE },
+            { name: 'C++ (OpenCV SVM 示例)', code: OPENCV_SVM_CODE },
             { name: 'TypeScript 教学流程', code: TEACHING_DETECTION_CODE },
           ]}
         />

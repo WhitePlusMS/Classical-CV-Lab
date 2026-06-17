@@ -17,6 +17,8 @@ import {
 import { useGridNavigation } from '@/hooks/useGridNavigation';
 import { GrayscaleImage } from '@/lib/algorithms/types';
 import {
+  HOG_GX_KERNEL,
+  HOG_GY_KERNEL,
   HogCellStep,
   getHogCellStepAt,
   renderHogVisualization,
@@ -95,25 +97,82 @@ function getPixel(image: GrayscaleImage, x: number, y: number): number {
   return image[y][x];
 }
 
+function buildSobelKernelMatrixMathML(matrix: number[][]): string {
+  const rows = matrix
+    .map(row => `<mtr>${row.map(v => `<mtd><mn>${formatNumber(v, 0)}</mn></mtd>`).join('')}</mtr>`)
+    .join('');
+  return `<mrow><mo>[</mo><mtable>${rows}</mtable><mo>]</mo></mrow>`;
+}
+
+function buildWeightedSumMathML(terms: Array<{ weight: number; pixel: number }>): string {
+  return terms
+    .map(({ weight, pixel }, index) => {
+      const absWeight = Math.abs(weight);
+      if (index === 0) {
+        return weight < 0
+          ? `<mo>-</mo><mn>${absWeight}</mn><mo>·</mo><mn>${formatNumber(pixel)}</mn>`
+          : `<mn>${absWeight}</mn><mo>·</mo><mn>${formatNumber(pixel)}</mn>`;
+      }
+      return weight < 0
+        ? `<mo>-</mo><mn>${absWeight}</mn><mo>·</mo><mn>${formatNumber(pixel)}</mn>`
+        : `<mo>+</mo><mn>${absWeight}</mn><mo>·</mo><mn>${formatNumber(pixel)}</mn>`;
+    })
+    .join('');
+}
+
 function buildGradientSubstitutionMathML(step: HogCellStep, image: GrayscaleImage): string {
   const { sample } = step;
-  const left = getPixel(image, sample.x - 1, sample.y);
-  const right = getPixel(image, sample.x + 1, sample.y);
-  const up = getPixel(image, sample.x, sample.y - 1);
-  const down = getPixel(image, sample.x, sample.y + 1);
+  const neighborhood: number[][] = [];
+  for (let ky = -1; ky <= 1; ky++) {
+    const row: number[] = [];
+    for (let kx = -1; kx <= 1; kx++) {
+      row.push(getPixel(image, sample.x + kx, sample.y + ky));
+    }
+    neighborhood.push(row);
+  }
+
+  const gxTerms: Array<{ weight: number; pixel: number }> = [];
+  const gyTerms: Array<{ weight: number; pixel: number }> = [];
+  for (let ky = 0; ky < 3; ky++) {
+    for (let kx = 0; kx < 3; kx++) {
+      const gxWeight = HOG_GX_KERNEL[ky][kx];
+      const gyWeight = HOG_GY_KERNEL[ky][kx];
+      const pixel = neighborhood[ky][kx];
+      if (gxWeight !== 0) gxTerms.push({ weight: gxWeight, pixel });
+      if (gyWeight !== 0) gyTerms.push({ weight: gyWeight, pixel });
+    }
+  }
 
   return buildInlineMathML(`
-    <mrow>
-      <msub><mi>G</mi><mi>x</mi></msub><mo>=</mo><mi>I</mi><mo>(</mo><mi>x</mi><mo>+</mo><mn>1</mn><mo>,</mo><mi>y</mi><mo>)</mo><mo>-</mo><mi>I</mi><mo>(</mo><mi>x</mi><mo>-</mo><mn>1</mn><mo>,</mo><mi>y</mi><mo>)</mo>
-      <mo>=</mo><mi>I</mi><mo>(</mo><mn>${sample.x + 1}</mn><mo>,</mo><mn>${sample.y}</mn><mo>)</mo><mo>-</mo><mi>I</mi><mo>(</mo><mn>${sample.x - 1}</mn><mo>,</mo><mn>${sample.y}</mn><mo>)</mo>
-      <mo>=</mo><mn>${formatNumber(right)}</mn><mo>-</mo><mn>${formatNumber(left)}</mn>
-      <mo>=</mo><mn>${formatNumber(sample.gx)}</mn>
-      <mspace width="1em"/>
-      <msub><mi>G</mi><mi>y</mi></msub><mo>=</mo><mi>I</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>+</mo><mn>1</mn><mo>)</mo><mo>-</mo><mi>I</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>-</mo><mn>1</mn><mo>)</mo>
-      <mo>=</mo><mi>I</mi><mo>(</mo><mn>${sample.x}</mn><mo>,</mo><mn>${sample.y + 1}</mn><mo>)</mo><mo>-</mo><mi>I</mi><mo>(</mo><mn>${sample.x}</mn><mo>,</mo><mn>${sample.y - 1}</mn><mo>)</mo>
-      <mo>=</mo><mn>${formatNumber(down)}</mn><mo>-</mo><mn>${formatNumber(up)}</mn>
-      <mo>=</mo><mn>${formatNumber(sample.gy)}</mn>
-    </mrow>
+    <mtable>
+      <mtr>
+        <mtd columnalign="left">
+          <msub><mi>K</mi><mi>x</mi></msub><mo>=</mo>${buildSobelKernelMatrixMathML(HOG_GX_KERNEL)}
+          <mspace width="1em"/>
+          <msub><mi>K</mi><mi>y</mi></msub><mo>=</mo>${buildSobelKernelMatrixMathML(HOG_GY_KERNEL)}
+        </mtd>
+      </mtr>
+      <mtr>
+        <mtd columnalign="left">
+          <msub><mi>G</mi><mi>x</mi></msub><mo>=</mo>
+          <munder><mo>Σ</mo><mrow><mi>kx</mi><mo>,</mo><mi>ky</mi><mo>∈</mo><mrow><mo>{</mo><mn>-1</mn><mo>,</mo><mn>0</mn><mo>,</mo><mn>1</mn><mo>}</mo></mrow></mrow></munder>
+          <mi>I</mi><mo>(</mo><mi>x</mi><mo>+</mo><mi>kx</mi><mo>,</mo><mi>y</mi><mo>+</mo><mi>ky</mi><mo>)</mo>
+          <mo>·</mo><msub><mi>K</mi><mi>x</mi></msub><mo>[</mo><mi>ky</mi><mo>+</mo><mn>1</mn><mo>]</mo><mo>[</mo><mi>kx</mi><mo>+</mo><mn>1</mn><mo>]</mo>
+          <mo>=</mo>${buildWeightedSumMathML(gxTerms)}
+          <mo>=</mo><mn>${formatNumber(sample.gx)}</mn>
+        </mtd>
+      </mtr>
+      <mtr>
+        <mtd columnalign="left">
+          <msub><mi>G</mi><mi>y</mi></msub><mo>=</mo>
+          <munder><mo>Σ</mo><mrow><mi>kx</mi><mo>,</mo><mi>ky</mi><mo>∈</mo><mrow><mo>{</mo><mn>-1</mn><mo>,</mo><mn>0</mn><mo>,</mo><mn>1</mn><mo>}</mo></mrow></mrow></munder>
+          <mi>I</mi><mo>(</mo><mi>x</mi><mo>+</mo><mi>kx</mi><mo>,</mo><mi>y</mi><mo>+</mo><mi>ky</mi><mo>)</mo>
+          <mo>·</mo><msub><mi>K</mi><mi>y</mi></msub><mo>[</mo><mi>ky</mi><mo>+</mo><mn>1</mn><mo>]</mo><mo>[</mo><mi>kx</mi><mo>+</mo><mn>1</mn><mo>]</mo>
+          <mo>=</mo>${buildWeightedSumMathML(gyTerms)}
+          <mo>=</mo><mn>${formatNumber(sample.gy)}</mn>
+        </mtd>
+      </mtr>
+    </mtable>
   `);
 }
 
@@ -448,6 +507,10 @@ export default function HogFeaturePage() {
               选中 cell ({currentHogStep.cellX}, {currentHogStep.cellY})，先对其中每个像素计算 Sobel 梯度，
               再按方向 bin 累加梯度幅值，最后把所属 block 内的 cell 直方图串联并归一化。
             </p>
+            <p className="mt-2 text-xs leading-6 text-slate-500">
+              当前页面为教学演示，采用硬投票（每个像素只投入最近的一个方向 bin）和固定左上角 block 策略；
+              标准 HOG 还会对相邻 bin 做线性插值、使用 L2-Hys 归一化，并让 block 以 stride 滑动重叠。
+            </p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
             每柱角度：{formatNumber(anglePerBin, 1)}°
@@ -462,9 +525,9 @@ export default function HogFeaturePage() {
         </p>
         <div className="space-y-3">
           <FormulaCard
-            label={`像素 (${currentHogStep.sample.x}, ${currentHogStep.sample.y}) 的一阶差分`}
+            label={`像素 (${currentHogStep.sample.x}, ${currentHogStep.sample.y}) 的 Sobel 梯度`}
             mathML={buildGradientSubstitutionMathML(currentHogStep, originalImage)}
-            note="这里使用 Sobel 梯度场中的水平梯度 Gx 与垂直梯度 Gy，数值来自当前 Lena 图。"
+            note="这里使用未归一化的 Sobel 核近似梯度，Gx、Gy 数值来自当前 Lena 图的 3×3 邻域加权求和。"
             tone="embedded"
           />
           <FormulaCard
@@ -499,6 +562,10 @@ export default function HogFeaturePage() {
             <div className="text-xs leading-6 text-slate-600">
               当前 block 从 cell ({currentHogStep.blockX}, {currentHogStep.blockY}) 开始，
               覆盖 {cellsPerBlock}×{cellsPerBlock} 个 cell。先串联这些 cell 的方向直方图，再做 L2 归一化。
+            </div>
+            <div className="mt-2 text-xs leading-6 text-slate-500">
+              当前页面为演示，把当前 cell 固定分配到包含它的最左上角 block；若 cell 靠近图像边界，block 会自动贴近边缘。
+              标准 HOG 中 block 会以 stride 滑动，一个 cell 可能参与多个重叠 block 的归一化。
             </div>
             <div className="mt-3">
               <BlockCellsView step={currentHogStep} />
@@ -576,7 +643,7 @@ export default function HogFeaturePage() {
       title="HOG 特征"
       subtitle="Histogram of Oriented Gradient - 方向梯度直方图"
       operationLabel="HOG 统计"
-      parameterIntro="点击 Lena 图选择一个 8×8 cell，或用方向键移动；本页只追踪当前 cell 的梯度幅值、方向 bin、直方图和 block 归一化证据。"
+      parameterIntro="点击 Lena 图选择一个 8×8 cell，或用方向键移动；当前页面只追踪当前 cell 的梯度幅值、方向 bin、直方图和 block 归一化证据。"
       parameters={parameters}
       stepDetails={stepDetails}
       analysisPreview={analysisPreview}

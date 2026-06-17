@@ -627,7 +627,7 @@ export default function LBPGaborTexturePage() {
           <SelectParam label="Gabor 预设" value={gaborPreset} onChange={handleGaborPresetChange} options={GABOR_PRESET_OPTIONS} />
           <SliderParam label="方向 θ" value={gaborParams.orientation} onChange={value => updateGaborParam('orientation', value)} min={0} max={180} step={15} unit="°" />
           <SliderParam label="波长 λ" value={gaborParams.wavelength} onChange={value => updateGaborParam('wavelength', value)} min={4} max={16} step={1} />
-          <SliderParam label="方差 σ" value={gaborParams.sigma} onChange={value => updateGaborParam('sigma', value)} min={2} max={8} step={1} />
+          <SliderParam label="标准差 σ" value={gaborParams.sigma} onChange={value => updateGaborParam('sigma', value)} min={2} max={8} step={1} />
           <SliderParam label="纵横比 γ" value={gaborParams.gamma} onChange={value => updateGaborParam('gamma', value)} min={0.3} max={1} step={0.1} />
           <SliderParam label="核大小" value={gaborParams.kernelSize} onChange={value => updateGaborParam('kernelSize', value % 2 === 0 ? value + 1 : value)} min={15} max={31} step={2} />
         </>
@@ -643,7 +643,7 @@ export default function LBPGaborTexturePage() {
             <h2 className="mb-3 text-sm font-semibold text-slate-800">LBP 当前窗口计算</h2>
             <p className="text-xs leading-6 text-slate-600">
               <TeachingTerm term="LBP" explanation="Local Binary Pattern，用中心像素阈值化周围 8 个邻域像素，得到 0~255 的局部纹理编码。" className="mr-1" />
-              用中心像素作为阈值，把 3x3 邻域中的 8 个相邻像素编码为二进制模式。当前页面所有矩阵、位权重和结果值都来自主图红框中的真实像素。
+              用中心像素作为阈值，把 3x3 邻域中的 8 个相邻像素编码为二进制模式。所有矩阵、位权重和结果值均来自主图红框中的真实像素。
             </p>
           </TeachingCard>
 
@@ -744,7 +744,7 @@ export default function LBPGaborTexturePage() {
           <TeachingCard>
             <h2 className="mb-3 text-sm font-semibold text-slate-800">Gabor 当前窗口计算</h2>
             <p className="text-xs leading-6 text-slate-600">
-              <TeachingTerm term="Gabor 预设" explanation="预设把方向、波长、方差等参数组合成一类纹理探测器；切到自定义后只看当前参数的响应。" className="mr-1" />
+              <TeachingTerm term="Gabor 预设" explanation="预设把方向、波长、标准差等参数组合成一类纹理探测器；切到自定义后只看当前参数的响应。" className="mr-1" />
               滤波器用带方向和频率的核与局部窗口逐项相乘。当前演示只选核完整覆盖原图的位置，所以公式里的每一项都来自真实图像像素，不使用边界补零。
             </p>
           </TeachingCard>
@@ -823,11 +823,11 @@ export default function LBPGaborTexturePage() {
           </div>
           <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 text-xs leading-6 text-sky-800">
             Gabor 关注特定
-            <TeachingTerm term="方向 θ" explanation="θ 决定 Gabor 核的朝向，只有与纹理方向匹配时响应才会明显。" className="mx-1" />
+            <TeachingTerm term="方向 θ" explanation="θ 是平行条纹的法线角度（即纹理走向与 θ 垂直），只有纹理走向与法线垂直时响应才会明显。" className="mx-1" />
             和
             <TeachingTerm term="波长 λ" explanation="λ 决定条纹周期，越大越偏向较宽的纹理结构。" className="mx-1" />
             的纹理响应。
-            <TeachingTerm term="方差 σ" explanation="σ 决定核的空间覆盖范围，越大参考的邻域越宽。" className="mx-1" />
+            <TeachingTerm term="标准差 σ" explanation="σ 决定核的空间覆盖范围，越大参考的邻域越宽。" className="mx-1" />
             改变时，会直接改变核对条纹、棋盘和渐变区域的响应强度。
           </div>
         </div>
