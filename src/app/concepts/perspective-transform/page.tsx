@@ -23,8 +23,7 @@ import {
   isValidPerspectiveQuad,
   type PerspectivePoint,
 } from '@/lib/algorithms/perspectiveTransform';
-import { centerCropRgbImage, imageRgbToCanvas, loadImageAsRgb, resizeRgbImage } from '@/lib/utils/imageProcessing';
-import type { RgbImage } from '@/lib/algorithms/grayscale';
+import { imageRgbToCanvas } from '@/lib/utils/imageProcessing';
 
 const HANDLE_OPTIONS = [
   { value: '0', label: 'A 左上角' },
@@ -39,8 +38,6 @@ const HANDLE_COLORS = ['#dc2626', '#2563eb', '#059669', '#ea580c'] as const;
 const SOURCE_VIEW_MAX_SIZE = 300;
 const OUTPUT_VIEW_MAX_SIZE = 188;
 const DRAG_PADDING = 10;
-
-type PerspectiveImageType = 'document' | 'lenaOriginal';
 
 const PERSPECTIVE_CODE = `const dstQuad = [
   [0, 0],
@@ -366,41 +363,8 @@ function DraggablePerspectiveSource({
 }
 
 export default function PerspectiveTransformPage() {
-  useEffect(() => {
-    let cancelled = false;
-    loadImageAsRgb('/assets/lena-original.jpg')
-      .then(raw => {
-        if (!cancelled) {
-          const cropped = centerCropRgbImage(raw);
-          const h = cropped.length;
-          const w = cropped[0]?.length ?? 1;
-          const scaleX = 168 / w;
-          const scaleY = 120 / h;
-          const scale = Math.min(scaleX, scaleY);
-          const nw = Math.max(1, Math.round(w * scale));
-          const nh = Math.max(1, Math.round(h * scale));
-          const resized = resizeRgbImage(cropped, Math.max(nw, nh));
-          const finalRgb: RgbImage = Array.from({ length: 120 }, (_, y) =>
-            Array.from({ length: 168 }, (_, x) => (resized[y]?.[x] ?? [0, 0, 0]))
-          );
-          setLenaReferenceRgb(finalRgb);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setLenaReferenceRgb(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const [selectedHandleIndex, setSelectedHandleIndex] = useState(0);
-  const [imageType, setImageType] = useState<PerspectiveImageType>('document');
-  const [lenaReferenceRgb, setLenaReferenceRgb] = useState<RgbImage | null>(null);
-  const scene = useMemo(
-    () => createPerspectiveTeachingScene(imageType === 'lenaOriginal' && lenaReferenceRgb ? lenaReferenceRgb : undefined),
-    [imageType, lenaReferenceRgb]
-  );
+  const scene = useMemo(() => createPerspectiveTeachingScene(), []);
   const [controlPoints, setControlPoints] = useState<PerspectivePoint[]>(() =>
     scene.sourcePoints.map(point => ({ ...point }))
   );
@@ -439,6 +403,7 @@ export default function PerspectiveTransformPage() {
   }, [scene.sourcePoints]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setControlPoints(scene.sourcePoints.map(point => ({ ...point })));
     setSelectedHandleIndex(0);
   }, [scene]);
@@ -499,7 +464,7 @@ export default function PerspectiveTransformPage() {
             </p>
             <div className="mt-3 space-y-1 border-t border-amber-100 pt-3 text-xs leading-5">
               <div className="font-medium text-amber-900">
-                中心点尺度因子 ω={formatTransformNumber(computation.centerProjection.scale, 4)}
+                控制点中心尺度因子 ω={formatTransformNumber(computation.centerProjection.scale, 4)}
               </div>
               <div className="text-slate-600">
                 仿射矩阵只由前三点确定，因此第四个角点只能被近似预测。
@@ -586,7 +551,7 @@ export default function PerspectiveTransformPage() {
               tone="embedded"
             />
             <FormulaCard
-              label="当前中心点透视代入"
+              label="当前控制点中心透视代入"
               mathML={projectionSubstitutionMath(
                 'T',
                 computation.homography,
@@ -594,7 +559,7 @@ export default function PerspectiveTransformPage() {
                 computation.centerProjection.destination,
                 computation.centerProjection.scale
               )}
-              note="透视变换先得到齐次坐标，再除以尺度因子 omega 得到真正的像素坐标。"
+              note="取四个控制点的中心作为示例点；透视变换先得到齐次坐标，再除以尺度因子 omega 得到真正的像素坐标。"
               tone="embedded"
             />
             <FormulaCard
@@ -657,16 +622,6 @@ export default function PerspectiveTransformPage() {
   const parameters = (
     <div className="space-y-4">
       <SelectParam
-        label="参考图像"
-        value={imageType}
-        onChange={value => setImageType(value as PerspectiveImageType)}
-        options={[
-          { value: 'document', label: '教学文档' },
-          { value: 'lenaOriginal', label: 'Lena 原图' },
-        ]}
-      />
-
-      <SelectParam
         label="微调控点"
         value={String(selectedHandleIndex)}
         onChange={value => setSelectedHandleIndex(Number(value))}
@@ -688,12 +643,6 @@ export default function PerspectiveTransformPage() {
       <div className="border-l-4 border-emerald-300 pl-3 text-xs leading-5 text-emerald-800">
         透视矩阵由四点决定；仿射矩阵只由前三点决定，因此残差大小可以直接反映两者能力差异。
       </div>
-
-      {imageType === 'lenaOriginal' && !lenaReferenceRgb && (
-        <div className="border-l-4 border-amber-300 pl-3 text-xs leading-5 text-amber-800">
-          Lena 参考图加载失败，当前将自动退回教学文档示例。
-        </div>
-      )}
     </div>
   );
 

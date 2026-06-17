@@ -1,7 +1,9 @@
 'use client';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { CHAPTER_LABELS, NEXT_CONCEPT_MAP } from '@/components/ConceptLayout';
+import { ConceptIntro, CONCEPT_INTRO_CONTENT } from '@/components/teaching';
 import { resolveAssetPath } from '@/lib/utils/assetPath';
 const taskTypes = [
   { title: '识别', detail: '对象类别' },
@@ -14,7 +16,7 @@ const taskTypes = [
 
 const applicationFlow = [
   { title: '真实世界图像', detail: '相机、遥感、医学或监控系统采集视觉输入' },
-  { title: '图像处理', detail: '增强、校正、分割、特征提取和模式分析' },
+  { title: '图像处理与特征提取', detail: '增强、校正、分割、特征提取和模式分析' },
   { title: '可用信息', detail: '目标、位置、尺寸、类别、轨迹和状态变化' },
   { title: '行业决策', detail: '检测报警、质量控制、导航规划和辅助诊断' },
 ] as const;
@@ -52,7 +54,7 @@ const applicationDomains = [
     tone: 'border-indigo-200 bg-indigo-50/70 text-indigo-700',
     marker: 'bg-indigo-500',
     input: '车载摄像头、双目视觉、激光雷达',
-    tasks: ['车道线', '车辆行人', '交通标志', '障碍物感知'],
+    tasks: ['车道线检测', '车辆行人检测', '交通标志识别', '障碍物感知'],
     challenge: '实时性、动态目标、三维距离、多传感器融合',
     output: '环境理解、路径判断、运动决策',
   },
@@ -61,7 +63,7 @@ const applicationDomains = [
     tone: 'border-amber-200 bg-amber-50/75 text-amber-700',
     marker: 'bg-amber-500',
     input: '医学影像、热红外、专用成像设备',
-    tasks: ['X 光成像', '内窥镜', '红外测温', '非可见光成像'],
+    tasks: ['X 光影像分析', '内窥镜影像分析', '红外测温', '非可见光成像'],
     challenge: '成像噪声、组织边界、温度标定、细节增强',
     output: '结构观察、温度估计、辅助分析',
   },
@@ -190,7 +192,7 @@ const industryTrafficItems = [
 const medicalThermalCases = [
   {
     title: '医学影像',
-    detail: 'X 光结构观察、内窥镜局部成像、组织边界增强',
+    detail: 'X 光影像分析、内窥镜影像分析、组织边界增强',
   },
   {
     title: '热红外成像',
@@ -216,7 +218,7 @@ const keyTechGroups = [
   {
     title: '成像基础',
     hint: '先保证输入可信：标定、畸变和非均匀校正决定后续测量是否可靠。',
-    items: ['摄像机非均匀性', '摄像机畸变校正', '摄像机标定'],
+    items: ['非均匀性校正', '摄像机畸变校正', '摄像机标定'],
   },
   {
     title: '图像处理',
@@ -296,6 +298,11 @@ export default function ApplicationsOverviewPage() {
       </header>
 
       <main className="mx-auto max-w-6xl px-6 py-10">
+        <section className="mb-8 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+          <div className="px-5 py-5">
+            <ConceptIntro {...CONCEPT_INTRO_CONTENT['/concepts/applications-overview']} />
+          </div>
+        </section>
 
         <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
           <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 via-white to-cyan-50/70 px-7 py-7">
@@ -347,7 +354,7 @@ export default function ApplicationsOverviewPage() {
                 {visualCases.map(item => (
                   <article key={item.title} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                     <div className="relative aspect-[16/9] overflow-hidden bg-slate-100">
-                      <img
+                      <Image
                         src={resolveAssetPath(item.imageUrl)}
                         alt={item.alt}
                         width={item.imageWidth}
@@ -434,7 +441,7 @@ export default function ApplicationsOverviewPage() {
             <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">红外、景像匹配、遥感处理</h2>
             <div className="mt-5 overflow-hidden rounded-2xl border border-rose-100 bg-rose-50/50">
               <div className="relative aspect-[16/9] overflow-hidden bg-slate-100">
-                <img
+                <Image
                   src={resolveAssetPath('/assets/applications-overview/remote-aster-etna.jpg')}
                   alt="ASTER 遥感传感器生成的埃特纳火山假彩色三维影像"
                   width={1152}
@@ -463,7 +470,7 @@ export default function ApplicationsOverviewPage() {
               </h2>
               <div className={`mt-5 overflow-hidden rounded-2xl border ${index === 0 ? 'border-emerald-100 bg-emerald-50/50' : 'border-sky-100 bg-sky-50/50'}`}>
                 <div className="relative aspect-[16/9] overflow-hidden bg-slate-100">
-                  <img
+                  <Image
                     src={resolveAssetPath(group.imageUrl)}
                     alt={group.imageAlt}
                     width={group.imageWidth}
@@ -485,7 +492,7 @@ export default function ApplicationsOverviewPage() {
             <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">医学影像、红外测温、非可见光成像</h2>
             <div className="mt-5 overflow-hidden rounded-2xl border border-amber-100 bg-amber-50/50">
               <div className="relative aspect-[16/9] overflow-hidden bg-slate-100">
-                <img
+                <Image
                   src={resolveAssetPath('/assets/applications-overview/medical-thermal-body.jpg')}
                   alt="人体背部热成像图和温度标注"
                   width={760}
@@ -508,7 +515,7 @@ export default function ApplicationsOverviewPage() {
           <div className="mt-5 overflow-hidden rounded-2xl border border-indigo-100 bg-indigo-50/50">
             <div className="grid gap-0 lg:grid-cols-[0.9fr_1.1fr] lg:items-stretch">
               <div className="relative min-h-[240px] overflow-hidden bg-slate-100">
-                <img
+                <Image
                   src={resolveAssetPath('/assets/applications-overview/autonomous-cruise-lidar.optimized.jpg')}
                   alt="搭载车顶激光雷达和多传感器的 Cruise 自动驾驶车辆"
                   width={1400}

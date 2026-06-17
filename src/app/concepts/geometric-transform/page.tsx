@@ -45,7 +45,12 @@ import {
 import { centerCropRgbImage, loadImageAsRgb, resizeRgbImage } from '@/lib/utils/imageProcessing';
 import { rgbToGrayscaleWeighted } from '@/lib/algorithms/grayscale';
 
-const GEOMETRIC_TRANSFORM_CODE = `function warpAffine(
+const GEOMETRIC_TRANSFORM_CODE = `// 辅助函数说明：
+// - applyInverseMapping(x', y', invM): 用逆矩阵把输出像素坐标映射回源图坐标
+// - sampleNearest(image, x, y): 四舍五入取最近像素；越界时返回 0
+// - sampleBilinear(image, x, y): 取 2×2 邻域加权平均；越界像素按 0 参与计算
+
+function warpAffine(
   image: number[][],
   inverseMatrix: number[][],
   interpolation: 'nearest' | 'bilinear'
@@ -207,7 +212,7 @@ const RIGID_FAMILY_MATHML = buildInlineMathML(`
 
 const SIMILAR_FAMILY_MATHML = buildInlineMathML(`
   <mrow>
-    <mi>R</mi><msup><mi>R</mi><mi>T</mi></msup><mo>=</mo><mi>k</mi><mi>I</mi>
+    <mi>A</mi><msup><mi>A</mi><mi>T</mi></msup><mo>=</mo><mi>k</mi><mi>I</mi>
   </mrow>
 `);
 
@@ -661,7 +666,9 @@ export default function GeometricTransformPage() {
               </div>
             ) : (
               <div className="border-t border-red-100 pt-3 text-xs leading-6 text-red-700">
-                当前输出像素反向映射到原图之外，按背景值 0 填充，这也是几何变换中常见的边界处理方式。
+                {interpolation === 'nearest'
+                  ? '当前输出像素反向映射到原图之外，按背景值 0 填充，这也是几何变换中常见的边界处理方式。'
+                  : '当前输出像素反向映射到原图边缘/之外；双线性插值会按 0 填充缺失的邻域像素并参与加权，因此边界结果会偏暗。'}
               </div>
             )}
             <div className="mt-3 border-t border-slate-200 pt-3 text-xs leading-6 text-slate-600">
@@ -799,7 +806,7 @@ export default function GeometricTransformPage() {
           <FormulaCard
             mathML={SIMILAR_FAMILY_MATHML}
             label="相似"
-            note="允许整体等比例缩放，因此角度不变、长度按同一比例变化。"
+            note="允许整体等比例缩放，因此角度不变、长度按同一比例变化。这里的 A 表示线性部分，与纯旋转矩阵 R 区分。"
             tone="embedded"
           />
           <FormulaCard
