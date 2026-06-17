@@ -3,7 +3,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { CHAPTER_LABELS, NEXT_CONCEPT_MAP } from '@/components/ConceptLayout';
-import { ConceptIntro, CONCEPT_INTRO_CONTENT } from '@/components/teaching';
+
 import { resolveAssetPath } from '@/lib/utils/assetPath';
 const taskTypes = [
   { title: '识别', detail: '对象类别' },
@@ -298,12 +298,6 @@ export default function ApplicationsOverviewPage() {
       </header>
 
       <main className="mx-auto max-w-6xl px-6 py-10">
-        <section className="mb-8 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
-          <div className="px-5 py-5">
-            <ConceptIntro {...CONCEPT_INTRO_CONTENT['/concepts/applications-overview']} />
-          </div>
-        </section>
-
         <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
           <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 via-white to-cyan-50/70 px-7 py-7">
             <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr] lg:items-end">
