@@ -34,18 +34,19 @@ const PREVIEW_HEIGHT = 90;
 const SOURCE_WIDTH = 640;
 const SOURCE_HEIGHT = 480;
 
-const CALIBRATION_PATTERN_CODE = `const objectPoints = createChessboardWorldPoints(patternSize, squareSize);
-const imagePoints = [];
+const CALIBRATION_PATTERN_CODE = `// 以下为 OpenCV 风格的伪代码示例，展示标定输入数据的典型获取流程。
+const objectPoints = createChessboardWorldPoints(patternSize, squareSize);
+const imagePoints: Point2D[][] = [];
 
-for (const image of calibrationImages) {
-  const found = findChessboardCorners(image, patternSize, corners);
-  if (!found) continue;
+for (const grayImage of calibrationImages) {
+  const corners = findChessboardCorners(grayImage, patternSize);
+  if (!corners) continue; // 检测失败：跳过或重新采集
 
-  const refinedCorners = findCornerSubPix(grayImage, corners, windowSize);
-  imagePoints.push(refinedCorners);
+  const refined = findCornerSubPix(grayImage, corners, windowSize, zeroZone, criteria);
+  imagePoints.push(refined);
 }
 
-// The next page uses objectPoints and imagePoints to estimate camera parameters.
+// 下一页将使用 objectPoints 与 imagePoints 估计相机内参与外参。
 calibrateCamera(objectPoints, imagePoints, imageSize);`;
 
 interface PreviewCorner extends ProjectedBoardCorner {
@@ -161,7 +162,7 @@ export default function CalibrationPatternPage() {
       <div className="text-sm font-semibold text-slate-800">继续回答“求参数需要哪些数据”</div>
       <p className="mt-1 text-sm leading-6 text-slate-600">
         投影方程确定后，为了反求 K 和每张图的 [R,t]，需要采集许多组同一角点的两种坐标：
-        棋盘平面上的世界坐标 M，以及照片中检测到的像素坐标 m。
+        棋盘平面上的世界坐标 M，以及照片中对应的像素坐标 m。这里重点展示这组对应关系如何构成标定输入数据。
       </p>
     </div>
   );
@@ -209,11 +210,11 @@ export default function CalibrationPatternPage() {
 
         <FlowColumn align="center">
           <FlowNode tone="amber">
-            <div className="text-[11px] font-semibold uppercase text-amber-800">2. image_points：图像检测得到像素点</div>
+            <div className="text-[11px] font-semibold uppercase text-amber-800">2. image_points：图像中的像素点</div>
             <p className="mt-2 text-xs leading-5 text-slate-600">
-              同一角点在照片中会落到一个像素位置。角点检测和亚像素细化的任务，就是稳定得到这个
+              同一角点在照片中会落到一个像素位置
               <MathText className="mx-1" mathML={math('<mi>m</mi><mo>=</mo><mo>(</mo><mi>u</mi><mo>,</mo><mi>v</mi><mo>)</mo>')} />
-              。
+              。真实标定中，它由角点检测与亚像素细化获得；为说明对应关系，当前页面使用已知参数投影生成并叠加了模拟亚像素抖动。
             </p>
             <FormulaCard
               className="mt-3"
@@ -320,8 +321,29 @@ export default function CalibrationPatternPage() {
           <FormulaCard
             label="图像坐标点"
             mathML={math(`<msub><mi>m</mi><mi>${selectedCorner.index}</mi></msub><mo>=</mo><mo>(</mo><mn>${selectedCorner.subPixel.x.toFixed(2)}</mn><mo>,</mo><mn>${selectedCorner.subPixel.y.toFixed(2)}</mn><mo>)</mo>`)}
-            note="图像点来自角点检测和亚像素细化。"
+            note="真实标定中由 findChessboardCorners + findCornerSubPix 获得；当前页面使用已知参数投影生成以展示对应关系。"
           />
+        </div>
+      </TeachingCard>
+
+      <TeachingCard>
+        <div className="text-sm font-semibold text-slate-800">角点缺失、模糊或遮挡会怎样</div>
+        <p className="mt-1 text-xs leading-5 text-slate-500">
+          真实图像中角点检测可能失败。一旦某张图缺少角点或顺序错乱，对应的 object_points 与 image_points 就无法对齐，导致可用方程数下降、标定结果不稳定。
+        </p>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+            <div className="text-sm font-semibold text-slate-800">遮挡</div>
+            <p className="mt-2 text-xs leading-5 text-slate-600">部分角点不可见，该图 point_counts 减少，可能不满足求解约束数。</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+            <div className="text-sm font-semibold text-slate-800">模糊</div>
+            <p className="mt-2 text-xs leading-5 text-slate-600">角点定位误差增大，亚像素细化失效，重投影误差显著上升。</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+            <div className="text-sm font-semibold text-slate-800">顺序错乱</div>
+            <p className="mt-2 text-xs leading-5 text-slate-600">object_points 与 image_points 的索引必须一一对应，错位会直接破坏标定方程。</p>
+          </div>
         </div>
       </TeachingCard>
 
@@ -381,7 +403,7 @@ export default function CalibrationPatternPage() {
 
   return (
     <ConceptLayout
-      title="标定板与角点检测"
+      title="标定板与角点对应"
       subtitle="Calibration Pattern & Corners"
       contentHeader={contentHeader}
       operationLabel="角点对应"

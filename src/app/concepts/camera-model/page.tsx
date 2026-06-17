@@ -129,7 +129,7 @@ function parameterImpact(key: CameraParameterKey): {
       return {
         focusMode: 'extrinsics',
         title: '当前参数正在改变摄像机姿态',
-        summary: 'yaw / pitch / roll 改的是旋转矩阵 R，也就是世界坐标系如何转到摄像机坐标系。',
+        summary: 'yaw / pitch / roll 改的是旋转矩阵 R；本页按 roll→pitch→yaw 顺序合成，即 R=Rz·Ry·Rx，采用右手坐标系约定。',
         formulaLabel: '当前观察链路',
         formulaMath: math('<msub><mi>X</mi><mi>c</mi></msub><mo>=</mo><mi>R</mi><msub><mi>X</mi><mi>w</mi></msub><mo>+</mo><mi>t</mi>'),
       };
@@ -149,7 +149,7 @@ function parameterImpact(key: CameraParameterKey): {
       return {
         focusMode: 'intrinsics',
         title: '当前参数正在改变内参矩阵 K',
-        summary: 'alpha / beta 决定横纵缩放，gamma 是 skew，会让 x 坐标额外受到 y 坐标影响。',
+        summary: 'alpha / beta 是 u、v 方向的像素焦距，即 α=f/dx、β=f/dy（f 为焦距，dx/dy 为像素物理尺寸），gamma 是 skew，会让 x 坐标额外受到 y 坐标影响。',
         formulaLabel: '当前观察链路',
         formulaMath: math('<mi>u</mi><mo>=</mo><mi>&alpha;</mi><mi>x</mi><mo>+</mo><mi>&gamma;</mi><mi>y</mi><mo>+</mo><msub><mi>u</mi><mn>0</mn></msub><mo>,</mo><mi>v</mi><mo>=</mo><mi>&beta;</mi><mi>y</mi><mo>+</mo><msub><mi>v</mi><mn>0</mn></msub>'),
       };
@@ -167,7 +167,7 @@ function parameterImpact(key: CameraParameterKey): {
       return {
         focusMode: 'depth',
         title: '当前参数正在改变归一化平面上的位置',
-        summary: '点高度 Zw 会先影响摄像机坐标中的深度 Zc，再通过透视除法改变归一化平面坐标。',
+        summary: '世界点高度 Zw 会先经旋转矩阵 R 同时影响 Xc、Yc、Zc 三个分量，再经平移 t 得到最终摄像机坐标，最后通过透视除法改变归一化平面坐标。',
         formulaLabel: '当前观察链路',
         formulaMath: math('<mi>x</mi><mo>=</mo><msub><mi>X</mi><mi>c</mi></msub><mo>/</mo><msub><mi>Z</mi><mi>c</mi></msub><mo>,</mo><mi>y</mi><mo>=</mo><msub><mi>Y</mi><mi>c</mi></msub><mo>/</mo><msub><mi>Z</mi><mi>c</mi></msub>'),
       };
@@ -298,7 +298,8 @@ export default function CameraModelPage() {
       <div>
         <div className="text-sm font-semibold text-slate-800">先明确：摄像机标定到底要解什么</div>
         <p className="mt-1 text-sm leading-6 text-slate-600">
-          单目摄像机数学模型先建立“投影”和“反求”两种视角。正向看，已知内参 K 和外参 [R,t]，可以把世界点投影到像素点；
+          单目摄像机模型包含正向投影和反向标定两个视角。正向看，已知内参 K 和外参 [R,t]，可以把世界点投影到像素点
+          （教学简化：把图像坐标 (x,y) 到像素坐标 (u,v) 的中间步骤合并进 K 矩阵）；
           反向看，摄像机标定就是用许多已知点对反求 K，以及每张照片对应的 [R,t]。
         </p>
       </div>
@@ -458,7 +459,8 @@ export default function CameraModelPage() {
             <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 px-4 py-4">
               <div className="text-sm font-semibold text-emerald-800">内参 K</div>
               <p className="mt-2 text-xs leading-5 text-slate-700">
-                α、β、γ、u0、v0 描述摄像机成像几何和像素坐标系。换一个拍摄角度，它们通常不变。
+                α、β、γ、u0、v0 描述摄像机成像几何和像素坐标系。K 把图像坐标 (x,y) 映射到像素坐标 (u,v)，
+                其中 α=f/dx、β=f/dy 同时体现了焦距与像素物理尺寸。换一个拍摄角度，它们通常不变。
               </p>
             </div>
             <div className="rounded-xl border border-blue-200 bg-blue-50/80 px-4 py-4">
@@ -495,6 +497,35 @@ export default function CameraModelPage() {
           <MathText className="mx-1" mathML={math('<mi>m</mi>')} />
           ，才能反求 K 和每张图的 [R,t]。
         </p>
+      </TeachingCard>
+
+      <TeachingCard>
+        <div className="text-sm font-semibold text-slate-800">典型标定结果数值示例</div>
+        <p className="mt-1 text-xs leading-5 text-slate-500">
+          以下为一组常见量级的内参与某张标定图的外参，仅用于建立数值直觉。
+        </p>
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <FormulaCard
+            label="内参 K（像素单位）"
+            mathML={matrix([
+              ['860', '0', '320'],
+              ['0', '840', '240'],
+              ['0', '0', '1'],
+            ])}
+            tone="embedded"
+            note="α=f/dx、β=f/dy；u0、v0 为主点；γ 在理想相机中常为 0。"
+          />
+          <FormulaCard
+            label="外参 [R,t]（某张标定图）"
+            mathML={matrix([
+              ['0.99', '0.05', '-0.12', '-1.5'],
+              ['-0.04', '0.99', '0.10', '-0.8'],
+              ['0.13', '-0.09', '0.99', '12.0'],
+            ])}
+            tone="embedded"
+            note="R 为世界坐标系到摄像机坐标系的旋转；t 为平移。"
+          />
+        </div>
       </TeachingCard>
     </div>
   );
@@ -544,6 +575,11 @@ export default function CameraModelPage() {
           <SliderParam label="tx" value={extrinsics.tx} onChange={value => updateExtrinsics('tx', value)} min={-4} max={4} step={0.2} />
           <SliderParam label="ty" value={extrinsics.ty} onChange={value => updateExtrinsics('ty', value)} min={-4} max={4} step={0.2} />
           <SliderParam label="tz" value={extrinsics.tz} onChange={value => updateExtrinsics('tz', value)} min={6} max={18} step={0.2} />
+          <div className="rounded-xl border border-blue-100 bg-blue-50/60 px-3 py-2 text-xs leading-5 text-slate-600">
+            旋转顺序约定：roll（绕 X 轴）→ pitch（绕 Y 轴）→ yaw（绕 Z 轴），合成矩阵
+            <MathText className="mx-1" mathML={math('<mi>R</mi><mo>=</mo><msub><mi>R</mi><mi>z</mi></msub><mo>·</mo><msub><mi>R</mi><mi>y</mi></msub><mo>·</mo><msub><mi>R</mi><mi>x</mi></msub>')} />
+            ，采用右手坐标系。
+          </div>
         </div>
       </details>
 
