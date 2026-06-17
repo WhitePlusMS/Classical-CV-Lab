@@ -18,7 +18,7 @@ interface ConceptLayoutProps {
   originalRgbImage?: number[][][] | null;
   /** 可选的 RGB 结果图 */
   resultRgbImage?: number[][][] | null;
-  parameters: React.ReactNode;
+  parameters?: React.ReactNode;
   stepDetails: React.ReactNode;
   codeTab: React.ReactNode;
   teachingHint?: React.ReactNode;
@@ -59,6 +59,10 @@ interface ConceptLayoutProps {
   showInputSelection?: boolean;
   showNavigationBar?: boolean;
   showNavigationControls?: boolean;
+  /** 是否显示左侧参数面板，部分纯信息展示页可关闭 */
+  showParameterPanel?: boolean;
+  /** 是否让顶部概念说明/内容头部使用固定宽度（第一章信息页用），否则占满 */
+  compactContentHeader?: boolean;
   /** 章节标签，如 "第一章 / 图像采集与处理" */
   chapterLabel?: string;
 }
@@ -221,6 +225,8 @@ export default function ConceptLayout({
   showInputSelection = true,
   showNavigationBar = true,
   showNavigationControls = true,
+  showParameterPanel = true,
+  compactContentHeader = false,
 }: ConceptLayoutProps) {
   const pathname = usePathname();
   const [showCode, setShowCode] = useState(false);
@@ -294,7 +300,7 @@ export default function ConceptLayout({
               当前像素 ({currentStep.x}, {currentStep.y})
             </span>
           )}
-          <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium tabular-nums text-slate-600">
+          <span className="inline-block rounded-full border border-slate-200 bg-white px-2.5 py-1 text-center text-[11px] font-medium tabular-nums text-slate-600 min-w-[9rem]">
             第 {stepInfo.current + 1} / {stepInfo.total} 步
           </span>
         </div>
@@ -360,7 +366,7 @@ export default function ConceptLayout({
             </span>
           )}
         </div>
-        <div className="rounded-full border border-slate-200 bg-white px-2.5 py-0.5 font-medium tabular-nums text-slate-600">
+        <div className="rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-center font-medium tabular-nums text-slate-600 min-w-[9rem]">
           第 {stepInfo.current + 1} / {stepInfo.total} 步
         </div>
       </div>
@@ -415,79 +421,81 @@ export default function ConceptLayout({
           singlePageScroll ? 'items-start' : 'overflow-hidden'
         }`}
       >
-        <div
-          className={`min-w-0 shrink-0 overflow-x-hidden border-r border-slate-200/70 ${
-            showParameters ? 'w-[15.5rem] xl:w-[17rem]' : 'w-[4.75rem]'
-          } ${singlePageScroll ? 'sticky top-[4.25rem] self-start' : ''} transition-all duration-300`}
-        >
-          <div className={`min-w-0 ${singlePageScroll ? 'p-3 xl:p-4' : 'h-full p-3 xl:p-4'}`}>
-            <div
-              className={`flex min-w-0 flex-col overflow-hidden rounded-[1.5rem] border border-slate-200/80 bg-white/92 shadow-[0_18px_40px_rgba(15,23,42,0.06)] backdrop-blur ${
-                singlePageScroll ? 'max-h-[calc(100vh-5.25rem)]' : 'h-full'
-              }`}
-            >
-              <div className="border-b border-slate-100 px-4 py-4">
-                <div className="flex items-start justify-between gap-3">
-                  {showParameters ? (
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                        <span className="text-sm font-semibold text-slate-800">参数面板</span>
+        {showParameterPanel && (
+          <div
+            className={`min-w-0 shrink-0 overflow-x-hidden border-r border-slate-200/70 ${
+              showParameters ? 'w-[15.5rem] xl:w-[17rem]' : 'w-[4.75rem]'
+            } ${singlePageScroll ? 'sticky top-[4.25rem] self-start' : ''} transition-all duration-300`}
+          >
+            <div className={`min-w-0 ${singlePageScroll ? 'p-3 xl:p-4' : 'h-full p-3 xl:p-4'}`}>
+              <div
+                className={`flex min-w-0 flex-col overflow-hidden rounded-[1.5rem] border border-slate-200/80 bg-white/92 shadow-[0_18px_40px_rgba(15,23,42,0.06)] backdrop-blur ${
+                  singlePageScroll ? 'max-h-[calc(100vh-5.25rem)]' : 'h-full'
+                }`}
+              >
+                <div className="border-b border-slate-100 px-4 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    {showParameters ? (
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          <span className="text-sm font-semibold text-slate-800">参数面板</span>
+                        </div>
+                        <p className="mt-2 break-words text-xs leading-5 text-slate-500">
+                          {parameterIntro}
+                        </p>
                       </div>
-                      <p className="mt-2 break-words text-xs leading-5 text-slate-500">
-                        {parameterIntro}
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="flex flex-1 flex-col items-center justify-center gap-2">
-                      <div className="h-2 w-2 rounded-full bg-emerald-500" />
-                      <span className="text-[11px] font-medium tracking-[0.2em] text-slate-500 [writing-mode:vertical-rl]">
-                        参数
-                      </span>
-                    </div>
-                  )}
+                    ) : (
+                      <div className="flex flex-1 flex-col items-center justify-center gap-2">
+                        <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                        <span className="text-[11px] font-medium tracking-[0.2em] text-slate-500 [writing-mode:vertical-rl]">
+                          参数
+                        </span>
+                      </div>
+                    )}
 
-                  <button
-                    type="button"
-                    onClick={() => setShowParameters(prev => !prev)}
-                    className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700"
-                    aria-label={showParameters ? '收起参数面板' : '展开参数面板'}
-                    title={showParameters ? '收起参数面板' : '展开参数面板'}
-                  >
-                    <svg
-                      className={`h-4 w-4 transition-transform ${showParameters ? '' : 'rotate-180'}`}
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
+                    <button
+                      type="button"
+                      onClick={() => setShowParameters(prev => !prev)}
+                      className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700"
+                      aria-label={showParameters ? '收起参数面板' : '展开参数面板'}
+                      title={showParameters ? '收起参数面板' : '展开参数面板'}
                     >
-                      <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
-              {showParameters ? (
-                <div className={`${singlePageScroll ? 'overflow-y-auto' : 'flex-1 overflow-y-auto'} min-w-0 overflow-x-hidden px-4 pb-4 pt-3`}>
-                  <div className="min-w-0 max-w-full [&_*]:min-w-0">
-                    {parameters}
-                    {navigationControlPanel}
+                      <svg
+                        className={`h-4 w-4 transition-transform ${showParameters ? '' : 'rotate-180'}`}
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
                   </div>
                 </div>
-              ) : (
-                <div className="flex flex-1 items-center justify-center px-2 py-4">
-                  <button
-                    type="button"
-                    onClick={() => setShowParameters(true)}
-                    className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center text-xs leading-5 text-slate-500 hover:border-slate-300 hover:text-slate-700"
-                  >
-                    展开参数
-                  </button>
-                </div>
-              )}
+
+                {showParameters ? (
+                  <div className={`${singlePageScroll ? 'overflow-y-auto' : 'flex-1 overflow-y-auto'} min-w-0 overflow-x-hidden px-4 pb-4 pt-3`}>
+                    <div className="min-w-0 max-w-full [&_*]:min-w-0">
+                      {parameters}
+                      {navigationControlPanel}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-1 items-center justify-center px-2 py-4">
+                    <button
+                      type="button"
+                      onClick={() => setShowParameters(true)}
+                      className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center text-xs leading-5 text-slate-500 hover:border-slate-300 hover:text-slate-700"
+                    >
+                      展开参数
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         <div className={`relative flex-1 min-w-0 p-3 xl:p-4 ${singlePageScroll ? 'pb-6' : ''}`}>
           <div className={`flex min-w-0 flex-col ${singlePageScroll ? '' : 'h-full overflow-hidden'}`}>
@@ -497,7 +505,7 @@ export default function ConceptLayout({
               }`}
             >
               {mergedContentHeader && (
-                <div className="mb-4 overflow-hidden rounded-2xl border border-slate-200/80 bg-white/92 shadow-sm">
+                <div className={`mb-4 overflow-hidden rounded-2xl border border-slate-200/80 bg-white/92 shadow-sm ${compactContentHeader ? 'mx-auto max-w-6xl' : 'w-full'}`}>
                   <div className="px-4 py-4">{mergedContentHeader}</div>
                 </div>
               )}
@@ -567,7 +575,7 @@ export default function ConceptLayout({
                       </svg>
                     </div>
                     {stepInfo && (
-                      <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium tabular-nums text-slate-500 shadow-sm">
+                      <span className="inline-block rounded-full border border-slate-200 bg-white px-2.5 py-1 text-center text-[11px] font-medium tabular-nums text-slate-500 shadow-sm min-w-[9rem]">
                         第 {stepInfo.current + 1} / {stepInfo.total} 步
                       </span>
                     )}
@@ -614,20 +622,24 @@ export default function ConceptLayout({
             </div>
 
             {singlePageScroll ? (
-              <div className="px-4 pb-4 xl:px-6 xl:pb-6">
-                <div className="overflow-visible">
-                  {analysisPreview && (
-                    <div className="border-b border-slate-200/80">
-                      <div className="px-4 py-4">{analysisPreview}</div>
-                    </div>
-                  )}
-                  <div className="p-4">{stepDetails}</div>
+              (analysisPreview || stepDetails) && (
+                <div className="px-4 pb-4 xl:px-6 xl:pb-6">
+                  <div className="overflow-visible">
+                    {analysisPreview && (
+                      <div className="border-b border-slate-200/80">
+                        <div className="px-4 py-4">{analysisPreview}</div>
+                      </div>
+                    )}
+                    {stepDetails && <div className="p-4">{stepDetails}</div>}
+                  </div>
                 </div>
-              </div>
+              )
             ) : (
-              <div className="flex min-h-[320px] max-h-[46vh] flex-col border-t border-slate-200 bg-white xl:max-h-[44vh]">
-                <div className="flex-1 overflow-y-auto p-4">{stepDetails}</div>
-              </div>
+              stepDetails && (
+                <div className="flex min-h-[320px] max-h-[46vh] flex-col border-t border-slate-200 bg-white xl:max-h-[44vh]">
+                  <div className="flex-1 overflow-y-auto p-4">{stepDetails}</div>
+                </div>
+              )
             )}
 
             {resolvedNextConcept && (
