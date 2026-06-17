@@ -1,6 +1,7 @@
 'use client';
 import Image from 'next/image';
 import ConceptLayout from '@/components/ConceptLayout';
+import { MathText, buildInlineMathML } from '@/components/teaching';
 import { resolveAssetPath } from '@/lib/utils/assetPath';
 
 const systemChain = [
@@ -367,7 +368,10 @@ export default function AcquisitionSystemPage() {
               <h3 className="text-sm font-bold text-slate-900">焦距计算公式</h3>
               <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-6">
                 <div className="rounded-lg border border-slate-200 bg-slate-50 px-5 py-4 text-center">
-                  <div className="text-lg font-bold text-indigo-700">f = L &middot; h / H</div>
+                  <MathText
+                    className="text-lg font-bold text-indigo-700"
+                    mathML={buildInlineMathML('<mi>f</mi><mo>=</mo><mi>L</mi><mo>&middot;</mo><mi>h</mi><mo>/</mo><mi>H</mi>')}
+                  />
                   <div className="mt-1 text-xs text-slate-400">L: 工作距离 &middot; h: 像面尺寸 &middot; H: 目标尺寸</div>
                 </div>
                 <div className="rounded-lg border border-slate-200 bg-slate-50 px-5 py-4 text-xs leading-6 text-slate-600">
@@ -485,6 +489,17 @@ export default function AcquisitionSystemPage() {
           </section>
         </div>
       </section>
+
+      <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+        <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 via-white to-indigo-50/70 px-7 py-4">
+          <p className="text-xs font-semibold tracking-wide text-indigo-600">提示</p>
+        </div>
+        <div className="p-7">
+          <p className="text-sm leading-6 text-slate-600">
+            系统链路中的每个环节都会影响后续算法输入。光源决定可见性，镜头决定成像几何，相机完成光电转换，采集接口和处理平台决定实时计算能力。
+          </p>
+        </div>
+      </section>
     </div>
   );
 
@@ -498,18 +513,10 @@ export default function AcquisitionSystemPage() {
       showNavigationBar={false}
       showNavigationControls={false}
       showInputSelection={false}
-      parameterIntro="本页为系统组成概览，不涉及像素级算法交互，无需调节算法参数。"
-      parameters={
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs leading-5 text-slate-500">
-          系统链路、光源、摄像机、镜头、接口与平台均为信息展示内容，点击卡片即可查看详情。
-        </div>
-      }
+      showParameterPanel={false}
+      compactContentHeader={true}
       mainVisual={mainVisual}
-      stepDetails={
-        <div className="text-xs leading-5 text-slate-500">
-          提示：系统链路中的每个环节都会影响后续算法输入。光源决定可见性，镜头决定成像几何，相机完成光电转换，采集接口和处理平台决定实时计算能力。
-        </div>
-      }
+      stepDetails={null}
       codeTab={
         <div className="text-xs leading-5 text-slate-400">
           本页无算法代码实现。
