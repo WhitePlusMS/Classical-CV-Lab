@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { resolveAssetPath } from '@/lib/utils/assetPath';
+import { TeachingTerm } from './TeachingTerm';
 
 export interface ConceptIntroImage {
   src: string;
@@ -14,18 +15,18 @@ export interface ConceptIntroImage {
 
 export interface ConceptIntroProps {
   title: string;
-  problem: string;
-  idea: string;
-  observe: string;
+  problem: React.ReactNode;
+  idea: React.ReactNode;
+  observe: React.ReactNode;
   image?: ConceptIntroImage;
 }
 
 export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
   '/concepts/acquisition-system': {
     title: '图像采集系统先解决什么',
-    problem: '任务是把真实世界中的光学场景稳定地变成可计算的数字图像。后续算法看到的不是物体本身，而是光源、镜头、传感器和采集设备共同形成的数据结果。',
-    idea: '采集系统按光源、目标、镜头、摄像机、采集设备和处理设备串联工作。每个硬件环节都会影响亮度、清晰度、畸变、噪声、帧率和数据接口，因此系统选型本身就是视觉任务的一部分。',
-    observe: '重点观察硬件链路中每一环的职责：光源决定可见性，镜头决定成像几何，相机完成光电转换，处理平台决定实时计算能力。',
+    problem: '当你想用计算机分析真实场景时，光线、镜头和传感器会共同决定最终数字图像长什么样。如果忽略这些硬件环节，后续算法看到的可能并不是你想测量的真实信息。',
+    idea: '常用的办法是从采集链路的各个环节入手：先根据场景亮度与反光特性选择或布置光源，再按视野和清晰度需求选择镜头焦距与光圈，然后匹配分辨率、帧率和接口合适的相机，最后由处理平台完成实时传输与计算。每个环节都会改变图像数据。',
+    observe: '切换不同的光源、镜头或相机配置，观察同一场景的亮度、清晰度和视野范围如何变化；注意采集链中哪一环让图像变暗、变模糊或产生畸变。',
     image: {
       src: '/assets/concept-intro/acquisition-system-machine-vision.jpg',
       alt: '机器视觉采集处理系统结构图',
@@ -34,17 +35,11 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
       sourceHref: 'https://commons.wikimedia.org/wiki/File:Machine_Vision_System.jpg',
     },
   },
-  '/concepts/applications-overview': {
-    title: '计算机视觉课程要解决哪些任务',
-    problem: '任务是先把真实行业问题翻译成视觉处理目标。识别、检测、定位、测量、分拣和跟踪不是抽象名词，而是工业、交通、遥感、无人平台和医学场景中的具体输出。',
-    idea: '视觉系统通常从图像或视频输入出发，经过增强、校正、分割、特征提取和模式分析，最终输出目标、位置、尺寸、类别、轨迹或状态变化，再服务于业务决策。',
-    observe: '重点观察每个案例的输入、处理目标和输出结果：同一套算法能力会在不同场景中组合成不同任务链路。',
-  },
   '/concepts/grayscale': {
     title: '为什么要把彩色图变成灰度图',
-    problem: '任务是在不关心颜色类别时，把 RGB 三通道压缩成一个强度通道，降低后续计算复杂度。先判断当前任务依赖亮暗结构，还是依赖具体颜色。',
-    idea: '灰度化把 R、G、B 按权重合成为一个数值。加权法更接近人眼对绿色、红色和蓝色亮度的不同敏感度，平均法则把三个通道等权处理。',
-    observe: '重点观察同一个像素的 R/G/B 数值如何贡献到灰度值：切换通道显示和灰度化方法时，输出变化来自权重分配不同。',
+    problem: '当后续任务只关心物体的明暗结构和轮廓，而不需要区分红、绿、蓝颜色时，直接处理三个通道会让计算变重，也可能被不相关的颜色信息干扰。',
+    idea: '常用的办法是把 R、G、B 三个通道合成为一个亮度值：可以用加权平均，也可以用简单平均把三通道等权处理，还可以只取某一个通道作为灰度结果。',
+    observe: '切换原图的 R/G/B 单通道显示，再切换加权平均和简单平均等灰度化方法，观察同一个像素的输出值怎么变；注意颜色差异大的区域在灰度图中是否还能区分。',
     image: {
       src: '/assets/concept-intro/grayscale-rgb-to-gray.png',
       alt: 'RGB 图像转换为灰度图示例',
@@ -55,9 +50,9 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
   },
   '/concepts/histogram': {
     title: '直方图统计什么',
-    problem: '任务是不用逐像素看图，也能快速判断图像整体亮度、对比度和灰度分布。直方图只统计灰度出现次数，不保留空间位置。',
-    idea: '灰度直方图把每个像素归入 0 到 255 的灰度级，并统计数量或概率。柱子越高，说明该灰度级出现越多；分布偏左、偏右或集中，会反映图像偏暗、偏亮或低对比。',
-    observe: '重点观察当前锁定灰度级的像素数和概率：切换示例图后，直方图形状如何对应图像亮度和对比度变化。',
+    problem: '当你拿到一张偏暗、偏亮或灰度层次挤在一起的图像时，仅靠逐像素看图很难快速判断整体亮暗分布。我们需要一种直接统计所有像素亮度的方法。',
+    idea: '常用的办法是把每个像素按灰度级分组计数，画成柱状图：柱子越高说明该灰度出现越多；分布偏左说明图像偏暗，偏右说明偏亮，集中则说明对比度较低。',
+    observe: '切换不同的示例图，观察直方图整体是偏左、偏右还是集中；拖动阈值线时，看看哪些像素被划入当前区间，从而理解灰度分布和图像明暗的对应关系。',
     image: {
       src: '/assets/concept-intro/histogram-equalize-histogram.png',
       alt: '图像直方图与累计分布示例',
@@ -68,9 +63,9 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
   },
   '/concepts/convolution': {
     title: '卷积在计算什么',
-    problem: '任务是用一个小窗口在整张图上逐位置计算局部响应。滤波、锐化、边缘检测等很多算法，本质上都在重复”窗口像素和核权重相乘再求和”。',
-    idea: '卷积核定义邻域中每个位置的权重。窗口滑到某个输出位置时，输入窗口与核矩阵逐项相乘并求和，得到当前输出像素；不同核对应不同视觉效果。',
-    observe: '重点观察输入窗口、核矩阵、逐项乘积和求和结果四步是否一一对应：修改核类别或大小后，输出变化来自权重分布改变。',
+    problem: '当 3×3 或更大的小窗口滑到图像某个位置时，需要把窗口里的每个像素按一定权重加权求和，得到一个新的输出像素。问题是这些权重从何而来，以及不同权重会产生什么效果。',
+    idea: '常用办法是定义一个卷积核来规定窗口里每个位置的权重：可以全部取相同值做平滑平均，也可以中心为正、周围为负来提取边缘，还可以让权重朝某个方向倾斜以检测特定走向的轮廓。换核就是换计算规则。',
+    observe: '拖动窗口看当前邻域里的原始像素，再对照核矩阵里逐项相乘后的结果：改变核类型或核大小，输出变化来自权重分布和窗口范围的改变。',
     image: {
       src: '/assets/concept-intro/convolution-filter-denoise.png',
       alt: '空间滤波卷积处理示例',
@@ -81,9 +76,9 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
   },
   '/concepts/geometric-transform': {
     title: '几何变换改变什么',
-    problem: '任务是改变图像中物体的位置、方向、大小或形状，同时保持像素内容尽量合理。灰度处理改像素值，几何变换改像素所在坐标。',
-    idea: '平移、旋转、缩放和剪切都可以写成齐次坐标矩阵。输出图像中的每个位置会反查输入坐标，再用最近邻或双线性插值取得像素值。',
-    observe: '重点观察组合矩阵、原图坐标和输出结果：参数改变的是坐标映射关系，插值方法决定非整数坐标如何采样。',
+    problem: '当我们想把图像平移、旋转、放大或拉斜时，像素原来的坐标不再适用。需要重新计算每个输出位置对应原图的哪个坐标，再把像素值搬过去。',
+    idea: '常用办法是用一个 3×3 的变换矩阵描述坐标映射：可以只改 x、y 方向偏移做平移，可以绕中心乘旋转矩阵，也可以沿坐标轴缩放或加上剪切项。映射后如果坐标不是整数，还要用插值补出像素值。',
+    observe: '拖动变换参数滑块，对比原图坐标和输出图像：矩阵改变的是坐标映射关系，插值方法决定非整数位置采样的颜色过渡是否平滑。',
     image: {
       src: '/assets/concept-intro/geometric-transform.png',
       alt: '几何坐标变换示例',
@@ -94,9 +89,9 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
   },
   '/concepts/frame-difference-motion': {
     title: '帧差法怎样发现运动',
-    problem: '任务是在连续视频帧中找出发生变化的区域。静止背景在相邻帧中灰度差小，运动目标的位置变化会带来明显差异。',
-    idea: '帧差法计算当前帧和前一帧的绝对差，再用阈值判断运动像素；三帧差法同时比较前后两次差异，用交集减轻拖影和噪声影响。',
-    observe: '重点观察当前帧、相邻帧、差分图和运动掩膜：阈值越低越敏感但噪声更多，目标速度和帧间距会影响运动区域形状。',
+    problem: '当我们看一段视频，想知道哪些区域在动、哪些背景保持不动时，需要比较连续两帧的像素差异。问题是差异多大才算运动，以及如何减少噪声和拖影的干扰。',
+    idea: '常用办法是先算当前帧与前一帧对应位置的灰度绝对差，再用阈值把差值分成“静止”和“运动”两类；更稳的做法是三帧差法，比较当前帧与前后帧的两次差异，取交集来抑制噪声和空洞。',
+    observe: '切换播放或拖动到不同帧，对比当前帧、前一帧、差分图和运动掩膜：阈值调低会连噪声一起标成运动，目标移动越快、帧间距越大，运动区域越宽。',
     image: {
       src: '/assets/concept-intro/frame-difference-motion-triptych.jpg',
       alt: '帧差法前一帧、当前帧和运动掩膜对比',
@@ -106,9 +101,29 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
   },
   '/concepts/classifier-detection-pipeline': {
     title: '检测流水线把什么交给分类器',
-    problem: '任务是在整张图里找到目标，而不是只判断一张裁好的小图。检测流程要先生成候选窗口，再把每个窗口编码成特征并交给分类器判定。',
-    idea: '传统检测流水线通常包含训练样本、特征提取、分类器学习、滑动窗口扫描、候选框合并和方法对比。分类器只回答“当前窗口像不像目标”，整图检测依赖窗口遍历和后处理。',
-    observe: '重点观察当前阶段、窗口位置、特征值、级联判定和最终候选框：检测结果来自许多局部窗口判定的组合，而不是一次性看完整图。',
+    problem: (
+      <>
+        当一张图里目标位置和大小都不确定时，
+        <TeachingTerm term="分类器" explanation="根据输入特征判断样本属于哪一类的模型" />
+        只能回答“这个裁好的小窗口是不是目标”，没法直接说“目标在图的哪里”。检测任务需要把整张图拆成许多局部窗口，再逐个判断。
+      </>
+    ),
+    idea: (
+      <>
+        常用的处理办法是：用一个
+        <TeachingTerm term="滑动窗口" explanation="在图像上按固定大小逐步移动取样的矩形框" />
+        从左到右、从上到下扫过整张图，把每个窗口裁出来交给分类器；为每个窗口提取 Haar、HOG 或 LBP 等特征，把像素转成更稳定的数字；对重叠的检测框做
+        <TeachingTerm term="非极大值抑制" explanation="合并重叠检测框，只保留置信度最高的代表框" />
+        ，只保留最有代表性的结果；再用
+        <TeachingTerm term="级联" explanation="由简到繁的多级分类器，先用快速分类器排除简单背景" />
+        结构先快速排除明显不是目标的窗口，把精细判断留给少数可疑窗口。
+      </>
+    ),
+    observe: (
+      <>
+        拖动滑动窗口，比较当前窗口在原图的位置、提取出的特征响应和分类器输出；切换不同特征或级联阶段，观察哪些窗口被保留、哪些被过滤，理解整张图检测其实是很多局部判断的组合。
+      </>
+    ),
     image: {
       src: '/assets/concept-intro/classifier-detection-haar.png',
       alt: 'Haar 特征分类器训练示例',
@@ -119,9 +134,27 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
   },
   '/concepts/histogram-equalization': {
     title: '为什么要做直方图均衡化',
-    problem: '任务是让偏暗、偏亮或低对比度图像中原本挤在一起的灰度层次重新分开。先判断原图的灰度是否集中，再理解为什么直接看图像结果不够，必须同时看灰度分布。',
-    idea: '均衡化先统计灰度直方图，再用累计分布函数 CDF 建立旧灰度到新灰度的映射。灰度出现得越集中，映射后的拉伸越明显，图像的明暗层次会被重新分配。',
-    observe: '重点观察原直方图、CDF 映射曲线和均衡化结果三者是否一致：灰度分布被拉开时，图像局部细节应该更容易分辨。',
+    problem: (
+      <>
+        当照片整体偏暗、偏亮或灰度层次挤在一起时，原本该有的细节会糊成一片。任务是把集中在一起的灰度拉开，让暗部和亮部都能重新显出层次。
+      </>
+    ),
+    idea: (
+      <>
+        常用的处理办法是：先统计每个灰度级出现的次数，画出
+        <TeachingTerm term="灰度直方图" explanation="统计图像中各灰度级出现次数的柱状图" />
+        ；再计算
+        <TeachingTerm term="累计分布函数 CDF" explanation="灰度值小于等于某值的像素累计占比" />
+        ，建立旧灰度到新灰度的映射表；然后按这个映射表把原图像素逐点替换。原本出现很多的灰度被拉开，出现很少的灰度被合并，图像的
+        <TeachingTerm term="对比度" explanation="图像中明暗区域的差异程度" />
+        自然增强。
+      </>
+    ),
+    observe: (
+      <>
+        切换不同示例图，比较原图、原直方图、CDF 映射曲线和均衡化后的结果；拖动阈值观察灰度分布被拉开的过程，注意当原图灰度集中在一侧时，均衡化效果最明显，但噪声也可能被一起放大。
+      </>
+    ),
     image: {
       src: '/assets/concept-intro/histogram-equalization-scikit.png',
       alt: '直方图均衡化前后对比示例',
@@ -132,9 +165,27 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
   },
   '/concepts/image-sharpening': {
     title: '锐化要增强什么',
-    problem: '任务是让边缘、轮廓和纹理从模糊图像中重新凸显出来。把”锐化”理解成增强变化剧烈的位置，而不是简单把整张图变亮或变暗。',
-    idea: '锐化通常先提取高频信息或二阶差分响应，再把这些变化量叠加回原图。梯度方法强调方向变化，拉普拉斯方法强调中心像素与邻域的差异。',
-    observe: '重点观察当前窗口里的边缘响应如何影响输出像素：平坦区域变化小，边缘附近响应大，过强参数会让噪声和伪影一起被放大。',
+    problem: (
+      <>
+        当图像因为拍摄抖动、对焦不实或压缩而边缘发虚时，轮廓和纹理的细节会变模糊。任务是让边缘处的亮暗变化更陡峭，使轮廓重新清晰，而不是简单把整幅图变亮。
+      </>
+    ),
+    idea: (
+      <>
+        常用的处理办法是：先提取图像的
+        <TeachingTerm term="高频成分" explanation="图像中灰度变化剧烈的部分，通常对应边缘和细节" />
+        或
+        <TeachingTerm term="二阶差分" explanation="用中心像素与周围像素的差异衡量边缘强度" />
+        ，找到边缘和纹理的位置；再把这部分变化量按一定比例叠加回原图；也可以先做一次轻微模糊得到
+        <TeachingTerm term="低频图" explanation="图像中变化缓慢的大致明暗结构" />
+        ，用原图减去低频图得到边缘细节，最后把细节加回去。参数越大边缘越突出，但噪声和伪影也可能被一起放大。
+      </>
+    ),
+    observe: (
+      <>
+        拖动窗口到边缘位置，比较原图窗口、提取出的边缘响应和锐化后的输出；切换锐化强度，观察平坦区域几乎不变、边缘处变化加剧，同时注意过强参数会让噪声和伪影一起变得明显。
+      </>
+    ),
     image: {
       src: '/assets/concept-intro/image-sharpening-unsharp-mask.png',
       alt: '图像锐化示例',
@@ -145,9 +196,9 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
   },
   '/concepts/pixel-matrix': {
     title: '为什么需要边界策略',
-    problem: '任务是在图像任意位置都能取到一个完整邻域窗口。当窗口中心移动到边缘时，卷积核或邻域模板会伸出图像范围。',
-    idea: '边界策略负责给越界位置补上可计算的像素值。常见做法包括补零、复制边缘、镜像反射或只计算有效区域，不同策略会改变边缘附近的输出。',
-    observe: '重点观察同一个边缘像素在不同策略下的邻域矩阵：哪些位置来自原图，哪些位置由规则补齐，输出差异就来自这些补齐值。',
+    problem: '当 3×3 或更大的窗口滑到图像边缘时，窗口中心周围的格子会跑到图像外面。如果不处理，这个窗口就缺像素、算不下去。',
+    idea: '常用的处理办法是给越界位置赋一个可用的像素值：可以补 0、复制边缘像素、按镜像方式对称填充，或者只计算窗口中仍在图像内的部分。补法不同，边缘像素的输出结果就不一样。',
+    observe: '把窗口拖到图像边缘，看看邻域矩阵里哪些格子来自原图、哪些格子是边界策略补出来的；换一种策略，比较输出值的变化，就能明白边界处理到底影响了什么。',
     image: {
       src: '/assets/lena-original.jpg',
       alt: 'Lena 图像像素矩阵示例',
@@ -157,9 +208,9 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
   },
   '/concepts/blur': {
     title: '空间域滤波的共同思想',
-    problem: '任务是在保留主要结构的同时抑制噪声或细碎纹理。先判断噪声是局部异常，还是整片区域的随机波动，再选择合适的邻域估计方法。',
-    idea: '空间域滤波用窗口覆盖中心像素，根据邻域重新估计输出值。均值和高斯使用加权平均，中值用排序去掉极端值，边窗滤波在多个候选窗口中选择更贴近边缘的一侧。',
-    observe: '重点观察同一个窗口在不同滤波方法下的计算依据：权重、排序、候选边窗会直接决定中心像素被平滑还是被保边。',
+    problem: '当图像里出现噪声点或细碎纹理干扰后续处理时，直接用单个像素的灰度值不可靠，需要借助周围像素重新估计中心像素的值。',
+    idea: '常用的处理办法是用一个小窗口罩住中心像素，再把窗口里的像素按某种规则合并成一个新值：可以简单取平均值，可以按离中心远近加权（高斯加权），可以排序后取中间值去掉极端点，也可以在跨越边缘时使用边窗滤波只保留贴近边缘一侧的像素。',
+    observe: '拖动窗口到平坦区域、边缘和噪声点旁边，切换均值/高斯/中值/边窗滤波，比较中心像素的变化；注意边缘处哪种方法能让边界保持清晰，噪声处哪种方法去噪更干净。',
     image: {
       src: '/assets/concept-intro/blur-denoise-scikit.png',
       alt: '图像降噪滤波示例',
@@ -170,9 +221,9 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
   },
   '/concepts/edge-detection': {
     title: '边缘检测在找什么',
-    problem: '任务是从图像中找到物体边界、线条或亮暗突变的位置。把边缘理解为灰度变化剧烈的地方，而不是图像中所有深色或浅色区域。',
-    idea: '边缘算子通过差分、梯度幅值、二阶导数或 Canny 多阶段流程衡量局部变化。不同算子在抗噪、边缘宽度、方向敏感性上各有取舍。',
-    observe: '重点观察输入窗口、Gx/Gy 或 Canny 阶段响应：灰度变化越集中，梯度或二阶响应越强，最终越可能被保留为边缘。',
+    problem: '当我们要让计算机找到物体的轮廓、线条或明暗交界时，不能只看某个像素是深是浅，而要看它和周围像素的灰度变化有多大。',
+    idea: '常用的处理办法是在小窗口里计算灰度变化：可以用一阶差分得到水平和竖直方向的变化量，再合成梯度幅值；可以用二阶导数找变化最陡的零点；也可以用 Canny 流程先平滑再求梯度、做非极大值抑制和双阈值筛选。',
+    observe: '点击或拖动窗口到明暗交界处、平坦区域和噪声点，对比不同算子的响应图；注意灰度跳变越大的地方响应越强，而阈值和参数改变会如何影响检测到的边缘数量和粗细。',
     image: {
       src: '/assets/concept-intro/edge-detection-filter.png',
       alt: '边缘检测滤波示例',
@@ -183,9 +234,9 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
   },
   '/concepts/camera-model': {
     title: '相机成像需要哪些参数',
-    problem: '任务是解释一个三维点为什么会落在某个二维像素位置。先区分相机在世界中的位置、镜头成像方式和像素坐标单位。',
-    idea: '外参描述世界坐标到相机坐标的位姿变换，内参描述焦距、主点和像素尺度。完整成像链把三维点依次变换、归一化，再投影到像素平面。',
-    observe: '重点观察同一个三维点经过世界坐标、相机坐标、归一化平面和像素平面的每一步坐标变化，理解参数改变会影响哪一段。',
+    problem: '当知道一个物体在真实世界中的三维坐标时，要算出它会出现在照片上的哪个像素位置，必须同时考虑相机放在哪里、朝向哪里，以及镜头和传感器如何把光线变成像素。',
+    idea: '常用的处理办法是把成像拆成几步：先用外参把世界坐标转到相机坐标，再用透视投影把三维点映射到归一化平面，最后用内参把无单位坐标转成像素坐标。焦距决定放大倍数，主点决定光轴落在图像中的位置，像素尺度负责单位换算。',
+    observe: '拖动三维点或旋转相机姿态，观察世界坐标、相机坐标、归一化平面坐标和像素坐标四列数值如何联动；尝试只改外参、只改焦距或只改主点，看看哪一段变化对应图像上的平移，哪一段对应缩放。',
     image: {
       src: '/assets/concept-intro/camera-calibration-left01.jpg',
       alt: '相机标定棋盘格样例图',
@@ -196,9 +247,9 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
   },
   '/concepts/calibration-pattern': {
     title: '为什么要用标定板',
-    problem: '任务是给相机提供一组已知真实位置的点。普通照片里的点没有准确三维坐标，无法直接用来反推出相机参数。',
-    idea: '棋盘格或圆点标定板把世界坐标固定在一个平面上，角点检测得到对应的像素坐标。多组世界点到像素点的对应关系会形成求解相机参数的约束。',
-    observe: '重点观察角点是否按规则排列、是否能稳定编号，以及像素点和标定板坐标之间是否形成一一对应关系。',
+    problem: '当我们想从一张照片反推相机参数时，必须先知道照片中某些点在真实空间里的准确位置。普通场景里的墙面、桌椅没有精确三维坐标，单靠一张照片给不出求解所需的约束。',
+    idea: '常用办法是在相机前放置几何形状已知的标定板：棋盘格利用黑白交界产生清晰角点，圆点阵列利用圆心提供稳定定位。角点检测得到像素坐标后，再和标定板上的世界坐标一一配对，就能形成求解相机参数的约束。',
+    observe: '拖动或旋转标定板，观察角点在世界坐标和像素坐标之间是否还能一一对应；切换棋盘格与圆点图案，比较哪种角点在倾斜、模糊或靠近边缘时更容易被稳定检测和编号。',
     image: {
       src: '/assets/concept-intro/camera-calibration-left01.jpg',
       alt: '棋盘格标定板图像',
@@ -209,9 +260,9 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
   },
   '/concepts/zhang-calibration': {
     title: '张正友标定解决什么',
-    problem: '任务是只用多张平面标定板照片估计相机内参和每张照片的外参。每一张图都提供一个平面到图像的投影约束。',
-    idea: '张正友法先从平面点和像素点求单应矩阵 H，再由多张图像的 H 共同约束内参 K，最后分解出每张图的旋转和平移。',
-    observe: '重点观察世界平面点、像素点、H、K、R/t 的链路：某一步误差变大，会传递到后续参数和重投影误差。',
+    problem: '当我们只有普通相机和一张平面标定板时，想同时求出相机的内参和每张拍摄姿态的外参。问题是单张照片只能建立平面到图像的投影关系，无法直接拆分出焦距、主点和姿态。',
+    idea: '常用办法是张正友标定：对每张标定板照片，先用角点对应估计单应矩阵 H；再把多张图的 H 合起来，利用旋转矩阵的约束解出内参 K；最后用 K 和每张图的 H 分解出对应的 R 和 t。',
+    observe: '切换不同数量的标定照片，观察约束数量和估计精度的变化；点击某个角点，比较检测位置、重投影位置和真实位置之间的偏差，理解 H、K、R/t 的误差是怎样逐层传递的。',
     image: {
       src: '/assets/concept-intro/camera-calibration-left01.jpg',
       alt: '张正友标定使用的棋盘格图像',
@@ -222,9 +273,9 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
   },
   '/concepts/distortion-correction': {
     title: '镜头畸变为什么要校正',
-    problem: '任务是把被镜头弯曲或拉偏的图像恢复到更接近真实几何的位置。先观察直线是否弯曲、边缘是否被拉伸，再理解畸变不是简单平移或缩放。',
-    idea: '畸变模型在归一化坐标中描述径向和切向偏移。校正时根据目标像素反查原图采样位置，把弯曲的结构重新映射回规则坐标。',
-    observe: '重点观察同一个校正后像素对应到原图的采样坐标：越靠近图像边缘，畸变参数对位置的影响通常越明显。',
+    problem: '当用广角或普通镜头拍摄时，真实场景里的直线在照片边缘可能出现弯曲，物体的形状也会被拉长或压缩。如果不校正，后续基于直线或距离的测量就会出错。',
+    idea: '常用办法是先建立畸变模型：径向畸变用多项式描述光线向边缘的弯曲，切向畸变描述镜头与传感器不平行带来的偏移。校正时根据目标像素反查它在原图中的采样位置，再把弯曲的结构重新映射回规则坐标。',
+    observe: '拖动滑块改变畸变系数，观察图像中心与边缘的变形程度有什么不同；切换径向和切向参数，看看直线从弯曲恢复平直的过程主要来自哪一类畸变。',
     image: {
       src: '/assets/concept-intro/distortion-correction-radial.jpg',
       alt: '镜头径向畸变示例',
@@ -235,9 +286,9 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
   },
   '/concepts/image-registration': {
     title: '图像配准要对齐什么',
-    problem: '任务是把来自不同时间、视角或传感器的图像放到同一坐标系中。先判断两张图哪里错位，再理解为什么需要估计一个整体变换。',
-    idea: '配准通过控制点、相似度或相位相关等信息估计变换参数。变换会把待配准图的像素映射到参考图坐标，使同名结构尽量重合。',
-    observe: '重点观察控制点、预测点和误差向量：如果同名点对齐，叠加图会更清晰，残差也会变小。',
+    problem: '当同一目标在不同时间、视角或传感器拍成两幅图时，直接叠加会出现重影或错位。图像配准的任务是估计一个整体变换，把待配准图映射到参考图坐标系，使同一结构尽量重合。',
+    idea: '常用办法是先找两幅图中的同名<TeachingTerm term="控制点" explanation="控制点是两幅图中对应同一空间位置的标记点，用于约束几何变换的参数。" />，再用这些点估计变换参数；也可以比较整图相似度，或者用<TeachingTerm term="相位相关" explanation="相位相关利用图像频谱的相位信息估计两幅图之间的平移量，对亮度变化较稳健。" />搜索平移偏移。变换常用<TeachingTerm term="仿射变换" explanation="仿射变换保持平行关系和直线性，适合视角变化较小、目标近似平面的场景。" />或<TeachingTerm term="透视变换" explanation="透视变换允许近大远小的投影形变，适合同一平面因视角改变产生明显收缩的场景。" />，估计完成后把待配准图逐像素重采样到参考坐标系。',
+    observe: '切换几何模型或增加误匹配数量，观察参考点、观测点与模型预测点之间的误差向量；点击不同匹配对，查看叠加图重影和<TeachingTerm term="残差" explanation="残差是观测点与模型预测点之间的距离，越小表示当前匹配越支持估计出的变换。" />是否同步变化。',
     image: {
       src: '/assets/concept-intro/image-registration-translation.png',
       alt: '图像配准平移估计示例',
@@ -248,9 +299,9 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
   },
   '/concepts/threshold-auto-threshold': {
     title: '阈值分割先决定什么',
-    problem: '任务是把灰度图中的目标区域和背景区域分开。先区分两个问题：阈值 T 从哪里来，以及像素和 T 比较后写成什么结果。',
-    idea: '固定阈值由人工指定，OTSU 根据类间方差自动选 T，Kittler 使用梯度加权信息估计分界。输出模式再决定二值、截断或归零等写入规则。',
-    observe: '重点观察直方图中的阈值线和结果图：同一个输出规则下，T 的位置移动会直接改变前景面积和边界。',
+    problem: '当需要从灰度图中把目标区域和背景区域分开时，只凭人工指定阈值容易受光照和场景变化影响。要先确定阈值 T 从哪里来，再确定每个像素与 T 比较后按什么规则写入结果。',
+    idea: '常用办法是人工拖动固定阈值；也可以让 OTSU 根据直方图<TeachingTerm term="类间方差" explanation="类间方差衡量按某个阈值分开后，前景类和背景类均值差异的大小；OTSU 选择让它最大的阈值。" />自动选 T，或者用 Kittler 按梯度加权估计前景与背景的分界。阈值确定后，再用 BINARY、TRUNC、TOZERO 等输出规则生成结果图。',
+    observe: '拖动阈值滑杆或切换阈值方法，观察直方图中的阈值线位置和结果图中的前景面积、边界如何一起变化；再切换输出类型，比较同一阈值下不同写入规则的区别。',
     image: {
       src: '/assets/concept-intro/threshold-auto-threshold-scikit.png',
       alt: '自动阈值分割示例',
@@ -261,9 +312,9 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
   },
   '/concepts/background-modeling-subtraction': {
     title: '背景模型是什么',
-    problem: '任务是在视频中找出正在运动或新出现的前景目标。先把”当前帧”与”长期背景”分开理解，避免把背景减除看成普通两帧相减。',
-    idea: '背景建模用历史帧估计每个位置的常见外观，再把当前帧与模型比较。均值、自适应、高斯和混合高斯模型分别适合不同稳定程度的场景。',
-    observe: '重点观察背景图、当前帧和前景掩膜：模型更新太慢会残留旧目标，更新太快可能把真实目标吸收到背景里。',
+    problem: '当需要在连续视频中检测运动目标或新出现物体时，直接用相邻两帧相减会留下双影，也容易把静止不久的目标漏掉。需要先为每个像素建立一个长期背景模型，再把当前帧与它比较。',
+    idea: '常用办法是用前若干帧的均值作为背景；也可以用<TeachingTerm term="自适应递推" explanation="自适应递推按学习率 α 把当前帧融入背景，α 越大背景更新越快，适合缓慢光照变化。" />持续更新背景，或者用单高斯分布、<TeachingTerm term="混合高斯模型" explanation="混合高斯模型允许同一像素有多个常见背景取值，适合树叶摇晃、水面反光等动态背景。" />描述每个像素的常见取值。当前像素与背景估计相差超过阈值时，就判为前景并写入<TeachingTerm term="前景掩膜" explanation="前景掩膜是一幅二值图，标记当前帧中被判定为运动目标或新出现物体的像素位置。" />。',
+    observe: '点击不同像素或拖动当前帧序号，观察该位置的历史灰度序列、背景估计值和当前差分；再切换背景模型，比较前景掩膜中目标残留和背景噪声的变化。',
     image: {
       src: '/assets/concept-intro/background-modeling-subtraction-opencv.png',
       alt: '背景减除当前帧、背景模型和前景掩膜对比',
@@ -274,9 +325,9 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
   },
   '/concepts/binary-feature-descriptors': {
     title: '二进制描述子为什么快',
-    problem: '任务是在大量关键点之间快速判断哪些局部结构相似。如果每个描述子都是高维浮点向量，存储和匹配都会变重。',
-    idea: '二进制描述子用一组像素亮度比较生成 0/1 串。两个描述子的差异可以用汉明距离快速计算，适合实时匹配和资源受限场景。',
-    observe: '重点观察采样点对的位置、亮度比较结果和最终 bit 串：采样方式改变，描述子的稳定性和区分能力也会改变。',
+    problem: '当一幅图里检测出几百上千个关键点，需要快速判断哪些局部结构相似时，如果每个描述子都是高维浮点向量，存储和匹配都会变得很重。',
+    idea: '常用办法是把关键点周围的局部小块变成 0/1 串：先在 Patch 里选若干点对并比较亮暗，亮暗关系决定每一位是 0 还是 1；BRIEF 直接随机选点比较，ORB 先估计主方向再旋转采样，BRISK 用长点对估计方向、短点对编码细节。两个二进制描述子的差异用汉明距离统计，匹配速度比浮点向量快很多。',
+    observe: '拖动关键点位置或切换 BRIEF / ORB / BRISK，观察同一局部区域的采样点对、方向箭头和生成的 bit 串如何变化；重点比较旋转或移动后，哪些算法的 bit 串变化更小、更稳定。',
     image: {
       src: '/assets/concept-intro/binary-feature-descriptors-orb.png',
       alt: 'ORB 特征匹配示例',
@@ -287,9 +338,9 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
   },
   '/concepts/color-space-histogram': {
     title: '为什么从 RGB 转到 HSV',
-    problem: '任务是根据颜色找到目标区域。RGB 同时混合了颜色和亮度，光照变化会让同一种颜色的 R/G/B 数值一起改变。',
-    idea: 'HSV 把色调、饱和度和亮度拆开，使颜色提取可以主要关注色调范围。颜色直方图再统计目标颜色在图像中的分布，用于分割、检索或匹配。',
-    observe: '重点观察 RGB、HSV 和掩膜结果：当亮度变化时，HSV 的色调通道是否仍能稳定指向目标颜色。',
+    problem: '当想根据颜色把图像里的目标区域挑出来时，直接用 RGB 判断很容易出问题：光照变亮或变暗会让同一种颜色的 R、G、B 三个值一起改变，红色在阴影和强光下看起来数值差别很大。',
+    idea: '常用办法是先把颜色从 RGB 转到 HSV，然后只看色调范围来提取颜色；再用颜色直方图统计目标颜色在整幅图中的分布。这样亮度变化主要影响 V 通道，H 通道对同一种颜色更稳定。',
+    observe: '切换不同光照下的同一张图，或调整 HSV 的色调范围，观察 RGB 三个通道和 HSV 色调通道哪个更稳定；再拖动阈值，看掩膜里被保留的区域是随 H 变化还是随亮度变化。',
     image: {
       src: '/assets/color-space-histogram/hsv-example.jpg',
       alt: 'HSV 颜色空间示例',
@@ -299,9 +350,9 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
   },
   '/concepts/lbp-gabor-texture': {
     title: '纹理特征描述什么',
-    problem: '任务是识别表面粗糙度、条纹方向、重复纹理等局部模式。先把纹理和颜色区分开：纹理关注的是灰度在局部怎样排列和变化。',
-    idea: 'LBP 比较中心像素和邻域生成局部二进制模式，适合描述微小结构；Gabor 用方向和频率滤波器响应纹理，适合观察条纹、尺度和方向。',
-    observe: '重点观察同一块纹理在 LBP 编码和 Gabor 响应中的表现：一个偏局部模式统计，一个偏方向频率响应。',
+    problem: '当需要区分木材、布料、砖墙这类表面，或者要找出条纹、斑点、粗糙度等局部模式时，只用颜色或边缘不够：纹理关注的是灰度在局部怎么排列、怎么重复变化。',
+    idea: '常用办法是用两种思路刻画纹理：LBP 把中心像素和周围邻域逐个比较亮暗，生成一个局部二进制模式，再统计这些模式出现的频率，适合描述微小结构；Gabor 用一组方向和频率的滤波器扫描图像，看局部区域对不同方向条纹的响应强弱，适合描述条纹、尺度和方向。',
+    observe: '拖动观察窗口到不同纹理区域，比较 LBP 编码图和 Gabor 响应图：LBP 图里变化剧烈的地方通常对应细节丰富的纹理，Gabor 图里亮度高的方向则对应该区域的主导条纹方向。',
     image: {
       src: '/assets/concept-intro/lbp-gabor-texture-scikit.png',
       alt: 'Gabor 纹理滤波示例',
@@ -312,9 +363,9 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
   },
   '/concepts/hog-feature': {
     title: 'HOG 把窗口变成什么',
-    problem: '任务是把一个检测窗口变成分类器可以使用的固定长度向量。检测器关心的是边缘方向分布，而不是单个像素灰度。',
-    idea: 'HOG 先计算梯度方向和幅值，再按 cell 统计方向直方图，最后把多个 cell 组成 block 并归一化。这样可以保留轮廓信息，同时减弱局部亮度变化影响。',
-    observe: '重点观察当前 cell、方向 bin 和所属 block：每个像素的梯度投票如何累积成直方图，block 归一化如何改变最终向量。',
+    problem: '当直接把检测窗口的原始灰度交给分类器时，窗口大小或亮度一变化，向量就失去可比性；我们需要把窗口里的边缘结构抽成稳定描述。',
+    idea: <>常用办法是把窗口分成若干 <TeachingTerm term="cell" explanation="HOG 中按方向统计梯度分布的最小网格单元。" className="mx-1" />，在每个 cell 里按梯度方向投票得到直方图，再把相邻 cell 拼成 <TeachingTerm term="block" explanation="由多个相邻 cell 组成的区域，对其内部直方图做归一化，使描述对局部亮度变化更稳定。" className="mx-1" />。这样生成的固定长度向量保留物体轮廓，又对光照变化不那么敏感。</>,
+    observe: '拖动窗口到不同位置，对比 cell 直方图和 block 归一化前后的变化；注意梯度方向在哪里投票变多，以及 block 大小改变时哪些区域被合并。',
     image: {
       src: '/assets/concept-intro/hog-feature-scikit.png',
       alt: 'HOG 特征可视化示例',
@@ -325,9 +376,9 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
   },
   '/concepts/haar-lbp-feature-vector': {
     title: '特征向量给分类器什么',
-    problem: '任务是把滑动窗口变成一组可被分类器判断的数字。分类器不能直接”看懂图片”，它接收的是特征响应或统计向量。',
-    idea: 'Haar 特征用黑白区域差值描述亮暗结构，积分图让矩形求和变快；LBP 向量把局部纹理编码成直方图，再串联成固定长度输入。',
-    observe: '重点观察检测窗口、Haar 响应、积分图四点求和和 LBP 直方图：这些中间量就是分类器输入的来源。',
+    problem: '当分类器面对一个滑动窗口时，它不能直接读图；我们需要先把窗口里的亮暗结构和纹理规律转换成一组固定长度的数字。',
+    idea: <>常用办法有两种：一种是用 <TeachingTerm term="Haar-like 特征" explanation="把窗口划分成黑白矩形，比较区域灰度差，描述边缘、线或亮斑结构。" className="mx-1" /> 计算矩形区域差值，并用 <TeachingTerm term="积分图" explanation="每个位置保存左上角累计和，任意矩形求和只需四个角点加减。" className="mx-1" /> 加速；另一种是把中心像素与邻域的比较结果转成 <TeachingTerm term="LBP 编码" explanation="用中心像素阈值化周围邻域像素后得到的局部纹理模式编号。" className="mx-1" />，再按 cell 统计直方图并串联成向量。</>,
+    observe: '切换 Haar 模板或调整 LBP cell 大小，观察响应值和直方图怎么跟着变；注意同一个窗口里，哪些结构让 Haar 响应变大、哪些纹理让 LBP 直方图出现峰值。',
     image: {
       src: '/assets/haar-lbp-feature-vector/haar-integral-image.jpg',
       alt: 'Haar 积分图加速示例',
@@ -337,9 +388,9 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
   },
   '/concepts/keypoint-matching-pipeline': {
     title: '特征点匹配解决什么',
-    problem: '任务是在两张视角、尺度或光照不同的图像中找到同一物体的对应位置。固定模板比较整块像素，遇到旋转、缩放、遮挡时很容易失效。',
-    idea: '特征点方法先寻找可重复出现的局部显著位置，再为每个位置生成描述子。匹配时比较描述子的相似度，把整图对齐问题转化为局部结构对应问题。',
-    observe: '重点观察检测、描述和匹配三步：稳定关键点应该能在两张图中重复出现，正确匹配线应连接相同局部结构。',
+    problem: '当同一场景在两张图里发生视角偏移、尺度变化或亮度变化时，直接比对整图像素很难找到对应位置；我们需要先把图中稳定可重复的结构找出来。',
+    idea: <>常用办法分三步：先在两张图里分别检测 <TeachingTerm term="关键点" explanation="图像中在视角、尺度、亮度变化下仍能被稳定检测到的局部显著位置。" className="mx-1" />，再为每个关键点生成 <TeachingTerm term="描述子" explanation="描述关键点周围局部结构的向量，用于比较两个关键点是否相似。" className="mx-1" />，最后比较描述子相似度找到对应关系。这样整图对齐就被拆成了局部结构的配对问题。</>,
+    observe: '切换示例图片对或调整检测阈值，观察关键点在两张图里是否都能重复出现；拖动滑块改变匹配阈值，注意哪些连线真的连接了相同的局部结构，哪些是误匹配。',
     image: {
       src: '/assets/keypoint-matching-pipeline/feature-mapping.jpg',
       alt: '特征映射示意图',
@@ -349,9 +400,9 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
   },
   '/concepts/sift-surf-scale-features': {
     title: '尺度特征为什么重要',
-    problem: '任务是在目标变大、变小或局部旋转后仍能找到同一类关键点。同一个角点在不同距离下会覆盖不同大小的像素区域。',
-    idea: 'SIFT/SURF 构建尺度空间，在多个模糊程度和图像尺度中寻找稳定极值点，再分配主方向并生成描述子，从而增强尺度和旋转鲁棒性。',
-    observe: '重点观察金字塔、DoG/Hessian 响应、主方向和描述子：关键点是否跨尺度稳定，是后续匹配可靠的前提。',
+    problem: '当同一张图被拉近、拉远或旋转一定角度后，同一个角点在图像里占的像素大小和方向都会变。如果检测器只认固定大小的窗口，就可能在某些尺度上找不到同一个关键点。',
+    idea: '常用的处理办法是在多个尺度上同时观察图像：先用高斯模糊得到不同清晰程度的图层，再在相邻图层的差分里找极值点；给每个点分配一个主方向，让描述子对旋转也稳定；最后把周围梯度信息编码成固定长度的描述向量。',
+    observe: '切换 SIFT 和 SURF 视角，拖动缩放条或旋转图像，观察同一关键点是否在不同尺度下都能被检测到；再对比描述子网格，看看方向归一化后相似结构的向量是否接近。',
     image: {
       src: '/assets/sift-surf/sift-surf-scale-comparison.jpg',
       alt: 'SIFT 和 SURF 尺度特征比较',
@@ -361,9 +412,9 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
   },
   '/concepts/perspective-transform': {
     title: '透视变换校正什么',
-    problem: '任务是把斜拍的平面目标校正成正视图。同一个矩形平面在相机视角下可能变成任意凸四边形。',
-    idea: '透视变换用四对对应点求 3×3 齐次矩阵。矩阵不仅能表示平移、旋转和缩放，还能表示近大远小带来的投影形变。',
-    observe: '重点观察四个控制点和校正结果：点序必须保持合理，拖动任一点都会改变整张平面的投影关系。',
+    problem: '当相机斜对着一张纸、路面或墙面拍摄时，原本矩形的平面在图像里会变成梯形或任意凸四边形。如果直接做仿射校正，四个角无法同时对齐，需要引入能描述近大远小的投影变换。',
+    idea: '常用的处理办法是先在原图和目标正视图上各标出四个对应角点，用这八组坐标求解一个 3×3 齐次矩阵；得到矩阵后，对输出图像的每个像素反查原图位置并插值采样；也可以和仿射变换对比，体会前三点与四点约束的差别。',
+    observe: '拖动左图 A-D 四个控制点，观察透视结果和仿射结果的变化：当四点构成明显梯形时，透视结果能把平面展开成矩形，而仿射结果在第四角会留下残差。',
     image: {
       src: '/assets/concept-intro/perspective-transform-geometric.png',
       alt: '几何与透视变换示例',
@@ -374,9 +425,9 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
   },
   '/concepts/morphology': {
     title: '形态学操作改变什么',
-    problem: '任务是在二值图中去除噪点、连接断裂、填补小孔或调整目标轮廓。把图像看成前景集合和背景集合，而不是灰度连续图。',
-    idea: '结构元素像一个小探针，在图像上滑动并按命中规则改写中心像素。腐蚀收缩前景，膨胀扩张前景，开闭操作组合两者解决具体形状问题。',
-    observe: '重点观察结构元素覆盖当前邻域时的命中关系：输出像素是否变成前景，取决于当前操作和结构元素形状。',
+    problem: '当图像已经二值化后，前景里常混有孤立小白点、裂缝或小孔洞，轮廓也可能毛糙。如果直接交给后续步骤，这些噪声和断裂会被误判成真实结构。',
+    idea: '常用的处理办法是用一个结构元素当作小探针，在二值图上滑动并按集合规则改写中心像素：腐蚀只保留结构元素完全落在前景内的位置，能去掉细小突出和孤立点；膨胀只要结构元素碰到前景就把中心标为前景，能连接裂缝；开操作先腐蚀再膨胀可去噪，闭操作先膨胀再腐蚀可填孔。',
+    observe: '点击原图切换当前位置，或在应用示例里切换去噪、连接裂缝、填补小孔等任务，观察结构元素覆盖的邻域里有多少前景像素；再换矩形、十字或椭圆结构元素，比较同一位置的输出是否变化。',
     image: {
       src: '/assets/concept-intro/morphology-scikit.png',
       alt: '形态学操作示例',
@@ -387,9 +438,9 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
   },
   '/concepts/histogram-template-matching': {
     title: '匹配方法比较什么',
-    problem: '任务是在图像中找到和目标相似的区域。先区分两类线索：整体颜色或灰度分布相似，以及局部像素结构相似。',
-    idea: '直方图匹配比较分布，不关心空间位置；模板匹配滑动窗口比较局部结构；反向投影把目标分布转成每个像素属于目标的可能性。',
-    observe: '重点观察响应图和最终位置：分布相似可能带来多个候选，模板响应峰值则对应局部结构最相似的位置。',
+    problem: '当要在一张大图里找出和目标相似的区域时，会遇到两种不同情况：有些目标只要颜色或灰度分布一致就能定位，有些目标则需要局部像素排列都对应。选错线索，匹配结果会要么漏掉目标、要么带回大量误检。',
+    idea: '常用的处理办法分两类：模板匹配把目标窗口当作模板，在大图上逐位置滑动，用 SSD 或 SAD 比较像素差异；直方图匹配则统计目标区域和候选区域的灰度分布，用相关、卡方或巴氏距离判断分布是否接近；反向投影还可以把目标分布映射成每个像素属于目标的可能性图，再用后续约束筛选。',
+    observe: '切换“模板匹配”和“直方图匹配”两个模式，拖动源图上的红框和蓝框，对比响应热力图与直方图分数：模板匹配对像素位置敏感，热力图峰值通常对应唯一位置；直方图匹配只认分布，相似区域可能给出多个高分候选。',
     image: {
       src: '/assets/concept-intro/histogram-template-matching-template.png',
       alt: '模板匹配示例',
@@ -402,6 +453,34 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
 
 function classNames(...classes: Array<string | false | null | undefined>): string {
   return classes.filter(Boolean).join(' ');
+}
+
+function TeachingText({ text }: { text: React.ReactNode }): React.ReactElement {
+  if (typeof text !== 'string') {
+    return <span>{text}</span>;
+  }
+
+  const nodes: React.ReactNode[] = [];
+  const regex = /<TeachingTerm\s+term="([^"]*)"\s+explanation="([^"]*)"\s*>([^<]*)<\/TeachingTerm>/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      nodes.push(text.slice(lastIndex, match.index));
+    }
+    const [, term, explanation] = match;
+    nodes.push(
+      <TeachingTerm key={match.index} term={term} explanation={explanation} className="mx-1" />
+    );
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    nodes.push(text.slice(lastIndex));
+  }
+
+  return <span>{nodes}</span>;
 }
 
 export function ConceptIntro({
@@ -489,7 +568,7 @@ export function ConceptIntro({
           {items.map(item => (
             <div key={item.label} className={classNames('rounded-xl border px-3 py-3', item.tone)}>
               <div className="text-[11px] font-semibold tracking-[0.12em]">{item.label}</div>
-              <p className="mt-1 text-xs leading-6 text-slate-700">{item.text}</p>
+              <p className="mt-1 text-xs leading-6 text-slate-700"><TeachingText text={item.text} /></p>
             </div>
           ))}
         </div>
