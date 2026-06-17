@@ -291,7 +291,7 @@ export default function ImageRegistrationPage() {
       <div>
         <div className="text-sm font-semibold text-slate-800">图像配准不是增强图像，而是建立两幅图的同一坐标系</div>
         <p className="mt-1 text-sm leading-6 text-slate-600">
-          图像配准的基本流程是：先找对应特征点，再估计仿射矩阵或透视矩阵，最后把整幅待配准图重新映射到参考图坐标系。这样才能服务于零件检测、图像拼接和变化检测。
+          图像配准的基本流程是：先找对应关键点，再估计仿射矩阵或透视矩阵，最后把整幅待配准图重新映射到参考图坐标系。这样才能服务于零件检测、图像拼接和变化检测。
         </p>
       </div>
       <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
@@ -331,7 +331,7 @@ export default function ImageRegistrationPage() {
             <p className="mt-2 text-xs leading-5 text-slate-600">
               当前选择的是 {scenario.modelInfo.label}，至少需要 {scenario.modelInfo.minimumPairs} 对点。
               如果误匹配混入估计，矩阵中每个参数都会被错误拉动。选择稳健策略时，会先用
-              <TeachingTerm term="RANSAC" explanation="RANSAC 会反复抽少量点先估一个模型，再统计谁和这个模型一致，用来排掉误匹配。" className="mx-1" />
+              <TeachingTerm term="RANSAC" explanation="RANSAC 会反复抽少量点先估一个模型，再统计谁和这个模型一致，用来排掉误匹配。当前页面为教学演示，用穷举所有最小子集的方式模拟 RANSAC 的抽样-验证思想；真实 RANSAC 是随机抽样，不一定枚举全部组合。" className="mx-1" />
               找到几何上一致的内点集合。
             </p>
             <FormulaCard
@@ -347,13 +347,13 @@ export default function ImageRegistrationPage() {
           <FlowNode tone="emerald">
             <div className="text-[11px] font-semibold uppercase text-emerald-700">3. 把整幅图重采样到参考坐标系</div>
             <p className="mt-2 text-xs leading-5 text-slate-600">
-              配准完成后，不是只对特征点变换，而是把待配准图中全部像素都映射到参考图坐标系：
-              <MathText className="mx-1" mathML={math('<msup><mi>I</mi><mo>&prime;</mo></msup><mo>(</mo><msup><mi>x</mi><mo>&prime;</mo></msup><mo>,</mo><msup><mi>y</mi><mo>&prime;</mo></msup><mo>)</mo><mo>=</mo><mi>I</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo>')} />
-              。
+              配准完成后，不是只对关键点变换，而是把待配准图中全部像素都映射到参考图坐标系：
+              <MathText className="mx-1" mathML={math('<msub><mi>I</mi><mrow><mi>ref</mi></mrow></msub><mo>(</mo><msup><mi>x</mi><mo>&prime;</mo></msup><mo>,</mo><msup><mi>y</mi><mo>&prime;</mo></msup><mo>)</mo><mo>=</mo><msub><mi>I</mi><mrow><mi>src</mi></mrow></msub><mo>(</mo><mi>M</mi><mo>(</mo><msup><mi>x</mi><mo>&prime;</mo></msup><mo>,</mo><msup><mi>y</mi><mo>&prime;</mo></msup><mo>)</mo><mo>)</mo>')} />
+              。其中 M 为当前估计的变换矩阵，(x, y) 是对应源像素坐标。
             </p>
             <div className="mt-3 grid gap-2 text-xs">
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-800">
-                当前{scenario.activeEstimate.inlierCount > 0 ? '内点' : '匹配'}平均残差：{formatRegistrationValue(scenario.activeEstimate.meanResidual, 2)} px
+                当前{scenario.activeEstimate.mode === 'all-matches' ? '全部匹配' : scenario.activeEstimate.inlierCount > 0 ? '内点' : '匹配'}平均残差：{formatRegistrationValue(scenario.activeEstimate.meanResidual, 2)} px
               </div>
               <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-700">
                 叠加强度误差：{formatRegistrationValue(scenario.activeEstimate.meanIntensityError, 3)}
@@ -457,7 +457,8 @@ export default function ImageRegistrationPage() {
           <div className="text-sm font-semibold text-amber-900">“全部匹配”与“筛除误匹配”的差异</div>
           <div className="mt-4 grid gap-3">
             <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-700">
-              直接估计：内点平均残差 {formatRegistrationValue(scenario.directEstimate.meanResidual, 2)} px，
+              直接估计：全部匹配平均残差 {formatRegistrationValue(scenario.directEstimate.meanResidual, 2)} px，
+              其中满足阈值的有 {scenario.directEstimate.inlierCount} 对；
               叠加强度误差 {formatRegistrationValue(scenario.directEstimate.meanIntensityError, 3)}。
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-700">
@@ -465,7 +466,9 @@ export default function ImageRegistrationPage() {
               叠加强度误差 {formatRegistrationValue(scenario.robustEstimate.meanIntensityError, 3)}。
             </div>
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
-              当误匹配数量增加时，重点观察”矩阵偏差”和”叠加后重影”是否同步恶化。稳健估计的最后一步通常会对内点做一次
+              当前页面为合成示例，内点无噪声、外点偏离极大，因此稳健策略通常能完全恢复真实矩阵；
+              真实场景中 RANSAC 受噪声和采样次数影响，不一定完美。
+              当误匹配数量增加时，重点观察“矩阵偏差”和“叠加后重影”是否同步恶化。稳健估计的最后一步通常会对内点做一次
               <TeachingTerm term="最小二乘" explanation="最小二乘会在已经选出的内点上，寻找让整体残差平方和最小的矩阵参数。" className="mx-1" />
               拟合，进一步减小整体误差。
             </div>
@@ -532,7 +535,9 @@ export default function ImageRegistrationPage() {
 
       <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-5 text-slate-600">
         {scenario.modelInfo.label} 至少需要 {scenario.modelInfo.minimumPairs} 对点；
-        当前策略保留了 {scenario.activeEstimate.inlierCount} 对内点，{scenario.activeEstimate.inlierCount > 0 ? '内点' : '匹配'}平均残差为 {formatRegistrationValue(scenario.activeEstimate.meanResidual, 2)} px。
+        {scenario.activeEstimate.mode === 'all-matches'
+          ? `当前策略直接使用全部匹配，全部匹配平均残差为 ${formatRegistrationValue(scenario.activeEstimate.meanResidual, 2)} px。`
+          : `当前策略保留了 ${scenario.activeEstimate.inlierCount} 对内点，${scenario.activeEstimate.inlierCount > 0 ? '内点' : '匹配'}平均残差为 ${formatRegistrationValue(scenario.activeEstimate.meanResidual, 2)} px。`}
       </div>
 
       <div className={`rounded-2xl border px-3 py-3 text-xs leading-5 ${activeMatch ? residualTone(activeMatch) : 'border-slate-200 bg-slate-50 text-slate-600'}`}>

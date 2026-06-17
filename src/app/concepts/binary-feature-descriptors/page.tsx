@@ -112,11 +112,11 @@ const DEFAULT_PAIR_COUNTS: Record<AlgorithmMode, number> = {
 };
 
 const SAMPLING_OPTIONS: { value: SamplingMethod; label: string; desc: string }[] = [
-  { value: 'GI', label: 'GI - 均匀分布', desc: 'X、Y 在 Patch 内均匀分布，适合观察最直接的随机点对比较。' },
-  { value: 'GII', label: 'GII - 高斯分布', desc: 'X、Y 更集中在 Patch 中心，常用于让描述子更关注关键点附近结构。' },
-  { value: 'GIII', label: 'GIII - X 中心取 Y', desc: '先取 X，再在 X 附近取 Y，点对更偏向局部纹理关系。' },
-  { value: 'GIV', label: 'GIV - 极坐标量化', desc: '按极坐标半径和角度取点，便于理解方向归一化。' },
-  { value: 'GV', label: 'GV - 中心固定极坐标遍历', desc: '中心固定（X=Y=Patch 中心），采样点沿周围分布，适合观察中心与邻域的亮暗关系。' },
+  { value: 'GI', label: 'GI - 均匀分布', desc: 'X、Y 在 Patch 内均匀分布，适合观察最直接的随机点对比较。（教学化变体，与原论文实现细节可能不同）' },
+  { value: 'GII', label: 'GII - 高斯分布', desc: 'X、Y 更集中在 Patch 中心，常用于让描述子更关注关键点附近结构。（教学化变体，与原论文实现细节可能不同）' },
+  { value: 'GIII', label: 'GIII - X 中心取 Y', desc: '先取 X，再在 X 附近取 Y，点对更偏向局部纹理关系。（教学化变体，与原论文实现细节可能不同）' },
+  { value: 'GIV', label: 'GIV - 极坐标量化', desc: '按极坐标半径和角度取点，便于理解方向归一化。（教学化变体，与原论文实现细节可能不同）' },
+  { value: 'GV', label: 'GV - 中心固定极坐标遍历', desc: '中心固定（X=Y=Patch 中心），采样点沿周围分布，适合观察中心与邻域的亮暗关系。（教学化变体，与原论文实现细节可能不同）' },
 ];
 
 const PAIR_OPTIONS: { value: number; label: string }[] = [
@@ -159,8 +159,8 @@ const HAMMING_FORMULA = buildInlineMathML(
 );
 
 const ORB_CENTROID_FORMULA = buildInlineMathML(
-  '<mrow><msub><mi>m</mi><mn>10</mn></msub><mo>=</mo><munderover><mo>∑</mo><mi>x</mi><mi>y</mi></munderover><mi>x</mi><mi>I</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo>' +
-  '<mo>,</mo><msub><mi>m</mi><mn>01</mn></msub><mo>=</mo><munderover><mo>∑</mo><mi>x</mi><mi>y</mi></munderover><mi>y</mi><mi>I</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo>' +
+  '<mrow><msub><mi>m</mi><mn>10</mn></msub><mo>=</mo><munderover><mo>∑</mo><mi>x</mi><mi>y</mi></munderover><mo>(</mo><mi>x</mi><mo>-</mo><msub><mi>x</mi><mi>c</mi></msub><mo>)</mo><mi>I</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo>' +
+  '<mo>,</mo><msub><mi>m</mi><mn>01</mn></msub><mo>=</mo><munderover><mo>∑</mo><mi>x</mi><mi>y</mi></munderover><mo>(</mo><mi>y</mi><mo>-</mo><msub><mi>y</mi><mi>c</mi></msub><mo>)</mo><mi>I</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo>' +
   '<mo>,</mo><mi>θ</mi><mo>=</mo><mi>atan2</mi><mo>(</mo><msub><mi>m</mi><mn>01</mn></msub><mo>,</mo><msub><mi>m</mi><mn>10</mn></msub><mo>)</mo></mrow>'
 );
 
@@ -350,8 +350,9 @@ function calculateBriskDirection(patch: number[][], longPairs: Pair[]): { gx: nu
     gx += diff * dx / norm;
     gy += diff * dy / norm;
   }
+  // θ 由原始浮点 gx/gy 计算，避免四舍五入后方向被截断；界面展示时再取整。
   const theta = Math.atan2(gy, gx);
-  return { gx: Math.round(gx), gy: Math.round(gy), theta, degrees: Math.round(theta * 180 / Math.PI) };
+  return { gx, gy, theta, degrees: Math.round(theta * 180 / Math.PI) };
 }
 
 function getDescriptorGridCols(visibleBits: number): number {
@@ -428,7 +429,7 @@ function PatchPairView({ patch, pair, longPairs = [], theta }: { patch: number[]
 }
 
 const ORB_CODE_TS = `// OpenCV ORB 特征提取与匹配
-// 这段代码是工程调用示例，不等同于本页逐 bit 教学演示的内部实现。
+// 这段代码是工程调用示例，不等同于这里逐 bit 教学演示的内部实现。
 Ptr<ORB> orb = ORB::create();
 vector<KeyPoint> keypoints1, keypoints2;
 Mat descriptors1, descriptors2;
@@ -444,7 +445,7 @@ vector<DMatch> matches;
 matcher.match(descriptors1, descriptors2, matches);`;
 
 const BRISK_CODE_TS = `// OpenCV BRISK 特征提取与匹配
-// 这段代码是工程调用示例，不等同于本页长/短点对教学模型的内部实现。
+// 这段代码是工程调用示例，不等同于这里长/短点对教学模型的内部实现。
 Ptr<BRISK> brisk = BRISK::create();
 vector<KeyPoint> kp1, kp2;
 Mat des1, des2;
@@ -632,15 +633,15 @@ export default function BinaryFeatureDescriptorsPage() {
       : '原始 BRIEF 不估计主方向';
 
   const chainSubstitution = useMemo(() => {
-    let sum = 0;
-    return pairs.slice(0, Math.min(effectiveBitCount, 8, pairs.length)).map((pair, index) => {
+    return pairs.slice(0, Math.min(effectiveBitCount, 8, pairs.length)).reduce<{ i: number; tau: number; weight: number; contrib: number; sum: number }[]>((acc, pair, index) => {
       const [x1, y1, x2, y2] = pair;
       const tau = tauTest(activePatch, x1, y1, x2, y2);
       const weight = Math.pow(2, index);
       const contrib = weight * tau;
-      sum += contrib;
-      return { i: index + 1, tau, weight, contrib, sum };
-    });
+      const sum = (acc[acc.length - 1]?.sum ?? 0) + contrib;
+      acc.push({ i: index + 1, tau, weight, contrib, sum });
+      return acc;
+    }, []);
   }, [activePatch, effectiveBitCount, pairs]);
 
   const handleInputRegionSelect = (x: number, y: number) => {
@@ -676,9 +677,9 @@ export default function BinaryFeatureDescriptorsPage() {
           <TeachingCard>
             <h2 className="mb-3 text-sm font-semibold text-slate-800">从像素块到二进制描述子</h2>
             <p className="text-xs leading-6 text-slate-600">
-              讲二进制描述子时，可以先抓住一条主线：先从图像里取出一小块局部区域，再把这块区域里的亮暗关系编码成 bit 串，最后再比较两串 bit 有多少位不同。
+              二进制描述子的核心思路可分为三步：先从图像里取出一小块局部区域，再把这块区域里的亮暗关系编码成 bit 串，最后比较两串 bit 有多少位不同。
               这里的局部区域就是
-              <TeachingTerm term="局部图像块（Patch）" explanation="围绕某个局部位置截取的小图像块；真实系统里这个位置通常来自关键点检测，本页则允许直接手动选择。" className="mx-1" />
+              <TeachingTerm term="局部图像块（Patch）" explanation="围绕某个局部位置截取的小图像块；真实系统里这个位置通常来自关键点检测，当前页面则允许直接手动选择。" className="mx-1" />
               ，编码结果就是
               <TeachingTerm term="描述子" explanation="描述子是局部图像结构的编码。二进制描述子使用 0/1 串，适合用位运算快速匹配。" className="mx-1" />
               。BRIEF、ORB、BRISK 都是在做这件事，只是补强的方式不同：BRIEF 直接比较点对亮暗，ORB 在比较前先对齐方向，BRISK 进一步把方向和尺度变化一起纳入考虑。所以后两者通常比原始 BRIEF 更能适应旋转或尺度变化，但也不意味着在所有视角或噪声条件下都一定稳定。
@@ -718,7 +719,7 @@ export default function BinaryFeatureDescriptorsPage() {
                 label="Intensity Centroid 方向"
                 mathML={ORB_CENTROID_FORMULA}
                 tone="embedded"
-                note={`当前 m10=${centroid.m10}，m01=${centroid.m01}，θ≈${centroid.degrees}°。这里用标准 ORB 图像矩公式，代码实现中将坐标原点平移至 Patch 中心以匹配局部计算。`}
+                note={`当前 m10=${centroid.m10}，m01=${centroid.m01}，θ≈${centroid.degrees}°。公式中 (x_c, y_c) 为 Patch 中心（当前为 ${PATCH_HALF}, ${PATCH_HALF}），代码中将坐标原点平移后再计算图像矩。`}
               />
             </TeachingCard>
           )}
@@ -733,7 +734,7 @@ export default function BinaryFeatureDescriptorsPage() {
                 label="BRISK 主方向"
                 mathML={BRISK_DIRECTION_FORMULA}
                 tone="embedded"
-                note={`当前长点对累计 gx=${briskDirection.gx}，gy=${briskDirection.gy}，θ≈${briskDirection.degrees}°。这里用“灰度差沿点对方向投影后求和”的教学化写法，目的是直观展示长点对如何提供整体方向。`}
+                note={`当前长点对累计 gx≈${Math.round(briskDirection.gx)}，gy≈${Math.round(briskDirection.gy)}，θ≈${briskDirection.degrees}°。θ 由原始浮点 gx/gy 计算，界面展示值已取整。这里用“灰度差沿点对方向投影后求和”的教学化写法，目的是直观展示长点对如何提供整体方向。`}
               />
             </TeachingCard>
           )}
@@ -767,7 +768,7 @@ export default function BinaryFeatureDescriptorsPage() {
           <TeachingCard>
             <h2 className="mb-3 text-sm font-semibold text-slate-800">描述子编码与汉明距离</h2>
             <p className="mb-3 text-xs leading-6 text-slate-600">
-              真实算法里，完整描述子通常会一次生成很多位。本页把前 {currentPairIndex + 1} 次点对比较按顺序逐位展开。数学上也可以把这串 bit 看成按 2 的幂加权得到的整数编码，但这里先把重点放在“每一位怎样产生”。输出图中深色表示 bit=1，浅色表示 bit=0，中灰色表示两条描述子在该位不同，当前位用更深色标出。
+              真实算法里，完整描述子通常会一次生成很多位。当前页面把前 {currentPairIndex + 1} 次点对比较按顺序逐位展开。数学上也可以把这串 bit 看成按 2 的幂加权得到的整数编码，但这里先把重点放在“每一位怎样产生”。输出图中接近黑色的格子表示 bit=1，接近白色的格子表示 bit=0，中灰色表示两条描述子在该位不同；算法阶段当前位用更深的蓝色灰度额外标出，以便看清当前 τ 测试落在哪一位。
             </p>
             <p className="mb-3 text-xs leading-6 text-slate-600">
               这里用于比较的第二条描述子仍来自当前局部图像块，只是采样点对或方向略有变化，目的是单独观察“bit 差异怎样累计成汉明距离”。真实匹配时，被比较的两条描述子通常来自两个候选关键点，而不一定来自同一个局部图像块。
@@ -868,7 +869,7 @@ export default function BinaryFeatureDescriptorsPage() {
             <div className="mb-3 text-xs font-semibold text-red-600">当前局部图像块（Patch）</div>
             {taskStage === 'intro' ? (
               <p className="text-xs leading-5 text-slate-600">
-                真实系统里，局部图像块通常围绕关键点截取；本页为了把编码过程讲清楚，也允许你直接手动选一个局部区域来观察。
+                真实系统里，局部图像块通常围绕关键点截取；当前页面为了把编码过程讲清楚，也允许你直接手动选一个局部区域来观察。
               </p>
             ) : (
               <>
@@ -1044,7 +1045,7 @@ export default function BinaryFeatureDescriptorsPage() {
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-800">
               {taskStage === 'orb'
                 ? `灰度质心方向 θ=${centroid.degrees}°（m10=${centroid.m10}，m01=${centroid.m01}）`
-                : `长点对方向 θ=${briskDirection.degrees}°（gx=${briskDirection.gx}，gy=${briskDirection.gy}）`}
+                : `长点对方向 θ=${briskDirection.degrees}°（gx≈${Math.round(briskDirection.gx)}，gy≈${Math.round(briskDirection.gy)}）`}
             </div>
           )}
 
@@ -1146,8 +1147,8 @@ export default function BinaryFeatureDescriptorsPage() {
       imageHints={{
         input: canInteractWithPatch ? '红框为当前 9×9 Patch，点击可重新选局部结构' : '当前阶段不修改 Patch，专注观察整体流程或算法对比',
         output: highlightedBitIndex >= 0
-          ? '算法阶段按已生成 bit 数逐步展开：深色=1，浅色=0，中灰=两条描述子该位不同'
-          : '当前展示完整描述子总览：深色=1，浅色=0，中灰=两条描述子该位不同',
+          ? '算法阶段按已生成 bit 数逐步展开：深色=1，浅色=0，中灰=两条描述子该位不同，接近白色的格子表示尚未生成或超出当前位数'
+          : '当前展示完整描述子总览：深色=1，浅色=0，中灰=两条描述子该位不同，接近白色的格子表示尚未生成或超出当前位数',
       }}
       showInputSelection={canInteractWithPatch}
       showNavigationControls={canInteractWithPatch}

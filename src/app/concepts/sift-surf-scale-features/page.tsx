@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import Image from 'next/image';
 import {
   AnchoredOverlay,
   type AnchoredOverlayPath,
@@ -132,10 +133,6 @@ const SCALE_CHAIN_FORMULA = buildInlineMathML(
 const HAAR_WAVELET_RESPONSE = buildInlineMathML(
   '<mrow><msub><mi>d</mi><mi>x</mi></msub><mo>=</mo><munder><mo>∑</mo><mrow></mrow></munder><mi>I</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>·</mo><msub><mi>W</mi><mi>x</mi></msub><mo>,</mo><mtext> </mtext><msub><mi>d</mi><mi>y</mi></msub><mo>=</mo><munder><mo>∑</mo><mrow></mrow></munder><mi>I</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>·</mo><msub><mi>W</mi><mi>y</mi></msub></mrow>'
 );
-const SIFT_SURF_SCALE_COMPARE = buildInlineMathML(
-  '<mrow><mtable><mtr><mtd><mtext>SIFT</mtext></mtd><mtd><mo>:</mo></mtd><mtd><mtext>改变图像大小，固定高斯核</mtext></mtd></mtr><mtr><mtd><mtext>SURF</mtext></mtd><mtd><mo>:</mo></mtd><mtd><mtext>固定图像大小，改变滤波器</mtext></mtd></mtr></mtable></mrow>'
-);
-
 // ==================== 辅助组件 ====================
 
 /** 8 柱方向直方图 */
@@ -358,7 +355,7 @@ function TabSwitcher({
 /** SIFT vs SURF 全流程对比表 */
 function SiftSurfCompareTable() {
   const rows = [
-    { feature: '尺度空间', sift: '改变图像大小，不同σ高斯核', surf: '固定图像大小，不同尺度 box filter' },
+    { feature: '尺度空间', sift: '标准：octave 降采样改变图像大小<br/>本页实现：固定图像尺寸、改变 σ（教学简化）', surf: '固定图像大小，不同尺度 box filter' },
     { feature: '特征点检测', sift: 'DoG 非极大抑制 + 26 邻域', surf: 'Hessian 行列式 + 非极大抑制' },
     { feature: '方向', sift: '正方形区域梯度直方图（36柱）', surf: '圆形区域 Haar 小波，扇形滑动' },
     { feature: '描述子邻域', sift: '16x16', surf: '20s x 20s' },
@@ -397,37 +394,570 @@ function SiftSurfCompareTable() {
 
 // ==================== 代码 ====================
 
-const SIFT_SURF_CODE = '// 简化 SIFT 关键点检测\n' +
-  'function detectSIFTKeypoints(image, sigma) {\n' +
-  '  // 1. 构建高斯尺度空间\n' +
-  '  const gaussianScales = buildGaussianPyramid(image, sigma);\n' +
-  '  // 2. 构建 DoG 尺度空间\n' +
-  '  const dogScales = [];\n' +
-  '  for (let i = 0; i < gaussianScales.length - 1; i++) {\n' +
-  '    dogScales.push(subtract(gaussianScales[i + 1], gaussianScales[i]));\n' +
-  '  }\n' +
-  '  // 3. 极值检测（26 邻域）\n' +
-  '  const keypoints = [];\n' +
-  '  for (const dog of dogScales) {\n' +
-  '    for (let y = 1; y < h - 1; y++) {\n' +
-  '      for (let x = 1; x < w - 1; x++) {\n' +
-  '        if (isLocalExtremum(dog, x, y)) {\n' +
-  '          keypoints.push({ x, y, scale: currentScale });\n' +
-  '        }\n' +
-  '      }\n' +
-  '    }\n' +
-  '  }\n' +
-  '  // 4. 方向分配\n' +
-  '  for (const kp of keypoints) {\n' +
-  '    const hist = computeOrientationHistogram(image, kp);\n' +
-  '    kp.orientation = findPeak(hist);\n' +
-  '  }\n' +
-  '  // 5. 描述子生成（4x4x8 = 128 维）\n' +
-  '  for (const kp of keypoints) {\n' +
-  '    kp.descriptor = computeSIFTDescriptor(image, kp);\n' +
-  '  }\n' +
-  '  return keypoints;\n' +
-  '}';
+const SIFT_SURF_CODE = `// 以下代码截取自 src/lib/algorithms/siftSurf.ts，展示核心实现
+/**
+ * SIFT / SURF 尺度特征教学演示算法
+ *
+ * 为教学目的提供简化的 SIFT/SURF 特征检测与描述模拟。
+ * 核心流程包括：
+ *   - 高斯尺度空间构建
+ *   - DoG 尺度空间构建
+ *   - 空间极值点检测（26 邻域）
+ *   - 方向分配（梯度直方图）
+ *   - 描述子生成（SIFT 128D / SURF 64D）
+ *   - 最近邻比值匹配
+ */
+
+import { GrayscaleImage } from './types';
+import { create2DArray } from '../utils/imageProcessing';
+
+// ==================== 类型定义 ====================
+
+/** 一个简易关键点 */
+export interface SiftKeypoint {
+  x: number;
+  y: number;
+  octave: number;
+  scale: number;
+  /** 主方向（弧度） */
+  orientation: number;
+  /** 幅值 */
+  magnitude: number;
+  /** SIFT 128 维描述子 */
+  siftDescriptor: number[];
+  /** SURF 64 维描述子 */
+  surfDescriptor: number[];
+}
+
+/** 单个邻居点的比较结果：relation 描述当前像素与该邻居的 DoG 值关系 */
+export interface NeighborComparison {
+  dx: number;
+  dy: number;
+  value: number;
+  relation: 'greater' | 'less' | 'equal';
+}
+
+/** 26 邻域跨尺度比较明细 */
+export interface NeighborComparisonsData {
+  prevDogPatch: number[][];       // 上层 DoG 3×3 patch
+  currentDogPatch: number[][];    // 当前层 DoG 3×3 patch
+  nextDogPatch: number[][];       // 下层 DoG 3×3 patch
+  currentValue: number;
+  prevComparisons: NeighborComparison[];   // 上层 9 个邻居
+  sameComparisons: NeighborComparison[];   // 同层 8 个邻居
+  nextComparisons: NeighborComparison[];   // 下层 9 个邻居
+  isExtremum: boolean;
+  extremumType: 'max' | 'min' | 'none';
+}
+
+/** SIFT 当前步骤的上下文数据 */
+export interface SiftStepData {
+  gaussianValues: number[][];
+  dogValues: number[][];
+  currentKeypoint: SiftKeypoint | null;
+  gradientMagnitudes: number[][] | null;
+  gradientOrientations: number[][] | null;
+  orientationHistogram: number[] | null;
+  siftDescriptorGrid: number[][] | null;
+  surfDescriptorGrid: number[][] | null;
+  matches: Array<{ queryIdx: number; trainIdx: number; distance: number }> | null;
+  /** 选中关键点的 26 邻域跨尺度比较明细，用于教学可视化 */
+  neighborComparisons: NeighborComparisonsData | null;
+}
+
+// ==================== 尺度空间辅助 ====================
+
+function gaussianBlur(image: GrayscaleImage, sigma: number): GrayscaleImage {
+  const h = image.length;
+  const w = image[0]?.length ?? 0;
+  if (h === 0 || w === 0) return image;
+
+  const radius = Math.ceil(2 * sigma);
+  const size = 2 * radius + 1;
+  const kernel = new Array<number>(size);
+  let sum = 0;
+  for (let i = 0; i < size; i++) {
+    const x = i - radius;
+    kernel[i] = Math.exp(-(x * x) / (2 * sigma * sigma));
+    sum += kernel[i];
+  }
+  for (let i = 0; i < size; i++) kernel[i] /= sum;
+
+  const temp = create2DArray(h, w, 0);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let val = 0;
+      for (let k = 0; k < size; k++) {
+        const sx = x + k - radius;
+        if (sx >= 0 && sx < w) val += image[y][sx] * kernel[k];
+      }
+      temp[y][x] = val;
+    }
+  }
+
+  const result = create2DArray(h, w, 0);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let val = 0;
+      for (let k = 0; k < size; k++) {
+        const sy = y + k - radius;
+        if (sy >= 0 && sy < h) val += temp[sy][x] * kernel[k];
+      }
+      result[y][x] = val;
+    }
+  }
+
+  return result;
+}
+
+function computeGaussianScale(image: GrayscaleImage, sigma: number): GrayscaleImage {
+  return gaussianBlur(image, sigma);
+}
+
+function computeDoG(l1: GrayscaleImage, l2: GrayscaleImage): GrayscaleImage {
+  const h = l1.length;
+  const w = l1[0]?.length ?? 0;
+  const result = create2DArray(h, w, 0);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      result[y][x] = l2[y][x] - l1[y][x];
+    }
+  }
+  return result;
+}
+
+// ==================== 关键点检测 ====================
+
+/**
+ * 真正的 26 邻域跨尺度极值检测
+ *
+ * 对 currDog 中的每个像素，与以下邻居比较：
+ *   - 同层 8 邻域（3×3 去中心）
+ *   - 前一层 prevDog 的 9 邻域（序号 s-1，σ 更小，相对更清晰）
+ *   - 后一层 nextDog 的 9 邻域（序号 s+1，σ 更大，相对更模糊）
+ * 总共 26 个比较。只有当前值严格大于（或严格小于）全部 26 个邻居时，
+ * 才被判定为候选关键点。
+ *
+ * @param prevDog 前一层 DoG 图像（序号 s-1，σ 更小，相对更清晰）
+ * @param currDog 当前层 DoG 图像（序号 s）
+ * @param nextDog 后一层 DoG 图像（序号 s+1，σ 更大，相对更模糊）
+ * @param octave  所在八度（多八度场景用，当前教学固定为 0）
+ * @param scaleIndex DoG 尺度序号（用于记录关键点来源）
+ * @returns 检测到的关键点列表 + 每个关键点的比较明细 Map
+ */
+function detectExtremaCrossScale(
+  prevDog: GrayscaleImage,
+  currDog: GrayscaleImage,
+  nextDog: GrayscaleImage,
+  octave: number,
+  scaleIndex: number
+): { keypoints: SiftKeypoint[]; comparisons: Map<number, NeighborComparisonsData> } {
+  const h = currDog.length;
+  const w = currDog[0]?.length ?? 0;
+  const keypoints: SiftKeypoint[] = [];
+  const comparisons = new Map<number, NeighborComparisonsData>();
+
+  // 最小 DoG 绝对值阈值：过滤纯噪声区域
+  const DOG_THRESHOLD = 0.005;
+
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const currentValue = currDog[y][x];
+
+      // Task 3: 绝对值过小的点视为噪声，跳过
+      if (Math.abs(currentValue) < DOG_THRESHOLD) continue;
+
+      const sameComparisons: NeighborComparison[] = [];
+      const prevComparisons: NeighborComparison[] = [];
+      const nextComparisons: NeighborComparison[] = [];
+
+      let allGreater = true;  // 当前值 > 全部 26 个邻居 → 极大值
+      let allLess = true;     // 当前值 < 全部 26 个邻居 → 极小值
+
+      // ---- 同层 8 邻域比较 ----
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nv = currDog[y + dy][x + dx];
+          let relation: 'greater' | 'less' | 'equal';
+          if (currentValue > nv) { relation = 'greater'; }
+          else if (currentValue < nv) { relation = 'less'; allGreater = false; }
+          else { relation = 'equal'; allGreater = false; allLess = false; }
+          // 仅当 nv >= currentValue 时才非极大值
+          if (nv >= currentValue) allGreater = false;
+          // 仅当 nv <= currentValue 时才非极小值
+          if (nv <= currentValue) allLess = false;
+          sameComparisons.push({ dx, dy, value: nv, relation });
+        }
+      }
+
+      // 同层已无法判定极值 → 跳过
+      if (!allGreater && !allLess) continue;
+
+      // ---- 上层 9 邻域比较 ----
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nv = prevDog[y + dy][x + dx];
+          let relation: 'greater' | 'less' | 'equal';
+          if (currentValue > nv) { relation = 'greater'; }
+          else if (currentValue < nv) { relation = 'less'; allGreater = false; }
+          else { relation = 'equal'; allGreater = false; allLess = false; }
+          if (nv >= currentValue) allGreater = false;
+          if (nv <= currentValue) allLess = false;
+          prevComparisons.push({ dx, dy, value: nv, relation });
+        }
+      }
+
+      if (!allGreater && !allLess) continue;
+
+      // ---- 下层 9 邻域比较 ----
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nv = nextDog[y + dy][x + dx];
+          let relation: 'greater' | 'less' | 'equal';
+          if (currentValue > nv) { relation = 'greater'; }
+          else if (currentValue < nv) { relation = 'less'; allGreater = false; }
+          else { relation = 'equal'; allGreater = false; allLess = false; }
+          if (nv >= currentValue) allGreater = false;
+          if (nv <= currentValue) allLess = false;
+          nextComparisons.push({ dx, dy, value: nv, relation });
+        }
+      }
+
+      if (!allGreater && !allLess) continue;
+
+      // ---- 通过全部 26 邻域比较，确定为极值点 ----
+      const extremumType: 'max' | 'min' | 'none' = allGreater ? 'max' : 'min';
+
+      // 提取三层 DoG 的 3×3 patch
+      const extract3x3 = (img: GrayscaleImage, cx: number, cy: number): number[][] => {
+        const patch: number[][] = [];
+        for (let dy = -1; dy <= 1; dy++) {
+          const row: number[] = [];
+          for (let dx = -1; dx <= 1; dx++) {
+            row.push(img[cy + dy][cx + dx]);
+          }
+          patch.push(row);
+        }
+        return patch;
+      };
+
+      const comparisonsData: NeighborComparisonsData = {
+        prevDogPatch: extract3x3(prevDog, x, y),
+        currentDogPatch: extract3x3(currDog, x, y),
+        nextDogPatch: extract3x3(nextDog, x, y),
+        currentValue,
+        prevComparisons,
+        sameComparisons,
+        nextComparisons,
+        isExtremum: true,
+        extremumType,
+      };
+
+      // 用 y * w + x 作为局部 key
+      const localKey = y * w + x;
+      comparisons.set(localKey, comparisonsData);
+
+      keypoints.push({
+        x, y, octave, scale: scaleIndex,
+        orientation: 0, magnitude: Math.abs(currentValue),
+        siftDescriptor: [], surfDescriptor: [],
+      });
+    }
+  }
+
+  return { keypoints, comparisons };
+}
+
+// ==================== 梯度与方向 ====================
+
+function computeGradients(
+  image: GrayscaleImage, cx: number, cy: number, radius: number
+): { magnitudes: number[][]; orientations: number[][] } {
+  const size = 2 * radius + 1;
+  const magnitudes = create2DArray(size, size, 0);
+  const orientations = create2DArray(size, size, 0);
+  const w = image[0]?.length ?? 0;
+  const h = image.length;
+
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      const px = cx + dx, py = cy + dy;
+      const ri = dy + radius, ci = dx + radius;
+      if (px <= 0 || px >= w - 1 || py <= 0 || py >= h - 1) continue;
+      const gx = image[py][px + 1] - image[py][px - 1];
+      const gy = image[py + 1][px] - image[py - 1][px];
+      magnitudes[ri][ci] = Math.sqrt(gx * gx + gy * gy);
+      orientations[ri][ci] = Math.atan2(gy, gx);
+    }
+  }
+  return { magnitudes, orientations };
+}
+
+function computeOrientationHistogram(magnitudes: number[][], orientations: number[][], radius: number): number[] {
+  const hist = new Array<number>(8).fill(0);
+  const binSize = (2 * Math.PI) / 8;
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      const ri = dy + radius, ci = dx + radius;
+      const bin = Math.floor((orientations[ri][ci] + Math.PI) / binSize) % 8;
+      const weight = Math.exp(-(dx * dx + dy * dy) / (2 * (radius * 0.5) ** 2));
+      hist[bin] += magnitudes[ri][ci] * weight;
+    }
+  }
+  const hSum = hist.reduce((a, b) => a + b, 0);
+  if (hSum > 0) { for (let i = 0; i < 8; i++) hist[i] /= hSum; }
+  return hist;
+}
+
+function findDominantOrientation(hist: number[]): number {
+  const binSize = (2 * Math.PI) / 8;
+  let maxBin = 0;
+  for (let i = 1; i < 8; i++) { if (hist[i] > hist[maxBin]) maxBin = i; }
+  return maxBin * binSize - Math.PI;
+}
+
+// ==================== 描述子生成 ====================
+
+function computeSiftDescriptor(
+  magnitudes: number[][], orientations: number[][],
+  kpX: number, kpY: number, orientation: number
+): { descriptor: number[]; grid: number[][] } {
+  const descriptor: number[] = [];
+  const grid: number[][] = [];
+  const subSize = 4;
+
+  for (let sr = 0; sr < 4; sr++) {
+    for (let sc = 0; sc < 4; sc++) {
+      const hist = new Array<number>(8).fill(0);
+      const cR = kpY + (sr - 1.5) * subSize;
+      const cC = kpX + (sc - 1.5) * subSize;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const py = Math.round(cR + dy), px = Math.round(cC + dx);
+          const ri = py - (kpY - 8), ci = px - (kpX - 8);
+          if (ri < 0 || ri >= orientations.length || ci < 0 || ci >= (orientations[0]?.length ?? 0)) continue;
+          const mag = magnitudes[ri][ci], orient = orientations[ri][ci];
+          const rawBin = Math.floor((orient - orientation + Math.PI) / (Math.PI / 4));
+          const bin = ((rawBin % 8) + 8) % 8;  // JS % 是余数，负数需修正
+          const dist = Math.sqrt((sr - 1.5 + dy / subSize) ** 2 + (sc - 1.5 + dx / subSize) ** 2);
+          hist[bin] += mag * Math.exp(-dist * dist / 2);
+        }
+      }
+      const hSum = hist.reduce((a, b) => a + b, 0);
+      if (hSum > 0) { for (let i = 0; i < 8; i++) hist[i] /= hSum; }
+      descriptor.push(...hist);
+      grid.push(hist);
+    }
+  }
+  // 最终 L2 归一化：标准 SIFT 对 128 维向量整体归一化
+  const norm = Math.sqrt(descriptor.reduce((s, v) => s + v * v, 0));
+  if (norm > 0) {
+    for (let i = 0; i < descriptor.length; i++) descriptor[i] /= norm;
+    for (let r = 0; r < 16; r++) for (let c = 0; c < 8; c++) grid[r][c] /= norm;
+  }
+  return { descriptor, grid };
+}
+
+function computeSurfDescriptor(image: GrayscaleImage, kpX: number, kpY: number, scale: number): { descriptor: number[]; grid: number[][] } {
+  const descriptor: number[] = [];
+  const grid: number[][] = [];
+  const sz = 20 * scale, step = sz / 4;
+  const w = image[0]?.length ?? 0, h = image.length;
+
+  for (let sr = 0; sr < 4; sr++) {
+    for (let sc = 0; sc < 4; sc++) {
+      const cx = kpX + (sc - 1.5) * step, cy = kpY + (sr - 1.5) * step;
+      let dxSum = 0, dySum = 0, dxAbs = 0, dyAbs = 0;
+      for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+          const px = Math.round(cx + dx), py = Math.round(cy + dy);
+          if (px <= 0 || px >= w - 1 || py <= 0 || py >= h - 1) continue;
+          const gx = image[py][px + 1] - image[py][px - 1];
+          const gy = image[py + 1][px] - image[py - 1][px];
+          dxSum += gx; dySum += gy; dxAbs += Math.abs(gx); dyAbs += Math.abs(gy);
+        }
+      }
+      descriptor.push(dxSum, dySum, dxAbs, dyAbs);
+      grid.push([dxSum, dySum, dxAbs, dyAbs]);
+    }
+  }
+  const norm = Math.sqrt(descriptor.reduce((s, v) => s + v * v, 0));
+  if (norm > 0) {
+    for (let i = 0; i < descriptor.length; i++) descriptor[i] /= norm;
+    for (let r = 0; r < 16; r++) for (let c = 0; c < 4; c++) grid[r][c] /= norm;
+  }
+  return { descriptor, grid };
+}
+
+function findMatches(descriptors1: number[][], descriptors2: number[][], ratio: number): Array<{ queryIdx: number; trainIdx: number; distance: number }> {
+  const matches: Array<{ queryIdx: number; trainIdx: number; distance: number }> = [];
+  for (let i = 0; i < descriptors1.length; i++) {
+    const d1 = descriptors1[i];
+    const dists = descriptors2.map((d2, j) => {
+      const d = d1.reduce((s, v, k) => s + (v - d2[k]) ** 2, 0);
+      return { idx: j, dist: d };
+    }).sort((a, b) => a.dist - b.dist);
+    if (dists.length >= 2 && Math.sqrt(dists[0].dist) / Math.sqrt(Math.max(dists[1].dist, 1e-10)) < ratio) {
+      matches.push({ queryIdx: i, trainIdx: dists[0].idx, distance: Math.sqrt(dists[0].dist) });
+    }
+  }
+  return matches;
+}
+
+// ==================== 主生成函数 ====================
+
+export interface SiftSurfResult {
+  keypoints: SiftKeypoint[];
+  gaussianScales: GrayscaleImage[];
+  dogScales: GrayscaleImage[];
+  stepData: SiftStepData;
+  allSiftDescriptors: number[][];
+  allSurfDescriptors: number[][];
+}
+
+export function computeSiftSurf(
+  image: GrayscaleImage, sigma: number, numScales: number, selectedKp: number
+): SiftSurfResult {
+  const kFactor = 2 ** (1 / Math.max(numScales, 1));
+
+  // 为 26 邻域检测补充额外层：标准 SIFT 每个 octave 需要 S+3 张高斯图以得到 S 个可检测层。
+  // 本教学实现固定图像尺寸，因此至少构造 numScales + 2 张高斯图，得到 numScales + 1 张 DoG，
+  // 从而保证中间可检测层数为 numScales - 1（≥ 2 当 numScales ≥ 3）。
+  const gaussianScales: GrayscaleImage[] = [];
+  for (let s = 0; s < numScales + 2; s++) {
+    gaussianScales.push(computeGaussianScale(image, sigma * (kFactor ** s)));
+  }
+
+  const dogScales: GrayscaleImage[] = [];
+  for (let s = 0; s < numScales + 1; s++) {
+    dogScales.push(computeDoG(gaussianScales[s], gaussianScales[s + 1]));
+  }
+
+  // ---- 使用 detectExtremaCrossScale 进行 26 邻域跨尺度极值检测 ----
+  const allComparisons = new Map<number, NeighborComparisonsData>();
+  const allKeypoints: SiftKeypoint[] = [];
+  const dogH = dogScales[0]?.length ?? image.length;
+  const dogW = dogScales[0]?.[0]?.length ?? image[0]?.length ?? 64;
+  for (let s = 1; s < dogScales.length - 1; s++) {
+    const result = detectExtremaCrossScale(
+      dogScales[s - 1], dogScales[s], dogScales[s + 1], 0, s
+    );
+    // 将关键点 scale 从索引修正为实际高斯 σ 值
+    const actualSigma = sigma * (kFactor ** s);
+    for (const kp of result.keypoints) {
+      kp.scale = actualSigma;
+    }
+    // 使用复合 key：scale * h * w + y * w + x，支持跨尺度查找
+    const scaleOffset = s * dogH * dogW;
+    for (const [localKey, data] of result.comparisons) {
+      allComparisons.set(scaleOffset + localKey, data);
+    }
+    allKeypoints.push(...result.keypoints);
+  }
+
+  const keypoints: SiftKeypoint[] = [];
+  for (const kp of allKeypoints) {
+    const radius = 8;
+    const { magnitudes, orientations } = computeGradients(image, kp.x, kp.y, radius);
+    const hist = computeOrientationHistogram(magnitudes, orientations, radius);
+    const mainOrient = findDominantOrientation(hist);
+    const { descriptor: siftDesc } = computeSiftDescriptor(magnitudes, orientations, kp.x, kp.y, mainOrient);
+    const { descriptor: surfDesc } = computeSurfDescriptor(image, kp.x, kp.y, Math.max(kp.scale, 1));
+    keypoints.push({ ...kp, orientation: mainOrient, magnitude: kp.magnitude, siftDescriptor: siftDesc, surfDescriptor: surfDesc });
+  }
+
+  keypoints.sort((a, b) => b.magnitude - a.magnitude);
+  const topKeypoints = keypoints.slice(0, 20);
+
+  let stepData: SiftStepData = {
+    gaussianValues: gaussianScales[0], dogValues: dogScales[0],
+    currentKeypoint: null, gradientMagnitudes: null, gradientOrientations: null,
+    orientationHistogram: null, siftDescriptorGrid: null, surfDescriptorGrid: null, matches: null,
+    neighborComparisons: null,
+  };
+
+  if (topKeypoints.length > 0) {
+    const idx = Math.min(selectedKp, topKeypoints.length - 1);
+    const kp = topKeypoints[idx];
+    const radius = 8;
+    const { magnitudes, orientations } = computeGradients(image, kp.x, kp.y, radius);
+    const hist = computeOrientationHistogram(magnitudes, orientations, radius);
+    const { grid: siftGrid } = computeSiftDescriptor(magnitudes, orientations, kp.x, kp.y, kp.orientation);
+    const { grid: surfGrid } = computeSurfDescriptor(image, kp.x, kp.y, Math.max(kp.scale, 1));
+    // 跨图匹配由 computeSiftSurfMatching 负责，基础函数不生成自匹配结果
+    const matches: Array<{ queryIdx: number; trainIdx: number; distance: number }> = [];
+
+    // 查找选中关键点的 26 邻域比较明细
+    // kp.scale 已存为实际 σ 值，需反推尺度索引来查表
+    const kpScaleIndex = Math.round(Math.log(kp.scale / sigma) / Math.log(kFactor));
+    const cmpKey = kpScaleIndex * dogH * dogW + kp.y * dogW + kp.x;
+    const neighborComparisons = allComparisons.get(cmpKey) ?? null;
+
+    stepData = {
+      gaussianValues: gaussianScales[0], dogValues: dogScales[0],
+      currentKeypoint: kp, gradientMagnitudes: magnitudes, gradientOrientations: orientations,
+      orientationHistogram: hist, siftDescriptorGrid: siftGrid, surfDescriptorGrid: surfGrid, matches,
+      neighborComparisons,
+    };
+  }
+
+  return {
+    keypoints: topKeypoints, gaussianScales, dogScales, stepData,
+    allSiftDescriptors: topKeypoints.map(k => k.siftDescriptor),
+    allSurfDescriptors: topKeypoints.map(k => k.surfDescriptor),
+  };
+}
+
+// ==================== 跨图像匹配 ====================
+
+/** 跨图像匹配的完整结果，SiftSurfResult 的超集 */
+export interface SiftSurfMatchingResult extends SiftSurfResult {
+  referenceKeypoints: SiftKeypoint[];
+  referenceDescriptors: number[][];
+}
+
+/**
+ * 对 queryImage 和 referenceImage 分别执行 SIFT 检测，然后进行跨图像描述子匹配。
+ *
+ * @param queryImage      待匹配图像
+ * @param referenceImage  参考图像
+ * @param sigma           初始尺度
+ * @param numScales       每组层数
+ * @param selectedKp      查询图中选中的关键点序号
+ * @returns               包含双方关键点、描述子和匹配结果的 SiftSurfMatchingResult
+ */
+export function computeSiftSurfMatching(
+  queryImage: GrayscaleImage,
+  referenceImage: GrayscaleImage,
+  sigma: number,
+  numScales: number,
+  selectedKp: number
+): SiftSurfMatchingResult {
+  const queryResult = computeSiftSurf(queryImage, sigma, numScales, selectedKp);
+  const refResult = computeSiftSurf(referenceImage, sigma, numScales, 0);
+
+  // 跨图像匹配：查询图描述子 vs 参考图描述子
+  const matches = findMatches(
+    queryResult.allSiftDescriptors,
+    refResult.allSiftDescriptors,
+    0.8
+  );
+
+  // 覆盖 stepData 中的 matches（原为自匹配结果）
+  const stepData: SiftStepData = {
+    ...queryResult.stepData,
+    matches,
+  };
+
+  return {
+    ...queryResult,
+    stepData,
+    referenceKeypoints: refResult.keypoints,
+    referenceDescriptors: refResult.allSiftDescriptors,
+  };
+}
+`;
 
 // ==================== 辅助函数 ====================
 
@@ -529,9 +1059,9 @@ function getStepEvidenceText(
     case 'orientation':
       return `以关键点 (${kp!.x}, ${kp!.y}) 为中心计算 17×17 邻域梯度，按 8 方向加权投票。主方向 ${(kp!.orientation * 180 / Math.PI).toFixed(0)}° 是梯度投票最多的方向。`;
     case 'descriptor':
-      return `16×16 邻域划分为 4×4=16 个子区域，每个子区域统计 8 方向梯度累加 → 128 维向量。L2 归一化消除光照影响，坐标旋转到主方向消除旋转影响。`;
+      return `16×16 邻域划分为 4×4=16 个子区域，每个子区域统计 8 方向梯度累加 → 128 维向量。L2 归一化消除光照影响，坐标旋转到主方向消除旋转影响。当前实现为教学简化版，子区域采样密度低于标准 SIFT。`;
     case 'matching':
-      return `对查询图中的每个关键点描述子，在参考图中找欧氏距离最近和次近的两个候选。若最近/次近 < 0.8 则为可靠匹配，否则该匹配被舍弃。`;
+      return `对查询图中的每个关键点描述子，在参考图中找欧氏距离最近和次近的两个候选。实现中对平方欧氏距离做比值检验：d₁² / d₂² < 0.8（等价于欧氏距离比 d₁ / d₂ < √0.8 ≈ 0.894），通过则为可靠匹配。`;
     default:
       return '从概览进入任一步骤，检查关键点如何一路从候选点变成可匹配特征。每一步的证据都基于具体数值和判定结果。';
   }
@@ -566,16 +1096,16 @@ function getStepResultText(
     case 'orientation':
       return `当前关键点主方向为 ${(currentKeypoint.orientation * 180 / Math.PI).toFixed(0)}°。后续描述子都会围绕这个方向对齐，因此旋转后仍有机会匹配上。`;
     case 'descriptor':
-      return '16×16→4×4→8方向→128维，L2归一化。当前关键点已被编码成 SIFT 128 维 / SURF 64 维局部特征。';
+      return '16×16→4×4→8方向→128维，L2归一化。当前关键点已被编码成 SIFT 128 维 / SURF 64 维局部特征（教学简化实现）。';
     case 'matching': {
       if (matches.length > 0) {
         const sorted = [...matches].sort((a, b) => a.distance - b.distance);
         const bestDist = sorted[0]?.distance ?? 0;
         const worstDist = sorted[sorted.length - 1]?.distance ?? 0;
         const avgDist = sorted.reduce((s, m) => s + m.distance, 0) / sorted.length;
-        return `${matches.length} 对匹配通过比值检验（< 0.8）。最近距离 ${bestDist.toFixed(3)}，平均 ${avgDist.toFixed(3)}，最远 ${worstDist.toFixed(3)}。`;
+        return `${matches.length} 对匹配通过比值检验（d₁²/d₂² < 0.8，等价于欧氏距离比 < √0.8 ≈ 0.894）。最近距离 ${bestDist.toFixed(3)}，平均 ${avgDist.toFixed(3)}，最远 ${worstDist.toFixed(3)}。`;
       }
-      return `当前教学演示没有通过比值检验的匹配。阈值 0.8 过滤掉了模棱两可的匹配对。可尝试调整参数或切换图像。`;
+      return `当前教学演示没有通过比值检验的匹配。阈值 0.8（作用于平方欧氏距离）过滤掉了模棱两可的匹配对。可尝试调整参数或切换图像。`;
     }
     default:
       return '现在可以从概览进入任一步骤，检查这个关键点是如何一路从候选点变成可匹配特征的。';
@@ -600,12 +1130,14 @@ export default function SiftSurfScaleFeaturesPage() {
   // ---------- 副作用 ----------
   // 步骤切换时重置标签到 SIFT
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setActiveTab('sift');
   }, [step]);
 
   // 图像类型变化且用户未手动选择参考图时，自动重置 refImageMode
   useEffect(() => {
     if (!userManuallySelectedRef) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRefImageMode('auto');
     }
   }, [imageType, userManuallySelectedRef]);
@@ -628,6 +1160,7 @@ export default function SiftSurfScaleFeaturesPage() {
 
   useEffect(() => {
     if (!stepData.currentKeypoint) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCurrentPosition({ x: stepData.currentKeypoint.x, y: stepData.currentKeypoint.y });
   }, [stepData.currentKeypoint]);
 
@@ -656,7 +1189,7 @@ export default function SiftSurfScaleFeaturesPage() {
 
   // ---------- 派生数据 ----------
   const currentKeypoint = stepData.currentKeypoint;
-  const matches = matchingResult?.stepData.matches ?? stepData.matches ?? [];
+  const matches = useMemo(() => matchingResult?.stepData.matches ?? stepData.matches ?? [], [matchingResult, stepData.matches]);
   const matchCount = matches.length;
   const neighborData = stepData.neighborComparisons;
   const currentTermHints = stepTermHints(step);
@@ -724,7 +1257,9 @@ export default function SiftSurfScaleFeaturesPage() {
   }, [currentStageIndex]);
 
   // ---------- 骨架卡片 ----------
-  const currentKeypointRail = currentKeypoint ? (
+  const currentKeypointRail = useMemo(() => {
+    if (!currentKeypoint) return null;
+    return (
     <TeachingCard>
       <div className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)_minmax(0,0.9fr)]">
         <div>
@@ -759,7 +1294,8 @@ export default function SiftSurfScaleFeaturesPage() {
         </div>
       ) : null}
     </TeachingCard>
-  ) : null;
+  );
+  }, [currentKeypoint, neighborData, currentEvidenceText, currentResultText, currentTermHints]);
 
   // ---------- 参数面板 ----------
   const parameters = (
@@ -821,6 +1357,9 @@ export default function SiftSurfScaleFeaturesPage() {
         max={5}
         step={1}
       />
+      <p className="-mt-2 text-[10px] text-slate-500">
+        算法会自动补充额外高斯层，保证 26 邻域跨尺度检测有足够中间层。
+      </p>
 
       {/* 步骤 6 专属：参考图像选择 */}
       {step === 'matching' && (
@@ -964,7 +1503,7 @@ export default function SiftSurfScaleFeaturesPage() {
                     </div>
                   ))}
                 </div>
-                <div className="mt-2 text-[10px] text-slate-500">比值检验阈值 0.8：d<sub>1</sub> / d<sub>2</sub> &lt; 0.8</div>
+                <div className="mt-2 text-[10px] text-slate-500">比值检验阈值 0.8：d₁² / d₂² &lt; 0.8（等价于欧氏距离比 &lt; 0.894）</div>
               </TeachingCard>
             )}
             {(activeTab === 'sift' || activeTab === 'surf') && crossMatches.length === 0 && (
@@ -1009,7 +1548,7 @@ export default function SiftSurfScaleFeaturesPage() {
                           <ImageCanvas image={dogScales[0]} maxDisplaySize={130} showGrid={false} />
                         )}
                         <p className="mt-2 text-xs leading-5 text-slate-600">
-                          DoG 把"局部结构变化最明显"的位置凸显出来。
+                          DoG 把「局部结构变化最明显」的位置凸显出来。
                         </p>
                       </FlowNode>
                     </FlowColumn>
@@ -1036,6 +1575,12 @@ export default function SiftSurfScaleFeaturesPage() {
             )}
             {activeTab === 'surf' && (
               <div className="space-y-4">
+                <TeachingCard tone="amber">
+                  <div className="text-xs font-semibold text-amber-800">教学简化说明</div>
+                  <p className="mt-1 text-xs leading-5 text-amber-700">
+                    当前页面 SURF 标签为教学示意实现：关键点仍由简化 DoG 流程生成，描述子未使用真实 SURF 的 Haar 小波方向分配与旋转对齐。重点展示 SURF 与 SIFT 在「检测思想 / 描述子结构 / 速度优势」上的区别。
+                  </p>
+                </TeachingCard>
                 <TeachingCard>
                   <div className="text-sm font-semibold text-slate-800">SURF Hessian 行列式检测</div>
                   <p className="mt-2 text-xs leading-6 text-slate-600">
@@ -1051,7 +1596,7 @@ export default function SiftSurfScaleFeaturesPage() {
                   <p className="mt-2 text-xs text-slate-500">w 取 0.9，补偿近似误差。</p>
                 </TeachingCard>
                 <TeachingCard>
-                  <img
+                  <Image
                     src={resolveAssetPath('/assets/sift-surf/surf-hessian-filters.jpg')}
                     alt="SURF 滤波器"
                     width={387}
@@ -1178,7 +1723,7 @@ export default function SiftSurfScaleFeaturesPage() {
                     <tbody>
                       <tr className="border-b border-slate-200">
                         <td className="px-3 py-1.5 font-medium text-slate-600">图像策略</td>
-                        <td className="px-3 py-1.5 text-slate-700">降采样改变大小</td>
+                        <td className="px-3 py-1.5 text-slate-700">标准：octave 降采样改变大小<br/>本页：固定图像尺寸、改变 σ（教学简化）</td>
                         <td className="px-3 py-1.5 text-slate-700">固定图像大小</td>
                       </tr>
                       <tr className="border-b border-slate-200">
@@ -1188,7 +1733,7 @@ export default function SiftSurfScaleFeaturesPage() {
                       </tr>
                       <tr className="border-b border-slate-200">
                         <td className="px-3 py-1.5 font-medium text-slate-600">加速手段</td>
-                        <td className="px-3 py-1.5 text-slate-700">降采样减少数据量</td>
+                        <td className="px-3 py-1.5 text-slate-700">标准：octave 降采样减少数据量<br/>本页：同尺寸卷积（教学简化）</td>
                         <td className="px-3 py-1.5 text-slate-700">积分图常数时间查表</td>
                       </tr>
                       <tr className="border-b border-slate-200">
@@ -1771,7 +2316,7 @@ export default function SiftSurfScaleFeaturesPage() {
                   </div>
                 </TeachingCard>
                 <TeachingCard>
-                  <img
+                  <Image
                     src={resolveAssetPath('/assets/sift-surf/gaussian-pyramid.jpg')}
                     alt="高斯金字塔"
                     width={620}
@@ -1780,7 +2325,7 @@ export default function SiftSurfScaleFeaturesPage() {
                     className="h-auto max-w-full rounded-lg"
                   />
                   <div className="mt-2 text-[10px] text-slate-500">
-                    高斯金字塔：同一阶相邻两层的尺度因子比例系数为 k，下一阶由上一阶中间层降采样获得。
+                    高斯金字塔：同一阶相邻两层的尺度因子比例系数为 k；标准 SIFT 下一阶由上一阶中间层降采样获得。本页教学实现保持图像尺寸不变，仅改变 σ。
                   </div>
                 </TeachingCard>
               </>
@@ -1799,7 +2344,7 @@ export default function SiftSurfScaleFeaturesPage() {
                   <FormulaCard label="积分图像定义" mathML={INTEGRAL_IMAGE} tone="embedded" />
                 </TeachingCard>
                 <TeachingCard>
-                  <img
+                  <Image
                     src={resolveAssetPath('/assets/sift-surf/integral-image.jpg')}
                     alt="积分图像"
                     width={1029}
@@ -1809,7 +2354,7 @@ export default function SiftSurfScaleFeaturesPage() {
                   />
                 </TeachingCard>
                 <TeachingCard>
-                  <img
+                  <Image
                     src={resolveAssetPath('/assets/sift-surf/sift-surf-scale-comparison.jpg')}
                     alt="SIFT 与 SURF 尺度空间对比"
                     width={1259}
@@ -1818,7 +2363,7 @@ export default function SiftSurfScaleFeaturesPage() {
                     className="h-auto max-w-full rounded-lg"
                   />
                   <div className="mt-1 text-[10px] text-slate-500">
-                    SIFT 改变图像大小，SURF 保持图像大小不变、改变滤波器大小。
+                    标准 SIFT 通过 octave 降采样改变图像大小；本页为教学演示保持图像尺寸不变、仅改变 σ。SURF 保持图像大小不变、改变滤波器大小。
                   </div>
                 </TeachingCard>
               </>
@@ -1827,7 +2372,8 @@ export default function SiftSurfScaleFeaturesPage() {
               <TeachingCard>
                 <div className="text-sm font-semibold text-slate-800">尺度空间全对比</div>
                 <p className="mt-2 text-xs leading-6 text-slate-600">
-                  SIFT 通过降采样构建高斯金字塔，不同八度（octave）的图像尺寸不同。
+                  标准 SIFT 通过 octave 降采样构建高斯金字塔，不同 octave 的图像尺寸不同；
+                  本页为教学演示保持图像尺寸不变，仅通过改变 σ 生成多尺度高斯层。
                   SURF 则保持原图尺寸不变，仅通过增大盒子滤波器模板来模拟更大尺度的卷积。
                   两者都实现了“从精细到粗糙”的多尺度分析，只是实现路径不同。
                 </p>
@@ -1876,7 +2422,7 @@ export default function SiftSurfScaleFeaturesPage() {
                   </div>
                 </TeachingCard>
                 <TeachingCard>
-                  <img
+                  <Image
                     src={resolveAssetPath('/assets/sift-surf/dog-pyramid.jpg')}
                     alt="DoG 金字塔"
                     width={1464}
@@ -1897,7 +2443,7 @@ export default function SiftSurfScaleFeaturesPage() {
                   <FormulaCard label="26 邻域极值判定条件" mathML={DOG_EXTREMUM_FORMULA} tone="embedded" />
                 </TeachingCard>
                 <TeachingCard>
-                  <img
+                  <Image
                     src={resolveAssetPath('/assets/sift-surf/dog-extreme-detection.jpg')}
                     alt="DOG 极值检测 26 邻域"
                     width={618}
@@ -1928,7 +2474,7 @@ export default function SiftSurfScaleFeaturesPage() {
                   <p className="mt-2 text-xs text-slate-500">w 取 0.9，补偿近似误差。</p>
                 </TeachingCard>
                 <TeachingCard>
-                  <img
+                  <Image
                     src={resolveAssetPath('/assets/sift-surf/surf-hessian-filters.jpg')}
                     alt="SURF 滤波器"
                     width={387}
@@ -1944,8 +2490,8 @@ export default function SiftSurfScaleFeaturesPage() {
               <TeachingCard>
                 <div className="text-sm font-semibold text-slate-800">检测阶段总对比</div>
                 <p className="mt-2 text-xs leading-6 text-slate-600">
-                  SIFT 的 DoG 检测本质上是"跨尺度的灰度变化"检测器；SURF 的 Hessian 行列式则是
-                  "同尺度的二阶结构强度"检测器。两者目标都是寻找稳定、可重复的关键点，但数学工具不同。
+                  SIFT 的 DoG 检测本质上是「跨尺度的灰度变化」检测器；SURF 的 Hessian 行列式则是
+                  「同尺度的二阶结构强度」检测器。两者目标都是寻找稳定、可重复的关键点，但数学工具不同。
                 </p>
               </TeachingCard>
             )}
@@ -2007,7 +2553,7 @@ export default function SiftSurfScaleFeaturesPage() {
                   )}
                 </TeachingCard>
                 <TeachingCard>
-                  <img
+                  <Image
                     src={resolveAssetPath('/assets/sift-surf/orientation-histogram.jpg')}
                     alt="方向直方图"
                     width={751}
@@ -2030,7 +2576,7 @@ export default function SiftSurfScaleFeaturesPage() {
                   </p>
                 </TeachingCard>
                 <TeachingCard>
-                  <img
+                  <Image
                     src={resolveAssetPath('/assets/sift-surf/surf-descriptor.jpg')}
                     alt="SURF 描述子"
                     width={1765}
@@ -2073,7 +2619,7 @@ export default function SiftSurfScaleFeaturesPage() {
                   </p>
                 </TeachingCard>
                 <TeachingCard>
-                  <img
+                  <Image
                     src={resolveAssetPath('/assets/sift-surf/sift-descriptor-grid.jpg')}
                     alt="SIFT 描述子网格"
                     width={1426}
@@ -2086,7 +2632,7 @@ export default function SiftSurfScaleFeaturesPage() {
                   </div>
                 </TeachingCard>
                 <TeachingCard>
-                  <img
+                  <Image
                     src={resolveAssetPath('/assets/sift-surf/coordinate-rotation.jpg')}
                     alt="坐标旋转"
                     width={1484}
@@ -2121,7 +2667,7 @@ export default function SiftSurfScaleFeaturesPage() {
                   <FormulaCard label="Haar 小波响应" mathML={HAAR_WAVELET_RESPONSE} tone="embedded" />
                 </TeachingCard>
                 <TeachingCard>
-                  <img
+                  <Image
                     src={resolveAssetPath('/assets/sift-surf/surf-descriptor.jpg')}
                     alt="SURF 描述子"
                     width={1765}
@@ -2221,7 +2767,7 @@ export default function SiftSurfScaleFeaturesPage() {
                     近似 Hessian 矩阵和 Haar 小波变换来提高时间效率。
                   </p>
                   <p className="mt-2 text-xs leading-6 text-slate-600">
-                    可以把 SURF 理解成对 SIFT 思想的"加速实现"：目标仍然是找到稳定、可匹配的局部结构，
+                    可以把 SURF 理解成对 SIFT 思想的「加速实现」：目标仍然是找到稳定、可匹配的局部结构，
                     只是把尺度检测和描述子统计做得更快、更短。
                   </p>
                 </TeachingCard>
@@ -2236,7 +2782,7 @@ export default function SiftSurfScaleFeaturesPage() {
                   <FormulaCard label="积分图像定义" mathML={INTEGRAL_IMAGE} tone="embedded" />
                 </TeachingCard>
                 <TeachingCard>
-                  <img
+                  <Image
                     src={resolveAssetPath('/assets/sift-surf/integral-image.jpg')}
                     alt="积分图像"
                     width={1029}
@@ -2274,7 +2820,7 @@ export default function SiftSurfScaleFeaturesPage() {
     }
   }, [
     step, activeTab, gaussianScales, dogScales, sigma, numScales,
-    keypoints, stepData, currentTermHints, matches, sourceImage,
+    keypoints, stepData, currentTermHints, matches,
   ]);
 
   // ==================== Main Render ====================

@@ -92,8 +92,8 @@ const TABLE_ROWS = [
     cells: [
       'DoG 最值点位置，再通过二次拟合确定位置',
       'Hessian 矩阵的行列式最值',
-      '无',
-      '使用 FAST 提点，使用 Harris Corner 去除非角点',
+      '不适用（纯描述子）',
+      'FAST 提点，按 Harris 响应排序筛选强角点',
       '使用 FAST 或 AGAST 提点',
     ],
   },
@@ -102,7 +102,7 @@ const TABLE_ROWS = [
     cells: [
       '特征邻域梯度直方图的最值方向',
       '特征邻域对 Haar wavelet 的最大响应方向',
-      '无',
+      '不适用（纯描述子）',
       '使用 Intensity centroid 方法来确定方向',
       '使用预定义采样点对，对远点对做梯度确定方向',
     ],
@@ -112,8 +112,8 @@ const TABLE_ROWS = [
     cells: [
       '建立尺度空间，DoG 最值所在尺度',
       '尺度空间中 Hessian 矩阵行列式最值所在尺度',
-      '无',
-      '无',
+      '不适用（纯描述子）',
+      '图像金字塔多层检测，基础描述子无显式尺度归一化',
       '尺度空间中 FAST 提点最显著的尺度',
     ],
   },
@@ -131,7 +131,7 @@ const TABLE_ROWS = [
 
 const EUCLIDEAN_FORMULA = buildInlineMathML(
   '<mrow><mi>Dis</mi><mo>(</mo><msub><mi>X</mi><mi>i</mi></msub><mo>,</mo><msub><mi>X</mi><mi>j</mi></msub><mo>)</mo>' +
-  '<mo>=</mo><msqrt><munderover><mo>∑</mo><mrow><mi>k</mi><mo>=</mo><mn>0</mn></mrow><mi>n</mi></munderover><msup><mrow><mo>(</mo><msub><mi>X</mi><mrow><mi>i</mi><mi>k</mi></mrow></msub><mo>-</mo><msub><mi>X</mi><mrow><mi>j</mi><mi>k</mi></mrow></msub><mo>)</mo></mrow><mn>2</mn></msup></msqrt></mrow>'
+  '<mo>=</mo><msqrt><munderover><mo>∑</mo><mrow><mi>k</mi><mo>=</mo><mn>1</mn></mrow><mi>n</mi></munderover><msup><mrow><mo>(</mo><msub><mi>X</mi><mrow><mi>i</mi><mi>k</mi></mrow></msub><mo>-</mo><msub><mi>X</mi><mrow><mi>j</mi><mi>k</mi></mrow></msub><mo>)</mo></mrow><mn>2</mn></msup></msqrt></mrow>'
 );
 
 const HAMMING_FORMULA = buildInlineMathML(
@@ -303,7 +303,7 @@ const METHOD_PRINCIPLES: Record<FeatureMethod, MethodPrinciple> = {
       '最终仍然用汉明距离匹配，因为 BRISK 描述子也是二进制串。',
     ],
     formulas: [
-      { label: 'BRISK 主方向', mathML: BRISK_DIRECTION_FORMULA, note: '本页把长点对灰度差沿点对方向投影后求和，再用 atan2 得到主方向，用来演示“长点对定方向”的思想。', stage: 'description' },
+      { label: 'BRISK 主方向', mathML: BRISK_DIRECTION_FORMULA, note: '当前页面把长点对灰度差沿点对方向投影后求和，再用 atan2 得到主方向，用来演示“长点对定方向”的思想。', stage: 'description' },
       { label: '汉明距离', mathML: HAMMING_FORMULA, note: 'BRISK 描述子为二进制串，匹配时统计对应位不同的数量。', stage: 'matching' },
     ],
     strengths: ['兼顾二进制匹配速度和尺度、旋转鲁棒性。', '512 位描述子能表达更丰富的局部点对关系。'],
@@ -322,6 +322,13 @@ function getMethodDistanceType(method: FeatureMethod): DistanceType {
 
 function getDescriptor(keypoint, method: FeatureMethod) {
   return keypoint.descriptors[method];
+}
+
+function descriptorDistance(a, b, distanceType: DistanceType) {
+  if (distanceType === 'euclidean') {
+    return Math.sqrt(a.reduce((sum, v, i) => sum + (v - b[i]) ** 2, 0));
+  }
+  return a.reduce((sum, v, i) => sum + (v === b[i] ? 0 : 1), 0);
 }
 
 function matchKeypoint(referenceKeypoint, targets, method: FeatureMethod, ratioThreshold) {
@@ -691,10 +698,15 @@ function buildMethodOptions() {
   }));
 }
 
+function descriptorLengthUnit(distanceType: DistanceType): string {
+  return distanceType === 'euclidean' ? '维' : '位';
+}
+
 function buildStageFeedbackText(
   stage: TaskStage,
   demo: KeypointMatchingDemoResult,
-  method: FeatureMethod
+  method: FeatureMethod,
+  distanceType: DistanceType
 ): string {
   if (stage === 'intro') {
     return '先建立整体任务图景，再进入检测、描述、匹配和筛选阶段逐步观察。';
@@ -705,7 +717,7 @@ function buildStageFeedbackText(
   }
 
   if (stage === 'description') {
-    return `当前方法使用 ${demo.descriptorLength} 维教学摘要向量演示描述子编码。`;
+    return `当前方法使用 ${demo.descriptorLength} ${descriptorLengthUnit(distanceType)} 教学摘要演示描述子编码。`;
   }
 
   if (stage === 'matching' || stage === 'filtering') {
@@ -729,8 +741,8 @@ export default function KeypointMatchingPipelinePage() {
   const methodPrinciple = METHOD_PRINCIPLES[method];
   const stageIndex = getStageIndex(taskStage);
   const stageFeedbackText = useMemo(
-    () => buildStageFeedbackText(taskStage, demo, method),
-    [demo, method, taskStage]
+    () => buildStageFeedbackText(taskStage, demo, method, distanceType),
+    [demo, distanceType, method, taskStage]
   );
   const showSensitiveKeypointJump = taskStage === 'matching' || taskStage === 'filtering';
 
@@ -763,11 +775,11 @@ export default function KeypointMatchingPipelinePage() {
     });
   }, [demo.referenceKeypoints.length, taskStage]);
 
-  const distanceFormulaCard = distanceType === 'euclidean' ? (
+  const distanceFormulaCard = useMemo(() => distanceType === 'euclidean' ? (
     <FormulaCard
       label="欧氏距离（Euclidean Distance）"
       mathML={EUCLIDEAN_FORMULA}
-      note="适用于 SIFT、SURF 这类浮点型描述子。"
+      note="适用于 SIFT、SURF 这类浮点型描述子。n 为描述子维度。"
       tone="embedded"
     />
   ) : (
@@ -777,7 +789,7 @@ export default function KeypointMatchingPipelinePage() {
       note="适用于 ORB、BRIEF、BRISK 这类二进制描述子。"
       tone="embedded"
     />
-  );
+  ), [distanceType]);
 
   const mainVisual = useMemo(() => {
     if (taskStage === 'intro') {
@@ -907,7 +919,7 @@ export default function KeypointMatchingPipelinePage() {
                 </p>
               </div>
               <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700">
-                {demo.descriptorLength} 维
+                {demo.descriptorLength} {descriptorLengthUnit(distanceType)}
               </span>
             </div>
             <DescriptorBars values={demo.selectedDescriptor} distanceType={distanceType} />
@@ -921,9 +933,7 @@ export default function KeypointMatchingPipelinePage() {
         <div className="rounded-[1.5rem] border border-slate-200 bg-white/95 px-4 py-4 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div className="text-sm font-semibold text-slate-800">
-                {taskStage === 'matching' ? '距离排序找最近邻' : 'ratio test 过滤误匹配'}
-              </div>
+              <div className="text-sm font-semibold text-slate-800">距离排序找最近邻</div>
               <p className="mt-1 text-xs leading-5 text-slate-500">
                 点击参考图关键点，观察它的最近邻、次近邻和筛选结果如何同步变化。
               </p>
@@ -959,8 +969,8 @@ export default function KeypointMatchingPipelinePage() {
             <KeypointImagePanel
               image={demo.targetImage}
               keypoints={demo.targetKeypoints}
-              bestTarget={taskStage === 'matching' ? demo.bestMatch.target : undefined}
-              secondTarget={taskStage === 'matching' ? demo.secondBestMatch.target : undefined}
+              bestTarget={demo.bestMatch.target}
+              secondTarget={demo.secondBestMatch.target}
               title="目标图候选点"
               anchorClassName="keypoint-target-main"
             />
@@ -1073,7 +1083,7 @@ export default function KeypointMatchingPipelinePage() {
         </div>
       </div>
     );
-  }, [demo, distanceType, goStage, method, methodPrinciple, selectedKeypointIndex, taskStage]);
+  }, [demo, distanceType, goStage, method, methodPrinciple, ratioThreshold, selectedKeypointIndex, taskStage]);
 
   const analysisPreview = useMemo(() => {
     if (taskStage === 'intro') {
@@ -1179,10 +1189,10 @@ export default function KeypointMatchingPipelinePage() {
               <FlowNode tone="emerald">
                 <div className="mb-2 text-xs font-semibold uppercase text-emerald-700">描述子摘要</div>
                 <div className="font-mono text-xs break-all text-emerald-800">
-                  {descriptorPreview(demo.selectedDescriptor.slice(0, 8), distanceType)}
+                  {descriptorPreview(demo.selectedDescriptor, distanceType)}
                 </div>
                 <div className="mt-2 text-xs leading-5 text-slate-600">
-                  {methodPrinciple.descriptorKind}；当前演示展示前 8 维摘要。
+                  {methodPrinciple.descriptorKind}；当前演示展示完整教学摘要维度。
                 </div>
               </FlowNode>
             </FlowColumn>
@@ -1470,8 +1480,8 @@ export default function KeypointMatchingPipelinePage() {
             ))
           ) : (
             <TeachingCard>
-              <h2 className="mb-3 text-sm font-semibold text-slate-800">本阶段公式说明</h2>
-              <p className="text-xs leading-6 text-slate-600">本阶段以流程说明为主，无独立公式。以 SURF 为例，本页只展示 4×4 子块统计思想，不在这里展开完整 64 维构造公式。</p>
+              <h2 className="mb-3 text-sm font-semibold text-slate-800">该阶段公式说明</h2>
+              <p className="text-xs leading-6 text-slate-600">该阶段以流程说明为主，无独立公式。以 SURF 为例，当前页面只展示 4×4 子块统计思想，不在这里展开完整 64 维构造公式。</p>
             </TeachingCard>
           )}
           <TeachingCard>
@@ -1502,7 +1512,7 @@ export default function KeypointMatchingPipelinePage() {
             <h2 className="mb-3 text-sm font-semibold text-slate-800">BFMatcher 与 FLANN</h2>
             <p className="text-xs leading-6 text-slate-600">
               BFMatcher 会对每个查询描述子遍历全部候选点，逐个计算距离，适合教学演示“最近邻是怎么排出来的”。
-              FLANN 则用近似最近邻结构加速查找，更适合大规模特征点集；但本页为了把距离排序过程讲清楚，主线仍采用 BFMatcher 式遍历思路。
+              FLANN 则用近似最近邻结构加速查找，更适合大规模特征点集；但当前页面为了把距离排序过程讲清楚，主线仍采用 BFMatcher 式遍历思路。
             </p>
           </TeachingCard>
           <TeachingCard>
