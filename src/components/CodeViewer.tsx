@@ -31,7 +31,7 @@ export default function CodeViewer({
   const lines = currentCode.split('\n');
 
   return (
-    <div className="space-y-4">
+    <div className="h-full flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
           {languages.map(lang => (
@@ -72,14 +72,14 @@ export default function CodeViewer({
         </button>
       </div>
 
-      <div className="bg-slate-900 rounded-xl overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden bg-slate-900 rounded-xl">
         <div className="flex items-center gap-1.5 px-4 py-3 border-b border-slate-800">
           <div className="w-3 h-3 rounded-full bg-red-500/80" />
           <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
           <div className="w-3 h-3 rounded-full bg-green-500/80" />
           <span className="ml-2 text-xs text-slate-500 font-mono">{activeLang.toLowerCase()}</span>
         </div>
-        <div className="overflow-auto max-h-[450px]">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden">
           <pre className="text-sm font-mono p-4">
             <code className="text-slate-300">
               {lines.map((line, index) => {
