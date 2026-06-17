@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import Image from 'next/image';
 import {
   CodeViewer,
   ConceptLayout,
@@ -33,20 +34,20 @@ const FRAME_CODE_TS = `function frameDifference(frames, t, threshold, mode) {
   const bPrev = dPrev > threshold ? 1 : 0;
   const bNext = dNext > threshold ? 1 : 0;
 
-  // 时间差分只看前一帧；对称差分要求前后两次差分同时成立
-  const motion = mode === 'twoFrame' ? bPrev : (bPrev & bNext);
+  // 帧差法只看前一帧；对称差分要求前后两次差分同时成立
+  const motion = mode === 'twoFrame' ? bPrev : (bPrev && bNext);
   return close(motion);
 }`;
 
 const METHOD_OPTIONS = [
-  { value: 'twoFrame', label: '时间差分法' },
+  { value: 'twoFrame', label: '帧差法' },
   { value: 'symmetric', label: '对称差分法' },
 ] as const;
 
 const TIME_DIFF_EXAMPLES = [
   {
     src: '/assets/simple-background/frame-course-current.jpg',
-    label: '当前帧1',
+    label: '当前帧 I_t(x,y)',
   },
   {
     src: '/assets/simple-background/frame-course-previous.jpg',
@@ -91,16 +92,21 @@ const SYMMETRIC_EXPERIMENT_STEPS = [
     ],
   },
   {
-    title: '5. 目标提取',
-    description: '连通标注后提取运动目标及外轮廓。',
+    title: '5. 结果示意',
+    description: '教材中常将清理后的掩膜叠加或轮廓化作为示意；本页动态实现只到形态学闭运算，不再做连通区域提取。',
     images: [
-      { src: '/assets/simple-background/symmetric-h-target.jpg', label: '(h) 目标提取结果' },
+      { src: '/assets/simple-background/symmetric-h-target.jpg', label: '(h) 清理后掩膜示意' },
     ],
   },
 ] as const;
 
 function grayAt(image: GrayscaleImage, x: number, y: number): number {
   return Math.round((image[y]?.[x] ?? 0) * 255);
+}
+
+// 差分图取值保留一位小数，避免四舍五入到整数后与真实阈值边界不一致
+function diffGrayAt(image: GrayscaleImage, x: number, y: number): number {
+  return Math.round((image[y]?.[x] ?? 0) * 2550) / 10;
 }
 
 function grayValue(value: number): number {
@@ -173,8 +179,6 @@ function morphologyFormulaMathML(): string {
       <msub><mi>B</mi><mi>clean</mi></msub>
       <mo>=</mo><mi>Close</mi><mo>(</mo><mi>B</mi><mo>)</mo>
       <mo>=</mo><mi>Erode</mi><mo>(</mo><mi>Dilate</mi><mo>(</mo><mi>B</mi><mo>)</mo><mo>)</mo>
-      <mo>→</mo><mtext>连通区域</mtext>
-      <mo>→</mo><mtext>运动目标</mtext>
     </mrow>
   `);
 }
@@ -191,7 +195,7 @@ function CourseImage({
   return (
     <figure className="space-y-2">
       <div className={`flex items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-950 ${className}`}>
-        <img src={resolveAssetPath(src)} alt={label} className="h-full w-full object-contain" />
+        <Image src={resolveAssetPath(src)} alt={label} className="h-full w-full object-contain" />
       </div>
       <figcaption className="text-center text-xs font-semibold text-slate-700">{label}</figcaption>
     </figure>
@@ -275,8 +279,8 @@ export default function FrameDifferenceMotionPage() {
   const previousGray = grayAt(result.previous, currentPosition.x, currentPosition.y);
   const currentGray = grayAt(result.current, currentPosition.x, currentPosition.y);
   const nextGray = grayAt(result.next, currentPosition.x, currentPosition.y);
-  const previousDiffGray = grayAt(result.previousDifference, currentPosition.x, currentPosition.y);
-  const nextDiffGray = grayAt(result.nextDifference, currentPosition.x, currentPosition.y);
+  const previousDiffGray = diffGrayAt(result.previousDifference, currentPosition.x, currentPosition.y);
+  const nextDiffGray = diffGrayAt(result.nextDifference, currentPosition.x, currentPosition.y);
   const finalMaskValue = result.cleaned[currentPosition.y]?.[currentPosition.x] ?? 0;
   const rawMaskValue = result.binary[currentPosition.y]?.[currentPosition.x] ?? 0;
   const decisionText = finalMaskValue > 0 ? '运动候选像素' : '静止/背景像素';
@@ -520,7 +524,7 @@ export default function FrameDifferenceMotionPage() {
           <FlowNode tone="emerald">
             <div className="text-xs font-semibold text-emerald-700">运动判定</div>
             <p className="mt-2 text-xs leading-5 text-slate-600">
-              {method === 'twoFrame' ? '时间差分只要求前向差分超过阈值。' : '对称差分要求前后两次差分同时超过阈值。'}
+              {method === 'twoFrame' ? '帧差法只要求前向差分超过阈值。' : '对称差分要求前后两次差分同时超过阈值。'}
               当前结果：{decisionText}。
             </p>
           </FlowNode>
@@ -537,17 +541,17 @@ export default function FrameDifferenceMotionPage() {
           点击任意图像都会更新同一个像素坐标，下面公式直接使用当前像素的真实灰度值。
         </p>
         <FormulaCard
-          label={method === 'twoFrame' ? '时间差分判定' : '对称差分判定'}
+          label={method === 'twoFrame' ? '帧差法判定' : '对称差分判定'}
           mathML={activeFormula}
           note={method === 'twoFrame'
-            ? `当前位置前向差分为 ${previousDiffGray}，阈值 T = ${threshold}。`
-            : `当前位置前向差分为 ${previousDiffGray}，后向差分为 ${nextDiffGray}，两者同时超过 T 才保留。`}
+            ? `当前位置前向差分为 ${previousDiffGray}（保留一位小数），阈值 T = ${threshold}。`
+            : `当前位置前向差分为 ${previousDiffGray}，后向差分为 ${nextDiffGray}（均保留一位小数），两者同时超过 T 才保留。`}
           tone="embedded"
         />
         <FormulaCard
           label="形态学清理"
           mathML={morphologyFormulaMathML()}
-          note={`原始运动像素 ${result.motionPixelCount} 个，清理后 ${result.cleanedPixelCount} 个。`}
+          note={`原始运动像素 ${result.motionPixelCount} 个，清理后 ${result.cleanedPixelCount} 个。闭运算用于填充小空洞、平滑边缘；本页不做连通区域提取。`}
           tone="embedded"
         />
       </TeachingCard>
@@ -561,7 +565,7 @@ export default function FrameDifferenceMotionPage() {
       </TeachingCard>
 
       <TeachingCard>
-        <h2 className="mb-3 text-sm font-semibold text-slate-800">教材补充：时间差分法示例</h2>
+        <h2 className="mb-3 text-sm font-semibold text-slate-800">教材补充：帧差法示例</h2>
         <div className="grid gap-4 lg:grid-cols-3">
           {TIME_DIFF_EXAMPLES.map(item => (
             <CourseImage key={item.src} src={item.src} label={item.label} className="h-56" />
@@ -623,7 +627,7 @@ export default function FrameDifferenceMotionPage() {
       <SliderParam label="噪声强度" value={noiseStrength} onChange={setNoiseStrength} min={0} max={35} step={1} />
       <div className="rounded-2xl border border-blue-200 bg-blue-50 px-3 py-3 text-xs leading-5 text-blue-800">
         {method === 'twoFrame'
-          ? '时间差分只比较 I(t) 与 I(t-1)，阈值越低，变化区域越容易被标为运动。'
+          ? '帧差法只比较 I(t) 与 I(t-1)，阈值越低，变化区域越容易被标为运动。'
           : '对称差分同时比较前后两次变化，能减少单侧残影，但快速运动时目标区域会更窄。'}
       </div>
     </div>

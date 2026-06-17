@@ -24,7 +24,7 @@ let bestVariance = -1;
 
 for (let t = 0; t < 256; t++) {
   const { wB, wF, mB, mF } = splitByThreshold(histogram, t);
-  const variance = wB * wF * (mB - mF) ** 2;
+  const variance = (wB / totalPixels) * (wF / totalPixels) * (mB - mF) ** 2;
 
   if (variance > bestVariance) {
     bestVariance = variance;
@@ -102,7 +102,7 @@ export default function OtsuPage() {
   const contentHeader = (
     <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
       <div>
-        <div className="text-sm font-semibold text-slate-800">OTSU 的核心不是“神奇自动阈值”，而是逐个测试候选 T</div>
+        <div className="text-sm font-semibold text-slate-800">Otsu 的核心不是“神奇自动阈值”，而是逐个测试候选 T</div>
         <p className="mt-1 text-sm leading-6 text-slate-600">
           页面主线固定为：给一个候选阈值 T，把灰度分成两类，计算这两类被拉开的程度，再记录当前扫描到的历史最大值。学生看到的不是最后答案先出现，而是 T 如何一步步被筛出来。
         </p>
@@ -134,12 +134,12 @@ export default function OtsuPage() {
             <div className="text-[11px] font-semibold uppercase text-amber-800">2. 当前证据：两类统计量</div>
             <div className="mt-3 grid gap-2 text-xs md:grid-cols-2">
               <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
-                <div className="text-[10px] text-slate-500">背景类灰度 &lt; T</div>
+                <div className="text-[10px] text-slate-500">背景类灰度 ≤ T</div>
                 <div className="mt-1 font-mono text-slate-700">ω0={(currentStep.wB / Math.max(1, currentStep.wB + currentStep.wF)).toFixed(3)}</div>
                 <div className="font-mono text-slate-700">μ0={currentStep.mB.toFixed(1)}</div>
               </div>
               <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2">
-                <div className="text-[10px] text-blue-500">前景类灰度 ≥ T</div>
+                <div className="text-[10px] text-blue-500">前景类灰度 &gt; T</div>
                 <div className="mt-1 font-mono text-blue-700">ω1={(currentStep.wF / Math.max(1, currentStep.wB + currentStep.wF)).toFixed(3)}</div>
                 <div className="font-mono text-blue-700">μ1={currentStep.mF.toFixed(1)}</div>
               </div>
@@ -165,7 +165,7 @@ export default function OtsuPage() {
               </div>
             </div>
             <p className="mt-3 text-xs leading-5 text-slate-600">
-              扫描结束后，历史最大值对应的 T 就是 OTSU 阈值。
+              扫描结束后，历史最大值对应的 T 就是 Otsu 阈值。
             </p>
           </FlowNode>
         </FlowColumn>
@@ -181,11 +181,11 @@ export default function OtsuPage() {
           <FormulaCard
             label="先按 T 分成两类"
             note={`当前 T=${activeThreshold}，背景类共有 ${currentStep.wB} 个像素，前景类共有 ${currentStep.wF} 个像素。`}
-            mathML="<math xmlns='http://www.w3.org/1998/Math/MathML'><mrow><msub><mi>C</mi><mn>0</mn></msub><mo>:</mo><mi>g</mi><mo>&lt;</mo><mi>T</mi><mo>,</mo><msub><mi>C</mi><mn>1</mn></msub><mo>:</mo><mi>g</mi><mo>≥</mo><mi>T</mi></mrow></math>"
+            mathML="<math xmlns='http://www.w3.org/1998/Math/MathML'><mrow><msub><mi>C</mi><mn>0</mn></msub><mo>:</mo><mi>g</mi><mo>≤</mo><mi>T</mi><mo>,</mo><msub><mi>C</mi><mn>1</mn></msub><mo>:</mo><mi>g</mi><mo>&gt;</mo><mi>T</mi></mrow></math>"
           />
           <FormulaCard
             label="再计算类间方差"
-            note="这里的 σ² 越大，说明两类被分得越开。"
+            note="这里的 σ² 越大，说明两类被分得越开。ω0 = wB / total，ω1 = wF / total，为标准 Otsu 概率权重形式。"
             mathML="<math xmlns='http://www.w3.org/1998/Math/MathML'><mrow><msubsup><mi>σ</mi><mi>b</mi><mn>2</mn></msubsup><mo>=</mo><msub><mi>ω</mi><mn>0</mn></msub><msub><mi>ω</mi><mn>1</mn></msub><msup><mrow><mo>(</mo><msub><mi>μ</mi><mn>0</mn></msub><mo>-</mo><msub><mi>μ</mi><mn>1</mn></msub><mo>)</mo></mrow><mn>2</mn></msup></mrow></math>"
           />
           <FormulaCard
@@ -203,7 +203,7 @@ export default function OtsuPage() {
             当前候选阈值 T={activeThreshold} 把灰度大于 T 的像素写成白色，其余写成黑色。当前结果图中白色像素约 {currentBinaryWhiteCount} 个，占 {(currentBinaryWhiteCount / Math.max(1, totalPixels) * 100).toFixed(1)}%。
           </div>
           <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
-            如果切到“直接查看最佳 T”，结果图会改用 OTSU 最终选出的最佳阈值 T={bestThreshold}，用于和当前候选 T 做直观对比。
+            如果切到“直接查看最佳 T”，结果图会改用 Otsu 最终选出的最佳阈值 T={bestThreshold}，用于和当前候选 T 做直观对比。
           </div>
         </div>
       </TeachingCard>
@@ -225,7 +225,7 @@ export default function OtsuPage() {
       <TeachingCard tone="amber">
         <div className="text-sm font-semibold text-amber-900">怎么读直方图</div>
         <p className="mt-2 text-sm leading-6 text-slate-700">
-          红线表示当前候选 T，绿色提示表示扫描到当前位置为止的历史最大 T。OTSU 不是直接找“最高的灰度柱”，而是找“让两类分开程度最大”的分界线。
+          红线表示当前候选 T，绿色提示表示扫描到当前位置为止的历史最大 T。Otsu 不是直接找“最高的灰度柱”，而是找“让两类分开程度最大”的分界线。
         </p>
       </TeachingCard>
     </div>
@@ -254,7 +254,7 @@ export default function OtsuPage() {
               <div
                 key={`hist-${index}`}
                 className={`flex-1 rounded-t ${
-                  isCurrent ? 'bg-red-500' : isBestSoFar ? 'bg-emerald-500' : index < activeThreshold ? 'bg-slate-300' : 'bg-blue-400'
+                  isCurrent ? 'bg-red-500' : isBestSoFar ? 'bg-emerald-500' : index <= activeThreshold ? 'bg-slate-300' : 'bg-blue-400'
                 }`}
                 style={{ height: `${height}%` }}
               />
@@ -288,14 +288,14 @@ export default function OtsuPage() {
         step={1}
       />
       <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-5 text-slate-600">
-        当前候选 T={activeThreshold}，历史最佳 T={previousBestStep?.currentThreshold ?? bestThreshold}，最终 OTSU 最佳 T={bestThreshold}。
+        当前候选 T={activeThreshold}，历史最佳 T={previousBestStep?.currentThreshold ?? bestThreshold}，最终 Otsu 最佳 T={bestThreshold}。
       </div>
     </div>
   );
 
   return (
     <ConceptLayout
-      title="OTSU 阈值分割"
+      title="Otsu 阈值分割"
       subtitle="Otsu Thresholding"
       contentHeader={contentHeader}
       operationLabel="候选阈值扫描"

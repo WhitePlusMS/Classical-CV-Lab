@@ -83,9 +83,11 @@ interface SingleGaussianParams {
   sigma: number;    // δ（标准差）
 }
 
-/** 初始化：μ₀ = I₀, δ₀ = 20（δ² = 400） */
-function initSingleGaussian(pixel: number): SingleGaussianParams {
-  return { mean: pixel, variance: 400, sigma: 20 };
+/** 初始化：用前 N 帧训练像素估计 μ₀、δ₀ */
+function initSingleGaussian(trainingPixels: number[]): SingleGaussianParams {
+  const mean = trainingPixels.reduce((sum, p) => sum + p, 0) / trainingPixels.length;
+  const variance = trainingPixels.reduce((sum, p) => (p - mean) ** 2, 0) / trainingPixels.length;
+  return { mean, variance, sigma: Math.sqrt(Math.max(0.0001, variance)) };
 }
 
 /** 前景判定：|I_t - μ| > λ·δ */
@@ -127,6 +129,9 @@ interface GaussianComponent {
 /**
  * 混合高斯单像素处理流程
  *
+ * 教学说明：教学演示中的前景掩膜使用简化阈值判定 |I-B|>T；
+ * 下方函数展示完整 GMM 的匹配、更新与背景选择逻辑，用于理解多分布建模思想。
+ *
  * ① 匹配：按 ω/δ 降序，检查 |I_t - μ_i| ≤ D·δ_i
  * ② 更新：匹配分布更新 μ、δ²、ω；不匹配分布 ω 按 (1-α) 衰减
  * ③ 背景选择：B = argmin_B ( Σ_{k=1}^{B} ω_k ≥ T_BG )
@@ -141,8 +146,10 @@ function mixtureGaussianProcess(
   const sorted = [...components].sort(
     (a, b) => b.weight / b.sigma - a.weight / a.sigma
   );
+  const matchedIndex = sorted.findIndex(c => Math.abs(pixel - c.mean) <= D * c.sigma);
+  const matchedWeight = matchedIndex >= 0 ? sorted[matchedIndex].weight : 0.05;
+  const rho = alpha / Math.max(matchedWeight, 0.01);
   let matched = false;
-  const rho = alpha / Math.max(components[0]?.weight ?? 0.05, 0.01);
 
   const updated = sorted.map((comp) => {
     if (!matched && Math.abs(pixel - comp.mean) <= D * comp.sigma) {
@@ -203,13 +210,6 @@ const MODEL_OPTIONS = [
 // 公式常量（链式标准格式）
 // ========================================
 
-/* 背景减除通用判定：D_t(x,y) = { 1 当 |I_t - B_t| > T; 0 其他 } */
-const SUBTRACTION_FORMULA = buildInlineMathML(
-  '<mrow><msub><mi>D</mi><mi>t</mi></msub><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>=</mo>' +
-  '<mrow><mo>{</mo><mtable><mtr><mtd><mn>1</mn></mtd><mtd><mtext>当 </mtext><mo>|</mo><msub><mi>I</mi><mi>t</mi></msub><mo>-</mo><msub><mi>B</mi><mi>t</mi></msub><mo>|</mo><mo>&gt;</mo><mi>T</mi></mtd></mtr>' +
-  '<mtr><mtd><mn>0</mn></mtd><mtd><mtext>其他</mtext></mtd></mtr></mtable></mrow></mrow>'
-);
-
 /* 自适应背景更新：B_t(x,y) = α·I_t(x,y) + (1-α)·B_{t-1}(x,y) */
 const ADAPTIVE_BG_FORMULA = buildInlineMathML(
   '<mrow><msub><mi>B</mi><mi>t</mi></msub><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>=</mo>' +
@@ -220,9 +220,9 @@ const ADAPTIVE_BG_FORMULA = buildInlineMathML(
 /* 单高斯概率密度函数 */
 const GAUSSIAN_PDF = buildInlineMathML(
   '<mrow><mi>P</mi><mo>(</mo><mi>I</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>,</mo><mi>t</mi><mo>)</mo><mo>)</mo><mo>=</mo>' +
-  '<mi>G</mi><mo>(</mo><mi>x</mi><mo>,</mo><msub><mi>μ</mi><mi>t</mi></msub><mo>,</mo><msub><mi>δ</mi><mi>t</mi></msub><mo>)</mo><mo>=</mo>' +
+  '<mi>G</mi><mo>(</mo><mi>I</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>,</mo><mi>t</mi><mo>)</mo><mo>;</mo><msub><mi>μ</mi><mi>t</mi></msub><mo>,</mo><msub><mi>δ</mi><mi>t</mi></msub><mo>)</mo><mo>=</mo>' +
   '<mfrac><mn>1</mn><mrow><msub><mi>δ</mi><mi>t</mi></msub><msqrt><mn>2</mn><mi>π</mi></msqrt></mrow></mfrac>' +
-  '<msup><mi>e</mi><mrow><mo>-</mo><mfrac><msup><mrow><mo>(</mo><mi>x</mi><mo>-</mo><msub><mi>μ</mi><mi>t</mi></msub><mo>)</mo></mrow><mn>2</mn></msup><mrow><mn>2</mn><msubsup><mi>δ</mi><mi>t</mi><mn>2</mn></msubsup></mrow></mfrac></mrow></msup></mrow>'
+  '<msup><mi>e</mi><mrow><mo>-</mo><mfrac><msup><mrow><mo>(</mo><mi>I</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>,</mo><mi>t</mi><mo>)</mo><mo>-</mo><msub><mi>μ</mi><mi>t</mi></msub><mo>)</mo></mrow><mn>2</mn></msup><mrow><mn>2</mn><msubsup><mi>δ</mi><mi>t</mi><mn>2</mn></msubsup></mrow></mfrac></mrow></msup></mrow>'
 );
 
 /* 单高斯前景判定 */
@@ -232,11 +232,14 @@ const GAUSSIAN_DETECT = buildInlineMathML(
   '<mtr><mtd><mn>0</mn></mtd><mtd><mtext>其他</mtext></mtd></mtr></mtable></mrow></mrow>'
 );
 
-/* 单高斯初始化：μ_0 = I_0, δ_0 = 20 */
+/* 单高斯初始化：用前 N 帧训练像素估计 μ₀、δ₀ */
 const GAUSSIAN_INIT = buildInlineMathML(
   '<mrow><msub><mi>μ</mi><mn>0</mn></msub><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>=</mo>' +
-  '<mi>I</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>,</mo><mn>0</mn><mo>)</mo><mo>,</mo>' +
-  '<msub><mi>δ</mi><mn>0</mn></msub><mo>=</mo><mn>20</mn></mrow>'
+  '<mfrac><mn>1</mn><mi>N</mi></mfrac><munderover><mo>∑</mo><mrow><mi>j</mi><mo>=</mo><mn>1</mn></mrow><mi>N</mi></munderover>' +
+  '<msub><mi>I</mi><mi>j</mi></msub><mo>,</mo>' +
+  '<msubsup><mi>δ</mi><mn>0</mn><mn>2</mn></msubsup><mo>=</mo>' +
+  '<mfrac><mn>1</mn><mi>N</mi></mfrac><munderover><mo>∑</mo><mrow><mi>j</mi><mo>=</mo><mn>1</mn></mrow><mi>N</mi></munderover>' +
+  '<msup><mrow><mo>(</mo><msub><mi>I</mi><mi>j</mi></msub><mo>-</mo><msub><mi>μ</mi><mn>0</mn></msub><mo>)</mo></mrow><mn>2</mn></msup></mrow>'
 );
 
 /* 单高斯模型更新 */
@@ -265,7 +268,7 @@ const MIXTURE_MATCH = buildInlineMathML(
 const MIXTURE_UPDATE = buildInlineMathML(
   '<mrow><mtable><mtr><mtd><mi>ω</mi><mo>=</mo><mo>(</mo><mn>1</mn><mo>-</mo><mi>α</mi><mo>)</mo><msub><mi>ω</mi><mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow></msub><mo>+</mo><mi>α</mi></mtd></mtr>' +
   '<mtr><mtd><mi>μ</mi><mo>=</mo><mo>(</mo><mn>1</mn><mo>-</mo><mi>ρ</mi><mo>)</mo><msub><mi>μ</mi><mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow></msub><mo>+</mo><mi>ρ</mi><msub><mi>I</mi><mi>t</mi></msub></mtd></mtr>' +
-  '<mtr><mtd><msup><mi>δ</mi><mn>2</mn></msup><mo>=</mo><mo>(</mo><mn>1</mn><mo>-</mo><mi>ρ</mi><mo>)</mo><msubsup><mi>δ</mi><mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow><mn>2</mn></msubsup><mo>+</mo><mi>ρ</mi><msup><mrow><mo>(</mo><msub><mi>I</mi><mi>t</mi></msub><mo>-</mo><mi>μ</mi><mo>)</mo></mrow><mn>2</mn></msup></mtd></mtr></mtable></mrow>'
+  '<mtr><mtd><msup><mi>δ</mi><mn>2</mn></msup><mo>=</mo><mo>(</mo><mn>1</mn><mo>-</mo><mi>ρ</mi><mo>)</mo><msubsup><mi>δ</mi><mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow><mn>2</mn></msubsup><mo>+</mo><mi>ρ</mi><msup><mrow><mo>(</mo><msub><mi>I</mi><mi>t</mi></msub><mo>-</mo><msub><mi>μ</mi><mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow></msub><mo>)</mo></mrow><mn>2</mn></msup></mtd></mtr></mtable></mrow>'
 );
 
 /* 混合高斯判定与背景选择合并 */
@@ -387,7 +390,7 @@ export default function BackgroundModelingSubtractionPage() {
   const comparisonMath = model === 'singleGaussian'
     ? inlineMath(`<mo>|</mo><mi>I</mi><mo>-</mo><mi>μ</mi><mo>|</mo><mo>=</mo><mn>${diffGray}</mn><mo>,</mo><mn>2.5</mn><mi>δ</mi><mo>=</mo><mn>${gaussianLimit}</mn>`)
     : inlineMath(`<mo>|</mo><msub><mi>I</mi><mi>t</mi></msub><mo>-</mo><msub><mi>B</mi><mi>t</mi></msub><mo>|</mo><mo>=</mo><mn>${diffGray}</mn><mo>,</mo><mi>T</mi><mo>=</mo><mn>${threshold}</mn>`);
-  const trainingWindowEnd = Math.min(7, Math.max(0, currentFrameIndex - 1));
+  const trainingWindowEnd = 7;
   const trainingWindowStart = 0;
   const mainVisual = (
     <div className="space-y-4">
@@ -782,9 +785,9 @@ export default function BackgroundModelingSubtractionPage() {
             />
             <div className="grid gap-2 text-xs leading-5 text-slate-700 sm:grid-cols-3 lg:grid-cols-1">
               <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2">
-                <div className="font-semibold text-amber-800">课件前提</div>
+                <div className="font-semibold text-amber-800">前提假设</div>
                 <div className="mt-1">
-                  前 K 帧中该像素多数时间应呈现背景值。本页当前统计：{trainingBackgroundLikeCount}/{trainingFrames.length} 帧接近均值，
+                  前 K 帧中该像素多数时间应呈现背景值。当前统计：{trainingBackgroundLikeCount}/{trainingFrames.length} 帧接近均值，
                   <span className={trainingBackgroundMajority ? 'font-semibold text-emerald-700' : 'font-semibold text-red-600'}>
                     {trainingBackgroundMajority ? '满足' : '不满足'}
                   </span>
@@ -796,8 +799,8 @@ export default function BackgroundModelingSubtractionPage() {
                 <div className="mt-1">历史帧只用于估计 B，当前帧 <InlineMath mathML={inlineMath('<msub><mi>I</mi><mi>t</mi></msub>')} /> 只用于和 B 做差分判定。</div>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                <div className="font-semibold text-slate-800">课件默认值映射</div>
-                <div className="mt-1">课件示例常用 T=58、K=3；本页 T 可调，K 固定为 {trainingFrames.length} 帧以增强连续序列稳定性。</div>
+                <div className="font-semibold text-slate-800">常用参数</div>
+                <div className="mt-1">教材示例常用 T=58、K=3；此处 T 可调，K 固定为 {trainingFrames.length} 帧以增强连续序列稳定性。</div>
               </div>
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-6 text-slate-700">
@@ -862,7 +865,7 @@ export default function BackgroundModelingSubtractionPage() {
           </div>
           <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2">
             <div className="font-semibold text-amber-800">递推闭环</div>
-            <div className="mt-1">本轮更新后的 <InlineMath mathML={inlineMath('<msub><mi>B</mi><mi>t</mi></msub>')} /> 会在下一帧成为 <InlineMath mathML={inlineMath('<msub><mi>B</mi><mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow></msub>')} />，这就是课件中“前一背景 = 当前背景”的含义。</div>
+            <div className="mt-1">本轮更新后的 <InlineMath mathML={inlineMath('<msub><mi>B</mi><mi>t</mi></msub>')} /> 会在下一帧成为 <InlineMath mathML={inlineMath('<msub><mi>B</mi><mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow></msub>')} />，这就是“前一背景 = 当前背景”的含义。</div>
           </div>
         </div>
       </TeachingCard>
@@ -915,13 +918,13 @@ export default function BackgroundModelingSubtractionPage() {
               label="像素时间分布"
               mathML={GAUSSIAN_PDF}
               tone="embedded"
-              note="课件强调每个像素的时间灰度值可看作随机过程，背景值集中在高斯分布的均值附近。"
+              note="每个像素的时间灰度值可看作随机过程，背景值集中在高斯分布的均值附近；δ 表示标准差，部分教材记作 σ。"
             />
             <FormulaCard
               label="模型初始化"
               mathML={GAUSSIAN_INIT}
               tone="embedded"
-              note="第一帧初始化均值，初始标准差给模型一个可容纳微小波动的范围。"
+              note="用前 N 帧训练像素初始化均值 μ 和标准差 δ。"
             />
             <FormulaCard
               label="单高斯前景判定"
@@ -959,6 +962,7 @@ export default function BackgroundModelingSubtractionPage() {
             <h2 className="text-sm font-semibold text-slate-800">混合高斯模型动态流程</h2>
             <p className="mt-1 text-xs leading-5 text-slate-500">
               不再使用静态“流程图”截图；这里直接用当前像素和当前分量展示匹配、排序、背景选择和前景判定。
+              以下分量是为教学演示预设的，用于展示匹配、排序与背景选择规则，并非由在线迭代真实生成。
             </p>
           </div>
           <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800">
@@ -1022,7 +1026,7 @@ export default function BackgroundModelingSubtractionPage() {
           <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
             <div className="font-semibold text-emerald-800">多峰分布含义</div>
             <div className="mt-2">
-              课件曲线表达的是同一个像素在时间上可能有多个常见灰度峰。本页当前有 {sortedMixtureComponents.length} 个分量，
+              曲线表达的是同一个像素在时间上可能有多个常见灰度峰。当前有 {sortedMixtureComponents.length} 个分量，
               其中 {backgroundComponentCount} 个被标记为背景分量。
             </div>
             <div className="mt-3 grid gap-2 sm:grid-cols-3">
@@ -1096,7 +1100,7 @@ export default function BackgroundModelingSubtractionPage() {
       <TeachingCard>
         <h2 className="mb-3 text-sm font-semibold text-slate-800">背景减除法</h2>
         <p className="text-xs leading-6 text-slate-600">
-          当前页面使用连续帧小人运动序列讲解背景建模：先建立长期背景，再比较当前帧与背景模型，差异超过判定条件的位置输出为前景。
+          下面使用连续帧小人运动序列讲解背景建模：先建立长期背景，再比较当前帧与背景模型，差异超过判定条件的位置输出为前景。
         </p>
       </TeachingCard>
 
@@ -1209,7 +1213,10 @@ export default function BackgroundModelingSubtractionPage() {
           <SliderParam label="前景阈值 T" value={threshold} onChange={setThreshold} min={10} max={120} step={1} />
           <SliderParam label="学习率 α" value={learningRate} onChange={setLearningRate} min={1} max={40} step={1} unit="%" />
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-xs leading-5 text-emerald-800">
-            混合高斯教学版按连续帧更新背景分量；T 控制掩膜，α 控制分量吸收新像素的速度。当前匹配到的
+            混合高斯教学版按连续帧更新背景分量；T 控制掩膜，α 控制分量吸收新像素的速度。
+            教学演示中的前景掩膜使用简化阈值判定 |I-B|&gt;T；右侧代码展示完整 GMM 匹配/更新/背景选择逻辑。
+            当前 α = {alphaValue.toFixed(2)}，为稳定性实际更新速率已缩放为 {(alphaValue * 0.55).toFixed(3)}。
+            当前匹配到的
             <TeachingTerm term="匹配分量" explanation="匹配分量就是当前像素落入阈值范围内的那一个高斯分布，它会优先被更新。" className="mx-1" />
             会在下方动态流程中直接显示。
           </div>

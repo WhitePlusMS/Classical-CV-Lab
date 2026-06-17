@@ -23,6 +23,7 @@ import {
   createThresholdScene,
 } from '@/lib/algorithms/simpleBackground';
 import { GrayscaleImage } from '@/lib/algorithms/types';
+import { clamp } from '@/lib/utils/imageProcessing';
 import { useLenaGrayscaleImage } from '@/hooks/useLenaGrayscaleImage';
 
 type ThresholdMethod = 'manual' | 'otsu' | 'kittler';
@@ -63,7 +64,7 @@ const OUTPUT_OPTIONS = [
    },
    trunc: {
      name: 'TRUNC',
-     description: '大于阈值的像素被截断为阈值，其他像素保留原灰度。该模式不是二值掩膜。',
+     description: '大于等于阈值的像素被截断为阈值，其他像素保留原灰度。该模式不是二值掩膜。',
    },
    tozero: {
      name: 'TOZERO',
@@ -75,6 +76,7 @@ const OUTPUT_OPTIONS = [
    },
  };
  
+// 教学简化版：下方函数签名仅用于展示核心循环，实际库函数接受整幅灰度图并返回 { image, threshold }。
 const THRESHOLD_CODE_TS = `function fixedThreshold(image: number[][], threshold: number): number[][] {
   return image.map(row =>
     row.map(gray => (gray * 255 >= threshold ? 1 : 0))
@@ -243,7 +245,7 @@ function fixedThresholdFormulaMathML(threshold: number, src: number, dst: number
         <mo>{</mo>
         <mtable>
           <mtr>
-            <mtd><mi>f</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo></mtd>
+            <mtd><mn>255</mn></mtd>
             <mtd><mi>f</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>≥</mo><mi>T</mi></mtd>
           </mtr>
           <mtr>
@@ -432,6 +434,13 @@ export default function ThresholdAutoThresholdPage() {
   const kittlerResult = useMemo(() => computeKittlerGradientThreshold(originalImage), [originalImage]);
   const otsuProfile = useMemo(() => createOtsuVarianceProfile(originalImage), [originalImage]);
 
+  const kittlerWeightedGrayImage = useMemo(() => {
+    const gradient = kittlerResult.gradientImage;
+    return originalImage.map((row, y) =>
+      row.map((pixel, x) => clamp((gradient[y]?.[x] ?? 0) * pixel, 0, 1))
+    );
+  }, [originalImage, kittlerResult.gradientImage]);
+
   const otsuThresholdValue = Math.round(otsuResult.threshold * 255);
   const threshold = useMemo(() => {
     if (method === 'manual') return manualThreshold;
@@ -468,7 +477,7 @@ export default function ThresholdAutoThresholdPage() {
 
   const sampleSrc = byteValue(originalImage[samplePoint.y]?.[samplePoint.x] ?? 0);
   const sampleDst = byteValue(resultImage[samplePoint.y]?.[samplePoint.x] ?? 0);
-  const sampleFixedDst = sampleSrc >= threshold ? sampleSrc : 0;
+  const sampleFixedDst = sampleSrc >= threshold ? 255 : 0;
   const bestOtsuVariance = Math.max(...otsuProfile.map(point => point.variance), 0);
 
   const handleMethodChange = useCallback((value: string) => {
@@ -542,6 +551,40 @@ export default function ThresholdAutoThresholdPage() {
         profile={otsuProfile}
         method={method}
       />
+      {method === 'kittler' && (
+        <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4">
+          <div className="mb-3">
+            <div className="text-sm font-semibold text-slate-800">Kittler 梯度加权可视化</div>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              左图为归一化后的梯度幅度，右图为归一化后的梯度加权灰度
+              {' '}
+              <InlineMath mathML={buildInlineMathML('<mrow><mi>g</mi><mi>r</mi><mi>a</mi><mi>d</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo><mo>·</mo><mi>f</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo></mrow>')} className="[&_math]:text-xs" />
+              {' '}
+              分布。Kittler 阈值由未归一化的加权灰度总和除以梯度总和计算得到。
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <figure className="space-y-2">
+              <div className="flex justify-center rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+                <ImageCanvas image={kittlerResult.gradientImage} maxDisplaySize={220} showGrid={false} />
+              </div>
+              <figcaption className="text-center">
+                <div className="text-xs font-semibold text-slate-700">梯度幅度图</div>
+                <div className="mt-0.5 text-[11px] text-slate-500">边缘/纹理越强，亮度越高（已归一化显示）</div>
+              </figcaption>
+            </figure>
+            <figure className="space-y-2">
+              <div className="flex justify-center rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+                <ImageCanvas image={kittlerWeightedGrayImage} maxDisplaySize={220} showGrid={false} />
+              </div>
+              <figcaption className="text-center">
+                <div className="text-xs font-semibold text-slate-700">梯度加权灰度</div>
+                <div className="mt-0.5 text-[11px] text-slate-500">梯度与原灰度乘积的相对分布</div>
+              </figcaption>
+            </figure>
+          </div>
+        </div>
+      )}
     </ProcessRail>
   );
 
@@ -565,7 +608,7 @@ export default function ThresholdAutoThresholdPage() {
           <FormulaCard
             label="Kittler 梯度加权阈值"
             mathML={kittlerFormulaMathML(kittlerResult.threshold, kittlerResult.weightedGraySum, kittlerResult.gradientSum)}
-            note="课件版 Kittler 使用梯度作为权重，使边缘附近的灰度对全局阈值贡献更大。"
+            note="教材版 Kittler 使用梯度作为权重，使边缘附近的灰度对全局阈值贡献更大。公式中 f(i,j) 为 0–255 字节灰度，与代码中的 image[y][x] * 255 对应。"
             tone="embedded"
           />
         </div>
