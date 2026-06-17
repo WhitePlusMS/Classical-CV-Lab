@@ -62,7 +62,7 @@ export function FormulaCard({
   tone = 'embedded',
 }: FormulaCardProps) {
   return (
-    <div className={className}>
+    <div className={className} data-tone={tone}>
       {label && (
         <div className="mb-2 text-xs font-semibold text-slate-500">
           {label}

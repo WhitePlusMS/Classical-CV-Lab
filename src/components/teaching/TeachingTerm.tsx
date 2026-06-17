@@ -15,7 +15,7 @@ function classNames(...classes: Array<string | false | null | undefined>): strin
 
 export function TeachingTerm({ term, explanation, className }: TeachingTermProps) {
   const [open, setOpen] = useState(false);
-  const [portalReady, setPortalReady] = useState(false);
+  const portalReady = typeof window !== 'undefined';
   const rootRef = useRef<HTMLSpanElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const tooltipRef = useRef<HTMLSpanElement | null>(null);
@@ -49,10 +49,6 @@ export function TeachingTerm({ term, explanation, className }: TeachingTermProps
       left,
       width: preferredWidth,
     });
-  }, []);
-
-  useEffect(() => {
-    setPortalReady(true);
   }, []);
 
   useEffect(() => {

@@ -80,7 +80,7 @@ export const CHAPTER_LABELS: Record<string, string> = {
   '/concepts/morphology': '第二章 / 图像预处理',
   '/concepts/camera-model': '第二章 / 摄像机标定',
   '/concepts/calibration-pattern': '第二章 / 摄像机标定',
-  '/concepts/zhang-calibration': '第二章 / 摄像机标定',
+  '/concepts/zhang-calibration': '第三章 / 摄像机标定',
   '/concepts/distortion-correction': '第二章 / 图像校正',
   '/concepts/geometric-transform': '第二章 / 图像校正',
   '/concepts/perspective-transform': '第二章 / 图像校正',

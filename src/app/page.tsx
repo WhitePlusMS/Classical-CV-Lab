@@ -330,7 +330,7 @@ const implementedCards = {
     href: '/concepts/image-sharpening',
     title: '图像锐化',
     titleEn: 'Image Sharpening',
-    description: '一阶梯度锐化与二阶 Laplace 增强：突出边缘与轮廓',
+    description: '一阶梯度边缘强度与二阶 Laplace 增强：突出边缘与轮廓',
     icon: icons.sharpen,
     color: 'from-pink-500 to-rose-600',
     bgLight: 'bg-pink-50',

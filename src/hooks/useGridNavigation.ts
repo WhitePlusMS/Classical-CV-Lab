@@ -47,6 +47,6 @@ export function useGridNavigation({
       if (disabled || !current || bounds.width <= 0 || bounds.height <= 0) return;
       onMove(moveGridPoint(current, bounds, direction));
     },
-    [bounds.height, bounds.width, current, disabled, onMove]
+    [bounds, current, disabled, onMove]
   );
 }

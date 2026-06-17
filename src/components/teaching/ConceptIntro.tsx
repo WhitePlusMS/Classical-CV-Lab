@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 import { resolveAssetPath } from '@/lib/utils/assetPath';
 
 export interface ConceptIntroImage {
@@ -81,7 +82,7 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
   '/concepts/geometric-transform': {
     title: '几何变换改变什么',
     problem: '任务是改变图像中物体的位置、方向、大小或形状，同时保持像素内容尽量合理。灰度处理改像素值，几何变换改像素所在坐标。',
-    idea: '平移、旋转、缩放和错切都可以写成齐次坐标矩阵。输出图像中的每个位置会反查输入坐标，再用最近邻或双线性插值取得像素值。',
+    idea: '平移、旋转、缩放和剪切都可以写成齐次坐标矩阵。输出图像中的每个位置会反查输入坐标，再用最近邻或双线性插值取得像素值。',
     observe: '重点观察组合矩阵、原图坐标和输出结果：参数改变的是坐标映射关系，插值方法决定非整数坐标如何采样。',
     image: {
       src: '/assets/concept-intro/geometric-transform.png',
@@ -430,9 +431,10 @@ export function ConceptIntro({
     };
 
     document.addEventListener('keydown', handleKeyDown);
+    const trigger = previewTriggerRef.current;
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
-      previewTriggerRef.current?.focus();
+      trigger?.focus();
     };
   }, [isPreviewOpen]);
 
@@ -455,7 +457,7 @@ export function ConceptIntro({
             onClick={() => setIsPreviewOpen(true)}
             aria-label={`放大查看：${image.alt}`}
           >
-            <img
+            <Image
               src={resolveAssetPath(image.src)}
               alt={image.alt}
               className="aspect-[16/9] w-full rounded-xl border border-slate-200 bg-slate-50 object-contain"
@@ -514,7 +516,7 @@ export function ConceptIntro({
             >
               关闭
             </button>
-            <img
+            <Image
               src={resolveAssetPath(image.src)}
               alt={image.alt}
               className="max-h-[82vh] max-w-full rounded-lg bg-white object-contain shadow-2xl"
