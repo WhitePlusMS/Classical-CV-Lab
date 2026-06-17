@@ -7,6 +7,7 @@ import {
   FormulaCard,
   SelectParam,
   TeachingCard,
+  TeachingTerm,
   ProcessRail,
   FlowColumns,
   FlowColumn,
@@ -254,9 +255,6 @@ export default function GrayscalePage() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-slate-800">当前像素灰度化表达式</div>
-              <p className="mt-1 text-xs leading-5 text-slate-500">
-                当前参数选择的是{currentMethodLabel}，所以下方只展示这一种方法的代入过程。
-              </p>
             </div>
             <div className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
               当前位置 ({x}, {y})
@@ -266,7 +264,7 @@ export default function GrayscalePage() {
           <FormulaCard
             label={currentMethodLabel}
             mathML={currentFormulaML}
-            className="mx-auto mt-4 max-w-4xl"
+            className="mt-4 w-full"
             mathClassName="[&_math]:text-lg"
           />
 
@@ -274,7 +272,15 @@ export default function GrayscalePage() {
             {method === 'weighted' ? (
               <>
                 <p>加权法使用 0.299、0.587、0.114 三个权重，反映人眼对绿色更敏感、对蓝色相对不敏感的视觉特性。</p>
-                <p>当前页面采用 ITU-R BT.601 的精确系数；教材中常见的 0.3/0.59/0.11 是该组权重的常用近似。</p>
+                <p>
+                  当前页面采用
+                  <TeachingTerm
+                    term="ITU-R BT.601"
+                    explanation="国际电信联盟（ITU）制定的数字视频标准，规定了 RGB 转亮度信号的精确权重：0.299R + 0.587G + 0.114B。"
+                    className="mx-0.5"
+                  />
+                  的精确系数；教材中常见的 0.3/0.59/0.11 是该组权重的常用近似。
+                </p>
               </>
             ) : (
               <p>平均法把 R、G、B 三个通道等权相加后除以 3，用于说明最直接的三通道合并方式。</p>
