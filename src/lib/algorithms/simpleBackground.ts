@@ -695,16 +695,6 @@ function gaussianForegroundMask(
   );
 }
 
-function createMixtureBackground(width: number, height: number): GrayscaleImage {
-  return Array.from({ length: height }, (_, y) =>
-    Array.from({ length: width }, (_, x) => {
-      const slowMode = 0.24 + 0.06 * Math.sin((x + y) / 7);
-      const dynamicMode = 0.36 + 0.08 * Math.sin(x / 4);
-      return clamp((slowMode * 0.54 + dynamicMode * 0.32) / 0.86, 0, 1);
-    })
-  );
-}
-
 function meanOfImage(image: GrayscaleImage): number {
   let sum = 0;
   let count = 0;

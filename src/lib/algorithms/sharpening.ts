@@ -2,18 +2,18 @@ import { GrayscaleImage } from './types';
 import { create2DArray, clamp } from '../utils/imageProcessing';
 
 // ============================================================
-// 梯度锐化
+// 梯度边缘强度
 // ============================================================
 
 /** 梯度合成方式 */
 export type GradientMethod = 'max' | 'sum';
 
 /**
- * 梯度锐化——用一阶差分近似梯度幅值
- * f_i' = f(i+1,j) - f(i,j)
- * f_j' = f(i,j+1) - f(i,j)
- * max 模式：grad = max(|f_i'|, |f_j'|)
- * sum 模式：grad = |f_i'| + |f_j'|
+ * 梯度边缘强度——用一阶差分近似梯度幅值
+ * f_x' = f(x+1,y) - f(x,y)  水平（列、x 方向）差分
+ * f_y' = f(x,y+1) - f(x,y)  垂直（行、y 方向）差分
+ * max 模式：grad = max(|f_x'|, |f_y'|)
+ * sum 模式：grad = |f_x'| + |f_y'|
  */
 export function gradientSharpen(
   image: GrayscaleImage,
@@ -25,18 +25,18 @@ export function gradientSharpen(
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      // 右邻域差分
+      // 右邻域差分（水平方向 f_x'）
       const rightX = clamp(x + 1, 0, width - 1);
-      const fiDiff = image[y][rightX] - image[y][x];
+      const fxDiff = image[y][rightX] - image[y][x];
 
-      // 下邻域差分
+      // 下邻域差分（垂直方向 f_y'）
       const bottomY = clamp(y + 1, 0, height - 1);
-      const fjDiff = image[bottomY][x] - image[y][x];
+      const fyDiff = image[bottomY][x] - image[y][x];
 
-      const absFi = Math.abs(fiDiff);
-      const absFj = Math.abs(fjDiff);
+      const absFx = Math.abs(fxDiff);
+      const absFy = Math.abs(fyDiff);
 
-      const grad = method === 'max' ? Math.max(absFi, absFj) : absFi + absFj;
+      const grad = method === 'max' ? Math.max(absFx, absFy) : absFx + absFy;
 
       result[y][x] = clamp(grad, 0, 1);
     }
@@ -110,10 +110,10 @@ export interface GradientSharpenStep {
   y: number;
   /** 3×3 邻域（取当前像素为中心） */
   inputRegion: number[][];
-  /** 水平差分 f_i' */
-  fiDiff: number;
-  /** 垂直差分 f_j' */
-  fjDiff: number;
+  /** 水平差分 f_x' */
+  fxDiff: number;
+  /** 垂直差分 f_y' */
+  fyDiff: number;
   /** 梯度幅值 */
   gradientMag: number;
   /** 输出像素值（归一化到 [0,1]） */
@@ -147,19 +147,19 @@ export function* gradientSharpenSteps(
       // 计算一阶差分
       const rightX = clamp(x + 1, 0, width - 1);
       const bottomY = clamp(y + 1, 0, height - 1);
-      const fiDiff = image[y][rightX] - image[y][x];
-      const fjDiff = image[bottomY][x] - image[y][x];
+      const fxDiff = image[y][rightX] - image[y][x];
+      const fyDiff = image[bottomY][x] - image[y][x];
 
-      const absFi = Math.abs(fiDiff);
-      const absFj = Math.abs(fjDiff);
-      const grad = method === 'max' ? Math.max(absFi, absFj) : absFi + absFj;
+      const absFx = Math.abs(fxDiff);
+      const absFy = Math.abs(fyDiff);
+      const grad = method === 'max' ? Math.max(absFx, absFy) : absFx + absFy;
 
       yield {
         x,
         y,
         inputRegion,
-        fiDiff,
-        fjDiff,
+        fxDiff,
+        fyDiff,
         gradientMag: grad,
         outputValue: clamp(grad, 0, 1),
         method,

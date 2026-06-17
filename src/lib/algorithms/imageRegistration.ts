@@ -520,7 +520,60 @@ function createReferencePartImage(): GrayscaleImage {
   return image;
 }
 
-function createObservedMatches(model: RegistrationModel, mismatchCount: number): RegistrationMatchBase[] {
+function extractNormalizedPatch(
+  image: GrayscaleImage,
+  point: RegistrationPoint,
+  patchSize: number = 7
+): number[] {
+  const values: number[] = [];
+  const half = Math.floor(patchSize / 2);
+  const centerX = Math.round(point.x);
+  const centerY = Math.round(point.y);
+  const height = image.length;
+  const width = image[0]?.length ?? 0;
+
+  for (let dy = -half; dy <= half; dy++) {
+    for (let dx = -half; dx <= half; dx++) {
+      const x = clamp(centerX + dx, 0, width - 1);
+      const y = clamp(centerY + dy, 0, height - 1);
+      values.push(image[y][x]);
+    }
+  }
+
+  const norm = Math.hypot(...values);
+  if (norm < 1e-9) {
+    return values;
+  }
+
+  return values.map(value => value / norm);
+}
+
+function patchDescriptorDistance(a: number[], b: number[]): number {
+  let sum = 0;
+  for (let index = 0; index < a.length; index++) {
+    const difference = a[index] - b[index];
+    sum += difference * difference;
+  }
+  return Math.sqrt(sum);
+}
+
+function computeDescriptorDistance(
+  referenceImage: GrayscaleImage,
+  targetImage: GrayscaleImage,
+  source: RegistrationPoint,
+  observedTarget: RegistrationPoint
+): number {
+  const referencePatch = extractNormalizedPatch(referenceImage, source);
+  const targetPatch = extractNormalizedPatch(targetImage, observedTarget);
+  return patchDescriptorDistance(referencePatch, targetPatch);
+}
+
+function createObservedMatches(
+  model: RegistrationModel,
+  mismatchCount: number,
+  referenceImage: GrayscaleImage,
+  targetImage: GrayscaleImage
+): RegistrationMatchBase[] {
   const trueMatrix = TRUE_TRANSFORMS[model];
   const expectedTargets = FEATURE_POINTS.map(feature => applyTransform(trueMatrix, feature.point));
   const outlierMap = new Map<number, { targetIndex: number; offset: RegistrationPoint }>();
@@ -545,7 +598,12 @@ function createObservedMatches(model: RegistrationModel, mismatchCount: number):
       source: feature.point,
       expectedTarget,
       observedTarget,
-      descriptorDistance: outlier ? 48 + index * 4 : 12 + index * 2.6,
+      descriptorDistance: computeDescriptorDistance(
+        referenceImage,
+        targetImage,
+        feature.point,
+        observedTarget
+      ),
       isOutlier: Boolean(outlier),
     };
   });
@@ -564,7 +622,8 @@ function buildEstimateSummary(
   const alignedImage = alignTargetToReference(targetImage, matrix);
   const overlayImage = blendImages(referenceImage, alignedImage);
   const residualPool = evaluatedMatches.filter(match => match.inlier);
-  const residualMatches = residualPool.length > 0 ? residualPool : evaluatedMatches;
+  const residualMatches =
+    mode === 'all-matches' ? evaluatedMatches : residualPool.length > 0 ? residualPool : evaluatedMatches;
   const meanResidual =
     residualMatches.reduce((sum, match) => sum + match.residual, 0) / residualMatches.length;
   const maxResidual = evaluatedMatches.reduce((max, match) => Math.max(max, match.residual), 0);
@@ -590,7 +649,7 @@ export function createImageRegistrationScenario(
 ): RegistrationScenario {
   const referenceImage = createReferencePartImage();
   const targetImage = warpReferenceToTarget(referenceImage, TRUE_TRANSFORMS[model]);
-  const matches = createObservedMatches(model, mismatchCount);
+  const matches = createObservedMatches(model, mismatchCount, referenceImage, targetImage);
 
   const directMatrix = estimateMatrix(model, matches) ?? createIdentityMatrix();
   const robustMatrix = estimateRobustMatrix(model, matches) ?? directMatrix;

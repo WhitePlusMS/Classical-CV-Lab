@@ -343,3 +343,116 @@ export function getLBPVectorStep(
     vectorPreview: normalizedHistogram.slice(0, 16),
   };
 }
+
+/**
+ * 教学展示用代码片段：getHaarFeatureStep 的核心逻辑。
+ * 完整实现见 src/lib/algorithms/haarLbpFeatureVector.ts 中的同名函数。
+ */
+export const HAAR_FEATURE_STEP_CODE_SNIPPET = `// 完整实现见 src/lib/algorithms/haarLbpFeatureVector.ts
+export function getHaarFeatureStep(
+  image: GrayscaleImage,
+  x: number,
+  y: number,
+  templateType: HaarTemplateType,
+  windowSize: number
+): HaarFeatureStep | null {
+  const templateRegions = getHaarTemplateRegions(templateType, windowSize);
+  const integralImage = computeIntegralImage(image);
+
+  const regions = templateRegions.map(region => ({
+    ...region,
+    sum: sumRegionBytes(image, x + region.x, y + region.y, region.width, region.height),
+  }));
+
+  const blackSum = regions
+    .filter(region => region.tone === 'black')
+    .reduce((total, region) => total + region.sum, 0);
+  const whiteSum = regions
+    .filter(region => region.tone === 'white')
+    .reduce((total, region) => total + region.sum, 0);
+
+  return {
+    x,
+    y,
+    windowSize,
+    templateType,
+    inputRegion: cropImage(image, x, y, windowSize, windowSize),
+    regions,
+    blackSum,
+    whiteSum,
+    featureValue: blackSum - whiteSum,
+    absoluteFeatureValue: Math.abs(blackSum - whiteSum),
+    integralImage,
+    integralRegions: templateRegions.map(region =>
+      sumRegionWithIntegral(integralImage, region, x, y)
+    ),
+  };
+}`;
+
+/**
+ * 教学展示用代码片段：getLBPVectorStep 的核心逻辑。
+ * 完整实现见 src/lib/algorithms/haarLbpFeatureVector.ts 中的同名函数。
+ */
+export const LBP_VECTOR_STEP_CODE_SNIPPET = `// 完整实现见 src/lib/algorithms/haarLbpFeatureVector.ts
+export function getLBPVectorStep(
+  image: GrayscaleImage,
+  x: number,
+  y: number,
+  windowSize: number,
+  cellSize: number
+): LBPVectorStep | null {
+  const cellsPerSide = windowSize / cellSize;
+  const lbpImage = computeLBPImage(image);
+  const selectedCellX = Math.floor(cellsPerSide / 2);
+  const selectedCellY = Math.floor(cellsPerSide / 2);
+  const selectedCellOffsetX = selectedCellX * cellSize;
+  const selectedCellOffsetY = selectedCellY * cellSize;
+
+  const histogram = Array.from({ length: 256 }, () => 0);
+  for (let row = 0; row < cellSize; row++) {
+    for (let col = 0; col < cellSize; col++) {
+      const px = x + selectedCellOffsetX + col;
+      const py = y + selectedCellOffsetY + row;
+      const decimalValue = getLBPWindow(image, px, py).decimalValue;
+      histogram[decimalValue] += 1;
+    }
+  }
+
+  const cellPixelCount = cellSize * cellSize;
+  const normalizedHistogram = histogram.map(count => count / cellPixelCount);
+  const samplePixelX = x + selectedCellOffsetX + Math.floor(cellSize / 2);
+  const samplePixelY = y + selectedCellOffsetY + Math.floor(cellSize / 2);
+  const sampleWindow = getLBPWindow(image, samplePixelX, samplePixelY);
+
+  return {
+    x,
+    y,
+    windowSize,
+    cellSize,
+    cellsPerSide,
+    inputRegion: cropImage(image, x, y, windowSize, windowSize),
+    lbpImage,
+    selectedCell: {
+      index: selectedCellY * cellsPerSide + selectedCellX,
+      cellX: selectedCellX,
+      cellY: selectedCellY,
+      x: selectedCellOffsetX,
+      y: selectedCellOffsetY,
+      size: cellSize,
+      histogram: normalizedHistogram,
+      nonZeroBins: normalizedHistogram
+        .map((normalized, bin) => ({ bin, count: histogram[bin] ?? 0, normalized }))
+        .filter(item => item.count > 0),
+      samplePixel: {
+        x: samplePixelX,
+        y: samplePixelY,
+        decimalValue: sampleWindow.decimalValue,
+        binaryPattern: sampleWindow.binaryPattern,
+        values: sampleWindow.values,
+        center: sampleWindow.center,
+      },
+    },
+    vectorLength: cellsPerSide * cellsPerSide * 256,
+    vectorPreview: normalizedHistogram.slice(0, 16),
+  };
+}`;

@@ -289,7 +289,12 @@ export interface CannyResult {
   stages: {
     grayscale: GrayscaleImage;
     blurred: GrayscaleImage;
+    /** 原始梯度幅值（未归一化） */
+    gradientMagnitudeRaw: GrayscaleImage;
+    /** 归一化到 [0,1] 的梯度幅值 */
     gradientMagnitude: GrayscaleImage;
+    /** 梯度幅值全局最大值，用于归一化 */
+    maxMagnitude: number;
     gradientDirection: number[][];
     nms: GrayscaleImage;
     doubleThreshold: GrayscaleImage;
@@ -341,7 +346,9 @@ export function cannyEdgeDetection(
     stages: {
       grayscale: image,
       blurred,
+      gradientMagnitudeRaw: magnitude,
       gradientMagnitude: normalizedMag,
+      maxMagnitude: maxMag,
       gradientDirection: direction,
       nms,
       doubleThreshold,

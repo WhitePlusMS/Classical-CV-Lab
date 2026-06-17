@@ -54,7 +54,7 @@ export function reflectStructElement(se: boolean[][]): boolean[][] {
 }
 
 /** 集合判定：检查结构元素平移到位置后，是否完全包含在目标集合内（腐蚀条件）
- *  A Θ B = {z | (B)_z ⊆ A}
+ *  A ⊖ B = {z | (B)_z ⊆ A}
  *  即结构元素的所有激活位置对应的像素值都为 1（前景）
  */
 export function checkErosionCondition(
@@ -131,7 +131,9 @@ export function erode(
   return result;
 }
 
-/** 膨胀操作：结构元素激活位置取最大值，越界位置按背景 0 处理 */
+/** 膨胀操作：先反射结构元素，再在反射后的激活位置取最大值，越界位置按背景 0 处理
+ *  集合定义: A ⊕ B = {z | (B_hat)_z ∩ A ≠ ∅}
+ */
 export function dilate(
   image: GrayscaleImage,
   structElement: StructElement
@@ -139,6 +141,7 @@ export function dilate(
   const height = image.length;
   const width = image[0]?.length || 0;
   const se = createStructElement(structElement.shape, structElement.size);
+  const seReflected = reflectStructElement(se);
   const seSize = structElement.size;
   const center = Math.floor(seSize / 2);
 
@@ -150,7 +153,7 @@ export function dilate(
 
       for (let sy = 0; sy < seSize; sy++) {
         for (let sx = 0; sx < seSize; sx++) {
-          if (!se[sy][sx]) continue;
+          if (!seReflected[sy][sx]) continue;
 
           const px = x + sx - center;
           const py = y + sy - center;
@@ -170,7 +173,7 @@ export function dilate(
   return result;
 }
 
-/** 开操作：先腐蚀后膨胀 A ○ B = (A Θ B) ⊕ B */
+/** 开操作：先腐蚀后膨胀 A ○ B = (A ⊖ B) ⊕ B */
 export function open(
   image: GrayscaleImage,
   structElement: StructElement
@@ -179,7 +182,7 @@ export function open(
   return dilate(eroded, structElement);
 }
 
-/** 闭操作：先膨胀后腐蚀 A • B = (A ⊕ B) Θ B */
+/** 闭操作：先膨胀后腐蚀 A • B = (A ⊕ B) ⊖ B */
 export function close(
   image: GrayscaleImage,
   structElement: StructElement
@@ -187,6 +190,88 @@ export function close(
   const dilated = dilate(image, structElement);
   return erode(dilated, structElement);
 }
+
+// 代码抽屉示例（与上方实现保持一致，供页面展示用）
+export const ERODE_CODE_TS = `/** 腐蚀：取结构元素邻域内的最小值
+ *  集合定义: A ⊖ B = {z | (B)_z ⊆ A}
+ */
+function erode(image: number[][], structElement: StructElement): number[][] {
+  const height = image.length;
+  const width = image[0].length;
+  const se = createStructElement(structElement.shape, structElement.size);
+  const seSize = structElement.size;
+  const center = Math.floor(seSize / 2);
+  const result = create2DArray(height, width, 0);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let minVal = 1;
+      for (let sy = 0; sy < seSize; sy++) {
+        for (let sx = 0; sx < seSize; sx++) {
+          if (!se[sy][sx]) continue;
+          const px = x + sx - center;
+          const py = y + sy - center;
+          const pixelVal =
+            px >= 0 && px < width && py >= 0 && py < height
+              ? image[py][px]
+              : 0;
+          minVal = Math.min(minVal, pixelVal);
+        }
+      }
+      result[y][x] = minVal;
+    }
+  }
+  return result;
+}`;
+
+export const DILATE_CODE_TS = `/** 膨胀：结构元素反射后取邻域最大值
+ *  集合定义: A ⊕ B = {z | (B_hat)_z ∩ A ≠ ∅}
+ */
+function dilate(image: number[][], structElement: StructElement): number[][] {
+  const height = image.length;
+  const width = image[0].length;
+  const se = createStructElement(structElement.shape, structElement.size);
+  const seReflected = reflectStructElement(se); // 先反射结构元素
+  const seSize = structElement.size;
+  const center = Math.floor(seSize / 2);
+  const result = create2DArray(height, width, 0);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let maxVal = 0;
+      for (let sy = 0; sy < seSize; sy++) {
+        for (let sx = 0; sx < seSize; sx++) {
+          if (!seReflected[sy][sx]) continue;
+          const px = x + sx - center;
+          const py = y + sy - center;
+          const pixelVal =
+            px >= 0 && px < width && py >= 0 && py < height
+              ? image[py][px]
+              : 0;
+          maxVal = Math.max(maxVal, pixelVal);
+        }
+      }
+      result[y][x] = maxVal;
+    }
+  }
+  return result;
+}`;
+
+export const OPEN_CODE_TS = `/** 开操作：先腐蚀后膨胀
+ *  集合定义: A ○ B = (A ⊖ B) ⊕ B
+ */
+function open(image: number[][], structElement: StructElement): number[][] {
+  const eroded = erode(image, structElement);
+  return dilate(eroded, structElement);
+}`;
+
+export const CLOSE_CODE_TS = `/** 闭操作：先膨胀后腐蚀
+ *  集合定义: A • B = (A ⊕ B) ⊖ B
+ */
+function close(image: number[][], structElement: StructElement): number[][] {
+  const dilated = dilate(image, structElement);
+  return erode(dilated, structElement);
+}`;
 
 /** 形态学步骤记录 */
 export interface MorphologyStep {
@@ -217,6 +302,7 @@ export function* morphologySteps(
 ): Generator<MorphologyStep> {
   if (!image || image.length === 0 || !image[0]) return;
   const se = createStructElement(structElement.shape, structElement.size);
+  const seReflected = reflectStructElement(se);
   const seSize = structElement.size;
   const center = Math.floor(seSize / 2);
 
@@ -242,6 +328,8 @@ export function* morphologySteps(
 
   if (operation === 'open' || operation === 'close') {
     const firstOp = operation === 'open' ? 'erode' : 'dilate';
+    const firstActiveSe = firstOp === 'dilate' ? seReflected : se;
+    const firstPhaseOutput = create2DArray(height, width, 0);
 
     // 第一阶段步
     for (let y = 0; y < height; y++) {
@@ -262,7 +350,7 @@ export function* morphologySteps(
                 : 0;
             row.push(pixelVal);
 
-            if (!se[sy][sx]) continue;
+            if (!firstActiveSe[sy][sx]) continue;
 
             if (pixelVal === 1) hasForeground = true;
             if (firstOp === 'erode') {
@@ -273,6 +361,8 @@ export function* morphologySteps(
           }
           inputRegion.push(row);
         }
+
+        firstPhaseOutput[y][x] = value;
 
         yield {
           operation: firstOp,
@@ -288,13 +378,11 @@ export function* morphologySteps(
       }
     }
 
-    // 计算第一阶段输出图像
-    const workingImage =
-      firstOp === 'erode'
-        ? erode(image, structElement)
-        : dilate(image, structElement);
+    // 第一阶段输出图像直接复用已计算结果，避免重复调用形态学函数
+    const workingImage = firstPhaseOutput;
 
     const secondOp = operation === 'open' ? 'dilate' : 'erode';
+    const secondActiveSe = secondOp === 'dilate' ? seReflected : se;
 
     // 第二阶段步：输入区域来自第一阶段输出图像
     for (let y = 0; y < height; y++) {
@@ -315,7 +403,7 @@ export function* morphologySteps(
                 : 0;
             row.push(pixelVal);
 
-            if (!se[sy][sx]) continue;
+            if (!secondActiveSe[sy][sx]) continue;
 
             if (pixelVal === 1) hasForeground = true;
             if (secondOp === 'dilate') {
@@ -343,6 +431,7 @@ export function* morphologySteps(
   } else {
     // 单一操作（腐蚀或膨胀）
     const singleOp = operation as 'erode' | 'dilate';
+    const activeSe = singleOp === 'dilate' ? seReflected : se;
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
@@ -362,7 +451,7 @@ export function* morphologySteps(
                 : 0;
             row.push(pixelVal);
 
-            if (!se[sy][sx]) continue;
+            if (!activeSe[sy][sx]) continue;
 
             if (pixelVal === 1) hasForeground = true;
             if (singleOp === 'erode') {

@@ -45,6 +45,18 @@ export interface HogCellStep {
   blockNorm: number;
 }
 
+export const HOG_GX_KERNEL = [
+  [-1, 0, 1],
+  [-2, 0, 2],
+  [-1, 0, 1],
+];
+
+export const HOG_GY_KERNEL = [
+  [-1, -2, -1],
+  [0, 0, 0],
+  [1, 2, 1],
+];
+
 export function computeHogGradients(image: GrayscaleImage): HogGradientField {
   const height = image.length;
   const width = image[0]?.length ?? 0;
@@ -52,16 +64,8 @@ export function computeHogGradients(image: GrayscaleImage): HogGradientField {
   const gy = create2DArray(height, width, 0);
   const magnitude = create2DArray(height, width, 0);
   const direction: number[][] = [];
-  const gxKernel = [
-    [-1, 0, 1],
-    [-2, 0, 2],
-    [-1, 0, 1],
-  ];
-  const gyKernel = [
-    [-1, -2, -1],
-    [0, 0, 0],
-    [1, 2, 1],
-  ];
+  const gxKernel = HOG_GX_KERNEL;
+  const gyKernel = HOG_GY_KERNEL;
 
   for (let y = 0; y < height; y++) {
     const dirRow: number[] = [];

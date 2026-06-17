@@ -129,6 +129,11 @@ export function grayscaleToColorImage(image: GrayscaleImage): ColorImage {
   return result;
 }
 
+/**
+ * 将灰度图转换为教学用伪彩色图。
+ * 注意：这不是真实颜色还原，而是把灰度值映射到人工彩色（伪彩色），
+ * 用于在 UI 中更直观地区分不同灰度区域。原始灰度值保留在 `gray` 字段中。
+ */
 export function grayscaleToTeachingColorImage(image: GrayscaleImage): ColorImage {
   const height = image.length;
   const width = image[0]?.length || 0;

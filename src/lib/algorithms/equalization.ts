@@ -27,8 +27,9 @@ export function generateCourseExample(): GrayscaleImage {
 export function computeCDF(
   bins: number[],
   totalPixels: number,
-): { cdf: number[]; mapping: number[] } {
+): { cdf: number[]; cdfCounts: number[]; mapping: number[] } {
   const cdf: number[] = [];
+  const cdfCounts: number[] = [];
   const mapping: number[] = [];
   let sum = 0;
 
@@ -36,10 +37,11 @@ export function computeCDF(
     sum += bins[k];
     const cdfVal = totalPixels > 0 ? sum / totalPixels : 0;
     cdf.push(cdfVal);
+    cdfCounts.push(sum);
     mapping.push(Math.floor(255 * cdfVal));
   }
 
-  return { cdf, mapping };
+  return { cdf, cdfCounts, mapping };
 }
 
 /** 直方图均衡化完整结果 */
@@ -47,6 +49,7 @@ export interface EqualizeResult {
   result: GrayscaleImage;
   mapping: number[];
   cdf: number[];
+  cdfCounts: number[];
   equalizedBins: number[];
   equalizedTotal: number;
 }
@@ -65,7 +68,7 @@ export function equalizeHistogram(image: GrayscaleImage): EqualizeResult {
   const { bins, totalPixels } = computeHistogram(image);
 
   // CDF + 映射
-  const { cdf, mapping } = computeCDF(bins, totalPixels);
+  const { cdf, cdfCounts, mapping } = computeCDF(bins, totalPixels);
 
   // 逐像素映射
   const result: GrayscaleImage = [];
@@ -84,7 +87,7 @@ export function equalizeHistogram(image: GrayscaleImage): EqualizeResult {
       equalizedBins[Math.round(result[y][x] * 255)]++;
     }
 
-  return { result, mapping, cdf, equalizedBins, equalizedTotal: totalPixels };
+  return { result, mapping, cdf, cdfCounts, equalizedBins, equalizedTotal: totalPixels };
 }
 
 /**

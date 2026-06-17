@@ -36,7 +36,7 @@ export function gaussianBlur(image: GrayscaleImage, kernelSize: number, sigma: n
   const width = image[0]?.length || 0;
   const half = Math.floor(kernelSize / 2);
 
-  // Create 2D Gaussian kernel
+  // 创建高斯核：省略前置常数 1/(2πσ²)，因最终归一化后结果不变
   const kernel: number[][] = [];
   let sum = 0;
 
@@ -111,7 +111,8 @@ export interface BlurStep {
   x: number;
   y: number;
   inputRegion: number[][];
-  kernel: number[][];
+  /** 线性滤波（均值/高斯）的权重矩阵；中值滤波无权重矩阵，省略该字段 */
+  kernel?: number[][];
   outputValue: number;
   operation: 'box' | 'gaussian' | 'median';
   description: string;
@@ -175,7 +176,7 @@ export function* gaussianBlurSteps(
   const width = image[0].length;
   const half = Math.floor(kernelSize / 2);
 
-  // Create 2D Gaussian kernel
+  // 创建高斯核：省略前置常数 1/(2πσ²)，因最终归一化后结果不变
   const kernel: number[][] = [];
   let sum = 0;
 
@@ -230,16 +231,6 @@ export function* medianFilterSteps(
   const width = image[0].length;
   const half = Math.floor(kernelSize / 2);
 
-  // Create identity-like kernel for display (all 1s)
-  const kernel: number[][] = [];
-  for (let y = 0; y < kernelSize; y++) {
-    const row: number[] = [];
-    for (let x = 0; x < kernelSize; x++) {
-      row.push(1);
-    }
-    kernel.push(row);
-  }
-
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const inputRegion: number[][] = [];
@@ -263,7 +254,6 @@ export function* medianFilterSteps(
         x,
         y,
         inputRegion,
-        kernel,
         outputValue: median,
         operation: 'median',
         description: `中值滤波: 对${kernelSize}x${kernelSize}邻域取中位数`,

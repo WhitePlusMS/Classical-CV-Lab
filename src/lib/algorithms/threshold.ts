@@ -1,4 +1,4 @@
-import { GrayscaleImage, Histogram, ThresholdResult } from './types';
+import { GrayscaleImage, ThresholdResult } from './types';
 import { clamp, create2DArray } from '../utils/imageProcessing';
 
 // computeHistogram 已迁移至 ./histogram，此处为内部使用 + 向后兼容导出
@@ -47,7 +47,7 @@ export function otsuThreshold(image: GrayscaleImage): ThresholdResult {
     const mB = sumB / wB;
     const mF = (sum - sumB) / wF;
 
-    const variance = wB * wF * (mB - mF) * (mB - mF);
+    const variance = (wB / totalPixels) * (wF / totalPixels) * (mB - mF) * (mB - mF);
 
     if (variance > maxVariance) {
       maxVariance = variance;
@@ -118,7 +118,7 @@ export function* otsuSteps(image: GrayscaleImage): Generator<OtsuStep> {
     const mB = sumB / wB;
     const mF = (sum - sumB) / wF;
 
-    const variance = wB * wF * (mB - mF) * (mB - mF);
+    const variance = (wB / totalPixels) * (wF / totalPixels) * (mB - mF) * (mB - mF);
 
     const isMax = variance > maxVariance;
     if (isMax) {

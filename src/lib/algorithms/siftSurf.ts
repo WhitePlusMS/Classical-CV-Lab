@@ -136,14 +136,14 @@ function computeDoG(l1: GrayscaleImage, l2: GrayscaleImage): GrayscaleImage {
  *
  * 对 currDog 中的每个像素，与以下邻居比较：
  *   - 同层 8 邻域（3×3 去中心）
- *   - 上层 prevDog 的 9 邻域
- *   - 下层 nextDog 的 9 邻域
+ *   - 前一层 prevDog 的 9 邻域（序号 s-1，σ 更小，相对更清晰）
+ *   - 后一层 nextDog 的 9 邻域（序号 s+1，σ 更大，相对更模糊）
  * 总共 26 个比较。只有当前值严格大于（或严格小于）全部 26 个邻居时，
  * 才被判定为候选关键点。
  *
- * @param prevDog 上层（更模糊）DoG 图像
- * @param currDog 当前层 DoG 图像
- * @param nextDog 下层（更清晰）DoG 图像
+ * @param prevDog 前一层 DoG 图像（序号 s-1，σ 更小，相对更清晰）
+ * @param currDog 当前层 DoG 图像（序号 s）
+ * @param nextDog 后一层 DoG 图像（序号 s+1，σ 更大，相对更模糊）
  * @param octave  所在八度（多八度场景用，当前教学固定为 0）
  * @param scaleIndex DoG 尺度序号（用于记录关键点来源）
  * @returns 检测到的关键点列表 + 每个关键点的比较明细 Map
@@ -401,7 +401,7 @@ function findMatches(descriptors1: number[][], descriptors2: number[][], ratio: 
       const d = d1.reduce((s, v, k) => s + (v - d2[k]) ** 2, 0);
       return { idx: j, dist: d };
     }).sort((a, b) => a.dist - b.dist);
-    if (dists.length >= 2 && dists[0].dist / Math.max(dists[1].dist, 1e-10) < ratio) {
+    if (dists.length >= 2 && Math.sqrt(dists[0].dist) / Math.sqrt(Math.max(dists[1].dist, 1e-10)) < ratio) {
       matches.push({ queryIdx: i, trainIdx: dists[0].idx, distance: Math.sqrt(dists[0].dist) });
     }
   }
@@ -424,13 +424,16 @@ export function computeSiftSurf(
 ): SiftSurfResult {
   const kFactor = 2 ** (1 / Math.max(numScales, 1));
 
+  // 为 26 邻域检测补充额外层：标准 SIFT 每个 octave 需要 S+3 张高斯图以得到 S 个可检测层。
+  // 本教学实现固定图像尺寸，因此至少构造 numScales + 2 张高斯图，得到 numScales + 1 张 DoG，
+  // 从而保证中间可检测层数为 numScales - 1（≥ 2 当 numScales ≥ 3）。
   const gaussianScales: GrayscaleImage[] = [];
-  for (let s = 0; s < numScales + 1; s++) {
+  for (let s = 0; s < numScales + 2; s++) {
     gaussianScales.push(computeGaussianScale(image, sigma * (kFactor ** s)));
   }
 
   const dogScales: GrayscaleImage[] = [];
-  for (let s = 0; s < numScales; s++) {
+  for (let s = 0; s < numScales + 1; s++) {
     dogScales.push(computeDoG(gaussianScales[s], gaussianScales[s + 1]));
   }
 

@@ -58,8 +58,6 @@ const LBP_INDICES = [
  * @param y 行坐标
  */
 export function getLBPWindow(image: GrayscaleImage, x: number, y: number): LBPWindowResult {
-  const height = image.length;
-  const width = image[0]?.length || 0;
   const values: number[][] = [];
   const binaryPattern: number[] = [];
   const center = image[y]?.[x] ?? 0;
@@ -173,7 +171,7 @@ export interface GaborParams {
   orientation: number;
   /** 相位偏移 ψ（度） */
   phase: number;
-  /** 高斯方差 σ */
+  /** 高斯标准差 σ */
   sigma: number;
   /** 空间纵横比 γ */
   gamma: number;
@@ -227,12 +225,12 @@ export interface GaborFilterStep {
 
 /** 默认 Gabor 参数预设 */
 export const GABOR_PRESETS: { label: string; wavelength: number; orientation: number; phase: number; sigma: number; gamma: number; kernelSize: number }[] = [
-  { label: '0° 水平', wavelength: 8, orientation: 0, phase: 0, sigma: 4, gamma: 0.5, kernelSize: 21 },
-  { label: '45° 斜向', wavelength: 8, orientation: 45, phase: 0, sigma: 4, gamma: 0.5, kernelSize: 21 },
-  { label: '90° 垂直', wavelength: 8, orientation: 90, phase: 0, sigma: 4, gamma: 0.5, kernelSize: 21 },
-  { label: '135° 斜向', wavelength: 8, orientation: 135, phase: 0, sigma: 4, gamma: 0.5, kernelSize: 21 },
-  { label: '宽条纹 λ=16', wavelength: 16, orientation: 0, phase: 0, sigma: 6, gamma: 0.5, kernelSize: 31 },
-  { label: '细条纹 λ=4', wavelength: 4, orientation: 0, phase: 0, sigma: 3, gamma: 0.5, kernelSize: 15 },
+  { label: '0° 竖条纹（法向水平）', wavelength: 8, orientation: 0, phase: 0, sigma: 4, gamma: 0.5, kernelSize: 21 },
+  { label: '45° 斜向（\\）', wavelength: 8, orientation: 45, phase: 0, sigma: 4, gamma: 0.5, kernelSize: 21 },
+  { label: '90° 横条纹（法向垂直）', wavelength: 8, orientation: 90, phase: 0, sigma: 4, gamma: 0.5, kernelSize: 21 },
+  { label: '135° 斜向（/）', wavelength: 8, orientation: 135, phase: 0, sigma: 4, gamma: 0.5, kernelSize: 21 },
+  { label: '宽条纹 λ=16（竖）', wavelength: 16, orientation: 0, phase: 0, sigma: 6, gamma: 0.5, kernelSize: 31 },
+  { label: '细条纹 λ=4（竖）', wavelength: 4, orientation: 0, phase: 0, sigma: 3, gamma: 0.5, kernelSize: 15 },
 ];
 
 /**
@@ -244,7 +242,7 @@ export const GABOR_PRESETS: { label: string; wavelength: number; orientation: nu
  *   x' = x·cosθ + y·sinθ
  *   y' = -x·sinθ + y·cosθ
  *
- * 返回归一化至 [-1, 1] 的内核。
+ * 返回实部 Gabor 核，值域约为 [-1, 1]。
  */
 export function generateGaborKernel(params: GaborParams): number[][] {
   const { wavelength, orientation, phase, sigma, gamma, kernelSize } = params;
@@ -253,8 +251,6 @@ export function generateGaborKernel(params: GaborParams): number[][] {
   const half = Math.floor(kernelSize / 2);
 
   const kernel = create2DArray(kernelSize, kernelSize, 0);
-  let minVal = Infinity;
-  let maxVal = -Infinity;
 
   for (let y = -half; y <= half; y++) {
     for (let x = -half; x <= half; x++) {
@@ -268,16 +264,6 @@ export function generateGaborKernel(params: GaborParams): number[][] {
       const ky = y + half;
       const kx = x + half;
       kernel[ky][kx] = value;
-      minVal = Math.min(minVal, value);
-      maxVal = Math.max(maxVal, value);
-    }
-  }
-
-  // 归一化到 [-1, 1]
-  const range = maxVal - minVal || 1;
-  for (let y = 0; y < kernelSize; y++) {
-    for (let x = 0; x < kernelSize; x++) {
-      kernel[y][x] = ((kernel[y][x] - minVal) / range) * 2 - 1;
     }
   }
 
