@@ -21,6 +21,8 @@ interface ConceptLayoutProps {
   parameters?: React.ReactNode;
   stepDetails: React.ReactNode;
   codeTab: React.ReactNode;
+  /** 当前概念相关的 OpenCV 函数/常量参考，展示在代码抽屉底部 */
+  opencvReference?: React.ReactNode;
   teachingHint?: React.ReactNode;
   imageHints?: {
     input?: string;
@@ -203,6 +205,7 @@ export default function ConceptLayout({
   parameters,
   stepDetails,
   codeTab,
+  opencvReference,
   teachingHint,
   imageHints,
   imageLabels,
@@ -684,7 +687,20 @@ export default function ConceptLayout({
                   <span className="text-xs font-medium text-slate-300">代码实现</span>
                   <span className="text-[10px] text-slate-500">TypeScript</span>
                 </div>
-                <div className="flex-1 overflow-auto p-4">{codeTab}</div>
+                <div className="flex-1 overflow-auto">
+                  <div className="p-4">{codeTab}</div>
+                  {opencvReference && (
+                    <details className="border-t border-slate-700">
+                      <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-xs font-medium text-slate-300 hover:bg-slate-800/50">
+                        <span>OpenCV 参考</span>
+                        <svg className="h-4 w-4 text-slate-500 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path d="M19 9l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </summary>
+                      <div className="px-4 pb-4">{opencvReference}</div>
+                    </details>
+                  )}
+                </div>
               </div>
             </>
           )}

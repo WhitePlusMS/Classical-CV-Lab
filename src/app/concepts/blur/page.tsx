@@ -1573,6 +1573,32 @@ export default function BlurPage() {
       codeTab={
         <CodeViewer languages={[{ name: 'TypeScript', code: getCode() }]} />
       }
+      opencvReference={(
+        <div className="space-y-3 text-xs text-slate-300">
+          <p className="text-slate-400">OpenCV 中常用的平滑滤波函数。</p>
+          <div className="rounded-xl border border-slate-700 bg-slate-800/50 px-3 py-3">
+            <div className="font-semibold text-slate-200">核心函数</div>
+            <div className="mt-2 grid gap-2">
+              <div className="flex items-start gap-2">
+                <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-sky-400">cv2.blur(src, ksize)</code>
+                <span className="text-slate-400">均值滤波</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-sky-400">cv2.GaussianBlur(src, ksize, sigmaX)</code>
+                <span className="text-slate-400">高斯加权平滑</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-sky-400">cv2.medianBlur(src, ksize)</code>
+                <span className="text-slate-400">中值滤波，去除椒盐噪声</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-sky-400">cv2.bilateralFilter(src, d, sigmaColor, sigmaSpace)</code>
+                <span className="text-slate-400">双边滤波，保边去噪</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       currentStep={
         method === 'sidewindow'
           ? currentSwStep

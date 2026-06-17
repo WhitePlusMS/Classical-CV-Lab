@@ -2055,6 +2055,32 @@ export default function EdgeDetectionPage() {
       onInputRegionSelect={handleInputRegionSelect}
       onOutputPixelSelect={handleOutputPixelSelect}
       codeTab={<CodeViewer languages={[{ name: 'TypeScript', code: activeCode }]} />}
+      opencvReference={(
+        <div className="space-y-3 text-xs text-slate-300">
+          <p className="text-slate-400">OpenCV 中常用的边缘检测函数。</p>
+          <div className="rounded-xl border border-slate-700 bg-slate-800/50 px-3 py-3">
+            <div className="font-semibold text-slate-200">核心函数</div>
+            <div className="mt-2 grid gap-2">
+              <div className="flex items-start gap-2">
+                <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-sky-400">cv2.Sobel(src, ddepth, dx, dy, ksize)</code>
+                <span className="text-slate-400">Sobel 梯度算子</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-sky-400">cv2.Laplacian(src, ddepth, ksize)</code>
+                <span className="text-slate-400">拉普拉斯二阶导数算子</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-sky-400">cv2.Canny(image, threshold1, threshold2)</code>
+                <span className="text-slate-400">Canny 边缘检测</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-sky-400">cv2.Scharr(src, ddepth, dx, dy)</code>
+                <span className="text-slate-400">Scharr 梯度算子</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       currentStep={
         currentStep
           ? { x: currentStep.x, y: currentStep.y, kernelSize: currentStep.kernelSize || 3 }

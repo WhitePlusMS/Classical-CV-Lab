@@ -1496,77 +1496,6 @@ export default function MorphologyPage() {
           </div>
         </TeachingCard>
 
-        {/* OpenCV 函数与结构元素形状说明 */}
-        <TeachingCard>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <div className="text-sm font-semibold text-slate-800">OpenCV 函数参考</div>
-              <p className="mt-1 text-xs leading-5 text-slate-500">
-                OpenCV 中相关函数与结构元素形状常量。
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-4 space-y-3">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <div className="text-xs font-semibold text-slate-700">核心函数</div>
-              <div className="mt-2 grid gap-2 text-xs text-slate-600">
-                <div className="flex items-start gap-2">
-                  <code className="rounded bg-white px-1.5 py-0.5 font-mono text-sky-700">cv2.erode(src, kernel, iterations=1)</code>
-                  <span>腐蚀操作</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <code className="rounded bg-white px-1.5 py-0.5 font-mono text-sky-700">cv2.dilate(src, kernel, iterations=1)</code>
-                  <span>膨胀操作</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <code className="rounded bg-white px-1.5 py-0.5 font-mono text-sky-700">cv2.morphologyEx(src, op, kernel)</code>
-                  <span>通用形态学操作（含开/闭/梯度/顶帽/黑帽）</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <code className="rounded bg-white px-1.5 py-0.5 font-mono text-sky-700">cv2.getStructuringElement(shape, ksize)</code>
-                  <span>创建结构元素</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <div className="text-xs font-semibold text-slate-700">结构元素形状常量</div>
-              <div className="mt-2 grid gap-2 text-xs text-slate-600">
-                <div className="flex items-start gap-2">
-                  <code className="rounded bg-white px-1.5 py-0.5 font-mono text-sky-700">cv2.MORPH_RECT</code>
-                  <span>矩形结构元素：所有位置均参与运算</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <code className="rounded bg-white px-1.5 py-0.5 font-mono text-sky-700">cv2.MORPH_CROSS</code>
-                  <span>十字形结构元素：仅中心行和中心列参与</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <code className="rounded bg-white px-1.5 py-0.5 font-mono text-sky-700">cv2.MORPH_ELLIPSE</code>
-                  <span>椭圆形结构元素：内切椭圆区域参与运算</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <div className="text-xs font-semibold text-slate-700">morphologyEx 操作类型</div>
-              <div className="mt-2 grid gap-2 text-xs text-slate-600">
-                <div className="flex items-start gap-2">
-                  <code className="rounded bg-white px-1.5 py-0.5 font-mono text-sky-700">cv2.MORPH_OPEN</code>
-                  <span>开操作：先腐蚀后膨胀</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <code className="rounded bg-white px-1.5 py-0.5 font-mono text-sky-700">cv2.MORPH_CLOSE</code>
-                  <span>闭操作：先膨胀后腐蚀</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <code className="rounded bg-white px-1.5 py-0.5 font-mono text-sky-700">cv2.MORPH_GRADIENT</code>
-                  <span>形态学梯度：膨胀 - 腐蚀</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </TeachingCard>
       </div>
     );
   }, [
@@ -1720,6 +1649,68 @@ export default function MorphologyPage() {
       onInputRegionSelect={viewMode === 'theory' ? handleInputRegionSelect : undefined}
       onOutputPixelSelect={viewMode === 'theory' ? handleOutputPixelSelect : undefined}
       codeTab={<CodeViewer languages={[{ name: 'TypeScript', code: getCode() }]} />}
+      opencvReference={(
+        <div className="space-y-3 text-xs text-slate-300">
+          <p className="text-slate-400">OpenCV 中相关函数与结构元素形状常量。</p>
+          <div className="rounded-xl border border-slate-700 bg-slate-800/50 px-3 py-3">
+            <div className="font-semibold text-slate-200">核心函数</div>
+            <div className="mt-2 grid gap-2">
+              <div className="flex items-start gap-2">
+                <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-sky-400">cv2.erode(src, kernel, iterations=1)</code>
+                <span className="text-slate-400">腐蚀操作</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-sky-400">cv2.dilate(src, kernel, iterations=1)</code>
+                <span className="text-slate-400">膨胀操作</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-sky-400">cv2.morphologyEx(src, op, kernel)</code>
+                <span className="text-slate-400">通用形态学操作（含开/闭/梯度/顶帽/黑帽）</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-sky-400">cv2.getStructuringElement(shape, ksize)</code>
+                <span className="text-slate-400">创建结构元素</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-700 bg-slate-800/50 px-3 py-3">
+            <div className="font-semibold text-slate-200">结构元素形状常量</div>
+            <div className="mt-2 grid gap-2">
+              <div className="flex items-start gap-2">
+                <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-sky-400">cv2.MORPH_RECT</code>
+                <span className="text-slate-400">矩形结构元素：所有位置均参与运算</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-sky-400">cv2.MORPH_CROSS</code>
+                <span className="text-slate-400">十字形结构元素：仅中心行和中心列参与</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-sky-400">cv2.MORPH_ELLIPSE</code>
+                <span className="text-slate-400">椭圆形结构元素：内切椭圆区域参与运算</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-700 bg-slate-800/50 px-3 py-3">
+            <div className="font-semibold text-slate-200">morphologyEx 操作类型</div>
+            <div className="mt-2 grid gap-2">
+              <div className="flex items-start gap-2">
+                <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-sky-400">cv2.MORPH_OPEN</code>
+                <span className="text-slate-400">开操作：先腐蚀后膨胀</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-sky-400">cv2.MORPH_CLOSE</code>
+                <span className="text-slate-400">闭操作：先膨胀后腐蚀</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-sky-400">cv2.MORPH_GRADIENT</code>
+                <span className="text-slate-400">形态学梯度：膨胀 - 腐蚀</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       currentStep={
         currentStep
           ? (() => {

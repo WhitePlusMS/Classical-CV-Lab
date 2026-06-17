@@ -510,6 +510,32 @@ export default function GrayscalePage() {
       stepDetails={stepDetails}
       analysisPreview={analysisPreview}
       codeTab={<CodeViewer languages={[{ name: 'TypeScript', code: GRAYSCALE_CODE_TS }]} />}
+      opencvReference={(
+        <div className="space-y-3 text-xs text-slate-300">
+          <p className="text-slate-400">OpenCV 中颜色空间转换与灰度化的常用函数。</p>
+          <div className="rounded-xl border border-slate-700 bg-slate-800/50 px-3 py-3">
+            <div className="font-semibold text-slate-200">核心函数</div>
+            <div className="mt-2 grid gap-2">
+              <div className="flex items-start gap-2">
+                <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-sky-400">cv2.cvtColor(src, cv2.COLOR_BGR2GRAY)</code>
+                <span className="text-slate-400">BGR 转灰度（默认加权）</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-sky-400">cv2.cvtColor(src, cv2.COLOR_BGR2HSV)</code>
+                <span className="text-slate-400">BGR 转 HSV</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-sky-400">cv2.split(src)</code>
+                <span className="text-slate-400">按通道拆分图像</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-sky-400">cv2.merge(channels)</code>
+                <span className="text-slate-400">合并多个单通道图</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       imageHints={imageHints}
       showOriginalGrid={shouldShowOriginalGrid}
       currentStep={currentStep ? { x: currentStep.x, y: currentStep.y, kernelSize: 1 } : null}

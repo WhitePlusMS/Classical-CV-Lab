@@ -1212,6 +1212,46 @@ export default function ConvolutionPage() {
       codeTab={
         <CodeViewer languages={[{ name: 'TypeScript', code: CONVOLUTION_CODE_TS }]} />
       }
+      opencvReference={(
+        <div className="space-y-3 text-xs text-slate-300">
+          <p className="text-slate-400">OpenCV 中用于二维卷积和滤波的核心函数。</p>
+          <div className="rounded-xl border border-slate-700 bg-slate-800/50 px-3 py-3">
+            <div className="font-semibold text-slate-200">核心函数</div>
+            <div className="mt-2 grid gap-2">
+              <div className="flex items-start gap-2">
+                <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-sky-400">cv2.filter2D(src, ddepth, kernel)</code>
+                <span className="text-slate-400">自定义核二维卷积</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-sky-400">cv2.sepFilter2D(src, ddepth, kernelX, kernelY)</code>
+                <span className="text-slate-400">可分离核卷积</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-sky-400">cv2.copyMakeBorder(src, top, bottom, left, right, borderType)</code>
+                <span className="text-slate-400">边界填充</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-700 bg-slate-800/50 px-3 py-3">
+            <div className="font-semibold text-slate-200">常用边界类型</div>
+            <div className="mt-2 grid gap-2">
+              <div className="flex items-start gap-2">
+                <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-sky-400">cv2.BORDER_CONSTANT</code>
+                <span className="text-slate-400">常数填充（通常补 0）</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-sky-400">cv2.BORDER_REPLICATE</code>
+                <span className="text-slate-400">复制边缘像素</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-sky-400">cv2.BORDER_REFLECT</code>
+                <span className="text-slate-400">镜像反射</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       currentStep={
         currentStep
           ? {
