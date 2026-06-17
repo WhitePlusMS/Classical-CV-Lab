@@ -291,6 +291,37 @@ function sampleRgb(image: RgbImage, x: number, y: number, interpolation: Interpo
   return interpolation === 'nearest' ? sampleNearest(image, x, y) : sampleBilinear(image, x, y);
 }
 
+/**
+ * 对单通道灰度图做双线性采样。
+ * 与 undistortImage / applyWarpFromInverseMap 默认使用的插值口径一致，
+ * 用于教学页面向学生展示「当前灰度采样值」时与真实 remap 结果口径统一。
+ */
+export function sampleGrayscaleBilinear(image: GrayscaleImage, x: number, y: number): number {
+  const height = image.length;
+  const width = image[0]?.length ?? 0;
+  if (!isFiniteNumber(x) || !isFiniteNumber(y) || width === 0 || height === 0) {
+    return 0;
+  }
+  if (x < 0 || x > width - 1 || y < 0 || y > height - 1) {
+    return 0;
+  }
+  const x0 = Math.floor(x);
+  const y0 = Math.floor(y);
+  const x1 = clamp(x0 + 1, 0, width - 1);
+  const y1 = clamp(y0 + 1, 0, height - 1);
+  const dx = clamp(x - x0, 0, 1);
+  const dy = clamp(y - y0, 0, 1);
+
+  const c00 = image[clamp(y0, 0, height - 1)][clamp(x0, 0, width - 1)];
+  const c10 = image[clamp(y0, 0, height - 1)][x1];
+  const c01 = image[y1][clamp(x0, 0, width - 1)];
+  const c11 = image[y1][x1];
+
+  const top = c00 * (1 - dx) + c10 * dx;
+  const bottom = c01 * (1 - dx) + c11 * dx;
+  return clamp(top * (1 - dy) + bottom * dy, 0, 1);
+}
+
 export function applyWarpFromInverseMap(
   source: RgbImage,
   destinationWidth: number,

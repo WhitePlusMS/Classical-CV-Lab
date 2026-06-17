@@ -21,9 +21,11 @@ import {
   buildUndistortionMaps,
   createCheckerboardRgbImage,
   createGeometryTeachingImage,
+  type RgbImage,
   distortImage,
   type DistortionCoefficients,
   rgbToGrayscale,
+  sampleGrayscaleBilinear,
   undistortImage,
 } from '@/lib/algorithms/imageGeometry';
 
@@ -72,7 +74,7 @@ export default function DistortionCorrectionPage() {
       .then(raw => {
         if (!cancelled) {
           const cropped = centerCropRgbImage(raw);
-          setLenaRgb(resizeRgbImage(cropped, 120) as any);
+          setLenaRgb(resizeRgbImage(cropped, 120) as RgbImage);
         }
       })
       .catch(() => { if (!cancelled) setLenaRgb(null); });
@@ -88,7 +90,8 @@ export default function DistortionCorrectionPage() {
   );
 
   const coefficients = useMemo<DistortionCoefficients>(() => {
-    const sign = distortionMode === 'barrel' ? -1 : 1;
+    // OpenCV 标准：k1>0 产生桶形畸变，k1<0 产生枕形畸变
+    const sign = distortionMode === 'barrel' ? 1 : -1;
     return {
       k1: sign * strength,
       k2: sign * strength * 0.18,
@@ -125,7 +128,7 @@ export default function DistortionCorrectionPage() {
     setSelectedPixel({ x, y });
   };
 
-  const distortedValue = distortedGray[Math.round(currentSource.y)]?.[Math.round(currentSource.x)] ?? 0;
+  const distortedValue = sampleGrayscaleBilinear(distortedGray, currentSource.x, currentSource.y);
   const correctedValue = correctedGray[selectedPixel.y]?.[selectedPixel.x] ?? 0;
   const normalizedX = ((selectedPixel.x - width / 2) / (width / 2)).toFixed(3);
   const normalizedY = ((selectedPixel.y - height / 2) / (height / 2)).toFixed(3);
@@ -146,7 +149,7 @@ export default function DistortionCorrectionPage() {
       <div className="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-800">
         当前模式：{distortionMode === 'barrel' ? '桶形畸变校正' : '枕形畸变校正'}
           <div className="mt-1 text-[11px] leading-4 text-violet-600">
-            桶形（k₁&lt;0）使直线向外鼓出，枕形（k₁&gt;0）使直线向内凹陷。
+            桶形（k₁&gt;0）使直线向外鼓出，枕形（k₁&lt;0）使直线向内凹陷。
           </div>
       </div>
     </div>
