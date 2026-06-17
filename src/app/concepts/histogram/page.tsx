@@ -32,13 +32,20 @@ const HISTOGRAM_CODE_TS = `interface Histogram {
   totalPixels: number; // 图像总像素数
 }
 
+// 与页面真实实现一致：先 clamp 到 [0,1] 再量化，并做空数组保护
+function clamp(v: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, v));
+}
+
 function computeHistogram(image: number[][]): Histogram {
+  const height = image.length;
+  const width = image[0]?.length || 0;
   const bins = new Array(256).fill(0);
   let totalPixels = 0;
 
-  for (let y = 0; y < image.length; y++) {
-    for (let x = 0; x < image[0].length; x++) {
-      const gray = Math.round(image[y][x] * 255);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const gray = Math.round(clamp(image[y][x], 0, 1) * 255);
       bins[gray]++;
       totalPixels++;
     }
@@ -175,6 +182,7 @@ export default function HistogramPage() {
   const [hoveredGray, setHoveredGray] = useState<number | null>(null);
   const [pinnedGray, setPinnedGray] = useState<number | null>(null);
   const [lenaImage, setLenaImage] = useState<GrayscaleImage | null>(null);
+  const [lenaLoading, setLenaLoading] = useState(true);
 
   // 加载 Lena 真实图像
   useEffect(() => {
@@ -186,14 +194,17 @@ export default function HistogramPage() {
         setHoveredGray(null);
         setPinnedGray(null);
       }
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => {
+      if (!cancelled) setLenaLoading(false);
+    });
     return () => { cancelled = true; };
   }, []);
 
   // 根据类型获取图像：Lena 用真实图，其他用生成图
   const originalImage = useMemo(() => {
     if (exampleType === 'lena' && lenaImage) return lenaImage;
-    if (exampleType === 'lena') return generateExampleImage('standard'); // 加载中回退
+    // Lena 尚未加载完成或加载失败时，用标准图占位并给出提示
+    if (exampleType === 'lena') return generateExampleImage('standard');
     return generateExampleImage(exampleType as Exclude<ExampleType, 'lena'>);
   }, [exampleType, lenaImage]);
 
@@ -235,8 +246,6 @@ export default function HistogramPage() {
   }, [hoveredGray]);
 
   const analysisPreview = useMemo(() => {
-    const gray = hoveredGray ?? pinnedGray;
-
     return (
       <ProcessRail className="overflow-x-auto py-2">
         <div className="flex flex-col items-center gap-3">
@@ -305,19 +314,24 @@ export default function HistogramPage() {
               <p>像素值集中在 80–119 的窄范围内，直方图呈陡峭的峰形。图像对比度低、看起来灰蒙蒙的。</p>
             )}
             {exampleType === 'bimodal' && (
-              <p>上半部分偏暗（&lt;64）、下半部分偏亮（&gt;192），直方图出现两个明显峰值。适合用阈值分割为前景和背景。</p>
+              <p>上半部分偏暗（&lt;64）、下半部分偏亮（≥192），直方图出现两个明显峰值。适合用阈值分割为前景和背景。</p>
             )}
             {exampleType === 'standard' && (
               <p>像素值在 0-255 之间近似均匀分布，直方图覆盖整个灰度范围。</p>
             )}
             {exampleType === 'lena' && (
-              <p>Lena 图是一张真实照片，其直方图覆盖较宽的灰度范围，呈现多个峰值。与标准图的均匀分布不同，真实照片的直方图反映了自然场景中的灰度分布特征。</p>
+              <>
+                <p>Lena 图是一张真实照片，其直方图覆盖较宽的灰度范围，呈现多个峰值。与标准图的均匀分布不同，真实照片的直方图反映了自然场景中的灰度分布特征。</p>
+                {lenaLoading && !lenaImage && (
+                  <p className="mt-1 text-amber-600">Lena 图正在加载，当前暂用标准图占位。</p>
+                )}
+              </>
             )}
           </div>
         </TeachingCard>
       </div>
     );
-  }, [exampleType, totalPixels]);
+  }, [exampleType, totalPixels, lenaLoading, lenaImage]);
 
   // 原图尺寸信息（用于 imageHints）
   const imageInfo = useMemo(() => {
@@ -349,7 +363,7 @@ export default function HistogramPage() {
       title="灰度直方图"
       subtitle="Histogram - 图像的灰度分布统计"
       operationLabel="灰度统计"
-      parameterIntro="左侧用于切换直方图示例；右侧聚焦当前灰度柱，展示该灰度级的像素数量、概率和它在整幅图分布中的位置。"
+      parameterIntro="切换直方图示例后，在直方图中聚焦当前灰度柱，查看该灰度级的像素数量、概率和它在整幅图分布中的位置。"
       originalImage={originalImage}
       resultImage={originalImage}
       parameters={parameters}

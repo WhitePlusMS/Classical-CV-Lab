@@ -11,7 +11,6 @@ import {
   FlowNode,
   FormulaCard,
   ImageCanvas,
-  MathText,
   ProcessRail,
   SelectParam,
   SliderParam,
@@ -24,10 +23,13 @@ import {
   open,
   close,
   morphologySteps,
-  createStructElement,
   checkErosionCondition,
   checkDilationCondition,
   reflectStructElement,
+  ERODE_CODE_TS,
+  DILATE_CODE_TS,
+  OPEN_CODE_TS,
+  CLOSE_CODE_TS,
   type MorphologyStep,
 } from '@/lib/algorithms/morphology';
 import type { GrayscaleImage, StructElement } from '@/lib/algorithms/types';
@@ -101,88 +103,6 @@ const TASK_OPS: { value: string; label: string }[] = [
   { value: 'connectCrack', label: TASK_LABELS.connectCrack },
   { value: 'fillHole', label: TASK_LABELS.fillHole }, { value: 'lenaClean', label: TASK_LABELS.lenaClean },
 ];
-
-// ========== 代码示例 ==========
-
-const ERODE_CODE_TS = `/** 腐蚀：取结构元素邻域内的最小值
- *  集合定义: A Θ B = {z | (B)_z ⊆ A}
- */
-function erode(image: number[][], structElement: StructElement): number[][] {
-  const height = image.length;
-  const width = image[0].length;
-  const se = createStructElement(structElement.shape, structElement.size);
-  const seSize = structElement.size;
-  const center = Math.floor(seSize / 2);
-  const result = create2DArray(height, width, 0);
-
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      let minVal = 1;
-      for (let sy = 0; sy < seSize; sy++) {
-        for (let sx = 0; sx < seSize; sx++) {
-          if (!se[sy][sx]) continue;
-          const px = x + sx - center;
-          const py = y + sy - center;
-          const pixelVal =
-            px >= 0 && px < width && py >= 0 && py < height
-              ? image[py][px]
-              : 0;
-          minVal = Math.min(minVal, pixelVal);
-        }
-      }
-      result[y][x] = minVal;
-    }
-  }
-  return result;
-}`;
-
-const DILATE_CODE_TS = `/** 膨胀：取结构元素邻域内的最大值
- *  集合定义: A ⊕ B = {z | (B_hat)_z ∩ A ≠ ∅}
- */
-function dilate(image: number[][], structElement: StructElement): number[][] {
-  const height = image.length;
-  const width = image[0].length;
-  const se = createStructElement(structElement.shape, structElement.size);
-  const seSize = structElement.size;
-  const center = Math.floor(seSize / 2);
-  const result = create2DArray(height, width, 0);
-
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      let maxVal = 0;
-      for (let sy = 0; sy < seSize; sy++) {
-        for (let sx = 0; sx < seSize; sx++) {
-          if (!se[sy][sx]) continue;
-          const px = x + sx - center;
-          const py = y + sy - center;
-          const pixelVal =
-            px >= 0 && px < width && py >= 0 && py < height
-              ? image[py][px]
-              : 0;
-          maxVal = Math.max(maxVal, pixelVal);
-        }
-      }
-      result[y][x] = maxVal;
-    }
-  }
-  return result;
-}`;
-
-const OPEN_CODE_TS = `/** 开操作：先腐蚀后膨胀
- *  集合定义: A ○ B = (A Θ B) ⊕ B
- */
-function open(image: number[][], structElement: StructElement): number[][] {
-  const eroded = erode(image, structElement);
-  return dilate(eroded, structElement);
-}`;
-
-const CLOSE_CODE_TS = `/** 闭操作：先膨胀后腐蚀
- *  集合定义: A • B = (A ⊕ B) Θ B
- */
-function close(image: number[][], structElement: StructElement): number[][] {
-  const dilated = dilate(image, structElement);
-  return erode(dilated, structElement);
-}`;
 
 // ========== 辅助函数 ==========
 
@@ -524,10 +444,7 @@ export default function MorphologyPage() {
   const currentStep: MorphologyStep | null = steps[activeStepIndex] ?? null;
 
   // 判断当前是高亮哪种操作类型
-  const isErode = currentStep?.operation === 'erode';
   const isComposite = effectiveOperation === 'open' || effectiveOperation === 'close';
-  const isFirstPhase = currentStep?.phase === 'first';
-  const isSecondPhase = currentStep?.phase === 'second';
 
   // 计算当前步骤在图像维度上的边界（与输出图像同大小）
   const outputWidth = inputWidth;
@@ -640,7 +557,6 @@ export default function MorphologyPage() {
 
     const { x, y, inputRegion, structElement: se, outputValue, operation: stepOp, phase } = currentStep;
     const size = se.length;
-    const center = Math.floor(size / 2);
     const cellClass = getCellClass(size);
     const zoomDisplaySize = size >= 7 ? 120 : Math.min(150, Math.max(112, size * 30));
     const activeValues = inputRegion.flatMap((row, ry) =>
@@ -915,7 +831,7 @@ export default function MorphologyPage() {
     // 腐蚀集合公式
     const erosionSetFormula = buildInlineMathML(`
       <mrow>
-        <mi>A</mi><mo>&#x0398;</mo><mi>B</mi>
+        <mi>A</mi><mo>&#x2296;</mo><mi>B</mi>
         <mo>=</mo>
         <mo>{</mo><mi>z</mi><mo>|</mo><msub><mrow><mo>(</mo><mi>B</mi><mo>)</mo></mrow><mi>z</mi></msub><mo>&#x2286;</mo><mi>A</mi><mo>}</mo>
       </mrow>
@@ -935,7 +851,7 @@ export default function MorphologyPage() {
       <mrow>
         <mi>A</mi><mo>&#x25CB;</mo><mi>B</mi>
         <mo>=</mo>
-        <mo>(</mo><mi>A</mi><mo>&#x0398;</mo><mi>B</mi><mo>)</mo>
+        <mo>(</mo><mi>A</mi><mo>&#x2296;</mo><mi>B</mi><mo>)</mo>
         <mo>&#x2295;</mo><mi>B</mi>
       </mrow>
     `);
@@ -946,7 +862,7 @@ export default function MorphologyPage() {
         <mi>A</mi><mo>&#x2022;</mo><mi>B</mi>
         <mo>=</mo>
         <mo>(</mo><mi>A</mi><mo>&#x2295;</mo><mi>B</mi><mo>)</mo>
-        <mo>&#x0398;</mo><mi>B</mi>
+        <mo>&#x2296;</mo><mi>B</mi>
       </mrow>
     `);
 
@@ -1655,15 +1571,17 @@ export default function MorphologyPage() {
     );
   }, [
     currentStep,
-    task,
+    currentTask,
     viewMode,
-    seSize,
     seShape,
     isComposite,
     operation,
+    recommendedOperation,
     originalImage,
     intermediateImage,
+    recommendedIntermediateImage,
     resultImage,
+    recommendedResultImage,
     operationChain,
     inputWidth,
     inputHeight,

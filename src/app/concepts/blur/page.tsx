@@ -78,7 +78,7 @@ const GAUSSIAN_BLUR_CODE_TS = `function gaussianBlur(image: number[][], kernelSi
   const width = image[0].length;
   const half = Math.floor(kernelSize / 2);
 
-  // 创建高斯核
+  // 创建高斯核：省略前置常数 1/(2πσ²)，因最终归一化后结果不变
   const kernel: number[][] = [];
   let sum = 0;
   for (let y = -half; y <= half; y++) {
@@ -169,6 +169,16 @@ const SIDEWINDOW_CODE_TS = `function sideWindowFilter(image: number[][], kernelS
 
 function formatPixelValue(value: number): string {
   return value < 0.01 ? value.toExponential(1) : value.toFixed(2);
+}
+
+/** 从生成器中只取第 n 个元素，避免一次性生成全部步骤（如 96×96 Lena 大图） */
+function getStepAtIndex<T>(generator: Generator<T>, index: number): T | undefined {
+  let i = 0;
+  for (const step of generator) {
+    if (i === index) return step;
+    i++;
+  }
+  return undefined;
 }
 
 function createEdgeTeachingImage(type: Exclude<TeachingImageType, SampleImageType>): GrayscaleImage {
@@ -427,40 +437,29 @@ export default function BlurPage() {
     }
   }, [originalImage, method, kernelSize, sigma]);
 
-  // 预生成所有步骤
-  const steps = useMemo(() => {
-    switch (method) {
-      case 'box':
-        return Array.from(boxBlurSteps(originalImage, kernelSize));
-      case 'gaussian':
-        return Array.from(gaussianBlurSteps(originalImage, kernelSize, sigma));
-      case 'median':
-        return Array.from(medianFilterSteps(originalImage, kernelSize));
-      default:
-        return [];
-    }
-  }, [originalImage, method, kernelSize, sigma]);
-
-  // 边窗滤波步骤（单独存储，结构不同）
-  const swSteps = useMemo(() => {
-    if (method !== 'sidewindow') return [];
-    return Array.from(sideWindowFilterSteps(originalImage, kernelSize));
-  }, [originalImage, method, kernelSize]);
-
   // 当前像素位置
   const [currentPosition, setCurrentPosition] = useState({ x: 0, y: 0 });
   const currentStepIndex = currentPosition.y * imageWidth + currentPosition.x;
 
-  // 当前步骤数据
+  // 当前步骤数据：按需生成，避免大图（如 96×96 Lena）一次性生成全部步骤
   const currentStep = useMemo<BlurStep | null>(() => {
-    if (method === 'sidewindow' || steps.length === 0) return null;
-    return steps[currentStepIndex] ?? null;
-  }, [method, steps, currentStepIndex]);
+    if (method === 'sidewindow') return null;
+    const generator =
+      method === 'box'
+        ? boxBlurSteps(originalImage, kernelSize)
+        : method === 'gaussian'
+          ? gaussianBlurSteps(originalImage, kernelSize, sigma)
+          : method === 'median'
+            ? medianFilterSteps(originalImage, kernelSize)
+            : null;
+    if (!generator) return null;
+    return getStepAtIndex(generator, currentStepIndex) ?? null;
+  }, [method, originalImage, kernelSize, sigma, currentStepIndex]);
 
   const currentSwStep = useMemo<SideWindowStep | null>(() => {
-    if (method !== 'sidewindow' || swSteps.length === 0) return null;
-    return swSteps[currentStepIndex] ?? null;
-  }, [method, swSteps, currentStepIndex]);
+    if (method !== 'sidewindow') return null;
+    return getStepAtIndex(sideWindowFilterSteps(originalImage, kernelSize), currentStepIndex) ?? null;
+  }, [method, originalImage, kernelSize, currentStepIndex]);
 
   const currentRegion = useMemo(() => {
     const activeStep = method === 'sidewindow' ? currentSwStep : currentStep;
@@ -589,7 +588,7 @@ export default function BlurPage() {
               <div className="rounded-2xl border border-red-200 bg-red-50/55 p-3">
                 <div className="text-sm font-semibold text-red-700">输入邻域</div>
                 <div className="mt-1 text-[11px] text-red-600">
-                  第 {regionStart.y + 1}-{regionStart.y + kernelSize} 行 / 第 {regionStart.x + 1}-{regionStart.x + kernelSize} 列
+                  第 {regionStart.y + 1}-{regionStart.y + kernelSize} 行 / 第 {regionStart.x + 1}-{regionStart.x + kernelSize} 列（边界处按最近像素复制 clamp 填充）
                 </div>
                 <div className="mt-3">
                   <div
@@ -707,6 +706,7 @@ export default function BlurPage() {
     }
 
     const { x, y, inputRegion, kernel, outputValue, operation } = currentStep;
+    const regionStart = getRegionTopLeft(x, y, kernelSize, imageWidth, imageHeight);
     const cellClass = getCellClass(kernelSize);
     const half = Math.floor(kernelSize / 2);
     const isMedian = operation === 'median';
@@ -747,20 +747,23 @@ export default function BlurPage() {
           {!isBox && !isMedian && kernelSize === 3 && Math.abs(sigma - 1) < 1e-6 && (
             <div className="mx-auto mt-4 max-w-2xl rounded-2xl border border-amber-200 bg-amber-50/60 px-4 py-3">
               <div className="mb-2 text-xs font-semibold text-amber-800">
-                经典 3×3 高斯模板（σ = 1.0）
+                课程中常用的 3×3 高斯整数近似模板
               </div>
               <FormulaLine
                 mathML={buildGaussianTemplateMathML()}
                 className="text-amber-800"
                 mathClassName="[&_math]:text-base sm:[&_math]:text-lg"
               />
+              <p className="mt-2 text-xs leading-5 text-amber-700">
+                该 1/16 整数模板只是便于快速计算的近似，并非 σ = 1.0 时按指数公式归一化得到的精确核。
+              </p>
             </div>
           )}
 
           {!isBox && !isMedian && kernelSize === 3 && Math.abs(sigma - 1) >= 1e-6 && (
             <div className="mx-auto mt-4 max-w-2xl rounded-2xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-xs leading-6 text-amber-800">
               当前 3×3 高斯核会随 <span className="font-semibold">σ = {sigma.toFixed(1)}</span> 动态变化；
-              上方输出值使用实时生成的高斯权重计算，不再套用固定的 `1/16` 经典模板。
+              上方输出值使用实时生成的高斯权重计算，不再套用固定的 `1/16` 整数近似模板。
             </div>
           )}
 
@@ -794,7 +797,7 @@ export default function BlurPage() {
             <div className="rounded-2xl border border-red-200 bg-red-50/55 p-3">
               <div className="text-sm font-semibold text-red-700">输入邻域</div>
               <div className="mt-1 text-[11px] text-red-600">
-                原图第 {y + 1}-{y + kernelSize} 行 / 第 {x + 1}-{x + kernelSize} 列
+                原图第 {regionStart.y + 1}-{regionStart.y + kernelSize} 行 / 第 {regionStart.x + 1}-{regionStart.x + kernelSize} 列（边界处按最近像素复制 clamp 填充）
               </div>
               <div className="mt-3">
                 <div
@@ -809,7 +812,7 @@ export default function BlurPage() {
                           rx === half && ry === half
                             ? 'border-red-400 bg-white text-red-700'
                             : 'border-red-200 bg-white/90 text-slate-700'
-                        }${isMedian && val === sortedValues[medianIdx] ? ' ring-2 ring-amber-400' : ''}`}
+                        }`}
                       >
                         {formatPixelValue(val)}
                       </div>
@@ -819,7 +822,7 @@ export default function BlurPage() {
               </div>
               {isMedian && (
                 <div className="mt-1 text-[10px] text-amber-600 text-center">
-                  黄色边框 = 中位数位置
+                  下方排序结果中高亮的值即为中位数
                 </div>
               )}
             </div>
@@ -848,7 +851,7 @@ export default function BlurPage() {
                       </span>
                     ))}
                   </div>
-                ) : (
+                ) : kernel ? (
                   <div
                     className="inline-grid gap-1"
                     style={{ gridTemplateColumns: `repeat(${kernelSize}, minmax(0, 1fr))` }}
@@ -868,7 +871,7 @@ export default function BlurPage() {
                       ))
                     )}
                   </div>
-                )}
+                ) : null}
               </div>
               {isMedian && (
                 <div className="mt-1 text-[10px] text-amber-600">
@@ -894,14 +897,15 @@ export default function BlurPage() {
                   >
                     {inputRegion.map((row, ry) =>
                       row.map((val, rx) => {
-                        const product = val * kernel[ry][rx];
+                        const weight = kernel?.[ry]?.[rx] ?? 0;
+                        const product = val * weight;
                         return (
                           <div
                             key={`product-${ry}-${rx}`}
                             className={`${cellClass} flex flex-col items-center justify-center rounded border border-sky-200 bg-white/90 font-mono`}
                           >
                             <InlineFormula
-                              mathML={productMathML(val, kernel[ry][rx], product)}
+                              mathML={productMathML(val, weight, product)}
                               className="scale-75 text-slate-500"
                             />
                             <span className="font-semibold text-sky-700">{product.toFixed(2)}</span>
@@ -996,7 +1000,7 @@ export default function BlurPage() {
         </TeachingCard>
       </div>
     );
-  }, [currentStep, currentSwStep, method, kernelSize]);
+  }, [currentStep, currentSwStep, method, kernelSize, imageWidth, imageHeight, sigma]);
 
   // ========== analysisPreview ==========
 
@@ -1005,6 +1009,7 @@ export default function BlurPage() {
       if (!currentSwStep) return null;
 
       const { x, y, inputRegion, candidates, selectedIndex, outputValue } = currentSwStep;
+      const regionStart = getRegionTopLeft(x, y, kernelSize, imageWidth, imageHeight);
       const zoomDisplaySize = kernelSize >= 5 ? 112 : 140;
 
       return (
@@ -1015,7 +1020,7 @@ export default function BlurPage() {
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <span className="text-[11px] font-semibold uppercase text-red-700">输入窗口放大</span>
                   <span className="text-[11px] text-red-700">
-                    第 {y + 1}-{y + kernelSize} 行 / 第 {x + 1}-{x + kernelSize} 列
+                    第 {regionStart.y + 1}-{regionStart.y + kernelSize} 行 / 第 {regionStart.x + 1}-{regionStart.x + kernelSize} 列
                   </span>
                 </div>
                 <div className="flex flex-col items-center gap-2">
@@ -1233,7 +1238,7 @@ export default function BlurPage() {
                     </span>
                   ))}
                 </div>
-              ) : (
+              ) : kernel ? (
                 <div
                   className="grid gap-1"
                   style={{ gridTemplateColumns: `repeat(${kernelSize}, minmax(0, 1fr))` }}
@@ -1253,7 +1258,7 @@ export default function BlurPage() {
                     ))
                   )}
                 </div>
-              )}
+              ) : null}
             </FlowNode>
 
             {!isMedian && (
@@ -1269,8 +1274,8 @@ export default function BlurPage() {
                   <FormulaLine
                     mathML={productMathML(
                       centerPixel,
-                      kernel[half]?.[half] ?? 0,
-                      centerPixel * (kernel[half]?.[half] ?? 0)
+                      kernel?.[half]?.[half] ?? 0,
+                      centerPixel * (kernel?.[half]?.[half] ?? 0)
                     )}
                     className="mt-1 text-sky-800"
                     mathClassName="[&_math]:text-[0.78rem]"
@@ -1315,7 +1320,7 @@ export default function BlurPage() {
         </FlowColumns>
       </ProcessRail>
     );
-  }, [currentStep, currentSwStep, method, kernelSize]);
+  }, [currentStep, currentSwStep, method, kernelSize, imageWidth, imageHeight]);
 
   // ========== visualOverlay (跨层连接线) ==========
 
@@ -1450,6 +1455,9 @@ export default function BlurPage() {
         <div className="mt-2 rounded-xl bg-white/80 px-3 py-2 text-sm font-semibold text-blue-800">
           窗口大小: {kernelSize}×{kernelSize} = {kernelSize * kernelSize} 个邻域像素
         </div>
+        <p className="mt-2 text-[11px] leading-4 text-blue-600">
+          边界处邻域超出图像范围时，采用最近像素复制（clamp）填充，保证窗口大小不变。
+        </p>
       </div>
 
       <SelectParam
@@ -1508,7 +1516,7 @@ export default function BlurPage() {
           <p className="mt-1">
             {method === 'box'
               ? '均值滤波对所有邻域像素等权平均。窗口越大，噪声抑制越强，但边缘和细节损失也越大。'
-              : '高斯滤波中心权重大、远处权重小。sigma越大权越均匀（趋近均值），sigma越小中心越突出。'}
+              : '高斯滤波中心权重大、远处权重小。sigma越大权越均匀（趋近均值），sigma越小中心越突出。实现中省略了 1/(2πσ²) 前置常数，因归一化后会被约去。'}
           </p>
         </div>
       )}

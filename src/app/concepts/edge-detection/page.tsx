@@ -184,8 +184,12 @@ interface EdgeStep {
   gxValue: number;
   /** 垂直梯度 */
   gyValue: number;
-  /** 梯度幅值 */
+  /** 梯度幅值（Canny 梯度阶段为归一化值，rawMagnitude 为原始值） */
   magnitude: number;
+  /** 原始梯度幅值（仅 Canny 梯度阶段使用） */
+  rawMagnitude?: number;
+  /** Canny 梯度阶段全局最大幅值 */
+  maxMagnitude?: number;
   /** 梯度方向(度) */
   direction: number;
   /** Canny 阶段标记 */
@@ -271,6 +275,20 @@ function buildGradientDirMathML(x: number, y: number, gy: number, gx: number, an
   `);
 }
 
+function buildCannyGradientNormalizeMathML(rawMag: number, maxMag: number, normalizedMag: number): string {
+  return buildInlineMathML(`
+    <mrow>
+      <msub><mi>M</mi><mtext>归一化</mtext></msub>
+      <mo>=</mo>
+      <mfrac><mrow><msub><mi>M</mi><mtext>原始</mtext></msub></mrow><mrow><msub><mi>M</mi><mtext>max</mtext></msub></mrow></mfrac>
+      <mo>=</mo>
+      <mfrac><mn>${rawMag.toFixed(2)}</mn><mn>${maxMag.toFixed(2)}</mn></mfrac>
+      <mo>&#x2248;</mo>
+      <mn>${normalizedMag.toFixed(3)}</mn>
+    </mrow>
+  `);
+}
+
 function buildLaplaceMathML(x: number, y: number, val: number): string {
   return buildInlineMathML(`
     <mrow>
@@ -286,7 +304,7 @@ function buildLaplaceMathML(x: number, y: number, val: number): string {
   `);
 }
 
-function buildCannyBlurMathML(x: number, y: number, orig: number, blurred: number): string {
+function buildCannyBlurMathML(x: number, y: number, blurred: number): string {
   return buildInlineMathML(`
     <mrow>
       <mi>B</mi><mo>(</mo><mn>${x}</mn><mo>,</mo><mn>${y}</mn><mo>)</mo>
@@ -296,15 +314,13 @@ function buildCannyBlurMathML(x: number, y: number, orig: number, blurred: numbe
       <mi>f</mi><mo>(</mo><mi>x</mi><mo>+</mo><mi>i</mi><mo>,</mo><mi>y</mi><mo>+</mo><mi>j</mi><mo>)</mo>
       <mo>&#x22C5;</mo>
       <mi>G</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo>
-      <mo>=</mo>
-      <msub><mi>f</mi><mtext>原始</mtext></msub><mo>=</mo><mn>${orig.toFixed(2)}</mn>
-      <mo>&#x2192;</mo>
-      <msub><mi>f</mi><mtext>模糊</mtext></msub><mo>=</mo><mn>${blurred.toFixed(2)}</mn>
+      <mo>&#x2248;</mo>
+      <mn>${blurred.toFixed(2)}</mn>
     </mrow>
   `);
 }
 
-function buildNmsMathML(x: number, y: number, suppressed: boolean, mag: number): string {
+function buildNmsMathML(x: number, y: number, mag: number): string {
   return buildInlineMathML(`
     <mrow>
       <mi>NMS</mi><mo>(</mo><mn>${x}</mn><mo>,</mo><mn>${y}</mn><mo>)</mo>
@@ -320,7 +336,7 @@ function buildNmsMathML(x: number, y: number, suppressed: boolean, mag: number):
             <mtd><mtext>否则(被抑制)</mtext></mtd>
           </mtr>
         </mtable>
-      <mo>)</mo></mrow>
+      <mo>}</mo></mrow>
     </mrow>
   `);
 }
@@ -332,7 +348,7 @@ export default function EdgeDetectionPage() {
   const [imageType, setImageType] = useState<SampleImageType>('lena');
   const [operator, setOperator] = useState<EdgeOperator>('sobel');
   const [laplaceVariant, setLaplaceVariant] = useState<LaplaceVariant>('4-neighbor');
-  const [cannyStage, setCannyStage] = useState<CannyStage>('gradient');
+  const [cannyStage, setCannyStage] = useState<CannyStage>('blur');
   const [lowThreshold, setLowThreshold] = useState(30);
   const [highThreshold, setHighThreshold] = useState(100);
   const [currentPosition, setCurrentPosition] = useState({ x: 0, y: 0 });
@@ -433,7 +449,7 @@ export default function EdgeDetectionPage() {
     // Canny: 为当前阶段生成步骤
     if (operator === 'canny' && cannyResult) {
       const {
-        stages: { grayscale, blurred, gradientMagnitude, gradientDirection, nms, doubleThreshold, thresholded },
+        stages: { grayscale, blurred, gradientMagnitudeRaw, gradientMagnitude, gradientDirection, maxMagnitude, nms, doubleThreshold, thresholded },
       } = cannyResult;
 
       for (let y = 0; y < imgHeight; y++) {
@@ -464,6 +480,8 @@ export default function EdgeDetectionPage() {
               step.inputRegion = extractInputRegion(blurred, x, y, 3);
               step.kernelSize = 3;
               step.magnitude = gradientMagnitude[y][x];
+              step.rawMagnitude = gradientMagnitudeRaw[y][x];
+              step.maxMagnitude = maxMagnitude;
               step.direction = gradientDirection[y][x];
               // Canny 的梯度计算在高斯去噪后的图像上执行，必须和算法中间结果同源。
               {
@@ -593,7 +611,7 @@ export default function EdgeDetectionPage() {
       }
     }
     return stepList;
-  }, [originalImage, operator, laplaceVariant, cannyStage, cannyResult, imgWidth, imgHeight]);
+  }, [originalImage, operator, laplaceVariant, cannyStage, cannyResult, imgWidth, imgHeight, lowThreshold, highThreshold]);
 
   const totalSteps = steps.length;
   const safeCurrentPosition = {
@@ -975,7 +993,9 @@ export default function EdgeDetectionPage() {
                   )}
                 </div>
                 <div className="max-w-[12rem] rounded-xl bg-red-50 px-3 py-2 text-center text-xs leading-5 text-red-700">
-                  原图第 {y + 1}-{y + kernelSize} 行 / 第 {x + 1}-{x + kernelSize} 列
+                  {operator === 'canny' && cs === 'gradient'
+                    ? `来自高斯模糊图像 第 ${y + 1}-${y + kernelSize} 行 / 第 ${x + 1}-${x + kernelSize} 列`
+                    : `原图第 ${y + 1}-${y + kernelSize} 行 / 第 ${x + 1}-${x + kernelSize} 列`}
                 </div>
               </div>
             </FlowNode>
@@ -1217,9 +1237,9 @@ export default function EdgeDetectionPage() {
               </div>
             </div>
             <FormulaCard
-              mathML={buildCannyBlurMathML(x, y, orig, blur)}
+              mathML={buildCannyBlurMathML(x, y, blur)}
               className="mt-4"
-              note="高斯核中心权重最大，边缘权重小，平滑同时尽量保留结构。"
+              note={`原始中心灰度值 ${fmtPx(orig)}，经 5×5 高斯加权平均后得到去噪值 ${fmtPx(blur)}。`}
             />
           </TeachingCard>
         </div>
@@ -1261,7 +1281,7 @@ export default function EdgeDetectionPage() {
               </div>
             </div>
             <FormulaCard
-              mathML={buildNmsMathML(x, y, suppressed, magnitude)}
+              mathML={buildNmsMathML(x, y, magnitude)}
               className="mt-4"
               note="梯度方向被量化为 0°/45°/90°/135° 四个方向，沿对应方向比较相邻像素。"
             />
@@ -1368,7 +1388,199 @@ export default function EdgeDetectionPage() {
       );
     }
 
-    // ---- 通用梯度算子详情 (Roberts / Sobel / Prewitt / Laplace / Canny gradient) ----
+    // ---- Canny 梯度阶段专用详情 ----
+
+    if (operator === 'canny' && cs === 'gradient') {
+      const rawMag = currentStep.rawMagnitude ?? magnitude;
+      const maxMag = currentStep.maxMagnitude ?? Math.max(rawMag, magnitude);
+      const normalizedMag = magnitude;
+
+      return (
+        <div className="space-y-4">
+          <TeachingCard>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-slate-800">Canny 第 2 步: 梯度计算</div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  Canny 的梯度计算在高斯去噪后的图像上进行。当前位置 ({x}, {y}) 的 3×3 邻域来自上一步的模糊图像，再用 Sobel 核计算 Gx、Gy 与幅值。
+                </p>
+              </div>
+              <div className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                原始幅值 {fmtPx(rawMag)}
+              </div>
+            </div>
+
+            <FormulaCard
+              mathML={buildGradientMagMathML(x, y, gxValue, gyValue, rawMag)}
+              className="mx-auto mt-4 max-w-4xl"
+              mathClassName="[&_math]:text-lg sm:[&_math]:text-xl"
+            />
+            <FormulaCard
+              mathML={buildGradientDirMathML(x, y, gyValue, gxValue, direction)}
+              className="mx-auto mt-3 max-w-4xl"
+              mathClassName="[&_math]:text-base sm:[&_math]:text-lg"
+            />
+            <FormulaCard
+              mathML={buildCannyGradientNormalizeMathML(rawMag, maxMag, normalizedMag)}
+              className="mx-auto mt-3 max-w-4xl"
+              mathClassName="[&_math]:text-base sm:[&_math]:text-lg"
+              note="结果图与后续 NMS、双阈值均使用归一化到 [0,1] 的幅值，便于统一阈值设置。"
+            />
+          </TeachingCard>
+
+          {/* 复用通用的核矩阵与计算展开，但明确标注输入来源 */}
+          <TeachingCard>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-slate-800">邻域与核矩阵展开</div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  下表中的输入邻域来自高斯模糊后的图像，不是原图。
+                </p>
+              </div>
+              <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+                Gx + Gy 展开
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(12rem,0.8fr)]">
+              {/* 输入邻域 */}
+              <div className="rounded-2xl border border-red-200 bg-red-50/55 p-3">
+                <div className="text-sm font-semibold text-red-700">
+                  输入邻域 (3×3)
+                </div>
+                <div className="mt-1 text-[11px] text-red-600">
+                  来自高斯模糊图像
+                </div>
+                <div className="mt-3 inline-grid gap-1" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
+                  {inputRegion.map((row, ry) =>
+                    row.map((val, rx) => (
+                      <div
+                        key={`canny-detail-input-${ry}-${rx}`}
+                        className={`flex h-9 w-9 items-center justify-center rounded border font-mono text-xs ${
+                          rx === 1 && ry === 1
+                            ? 'border-red-400 bg-white text-red-700 font-bold'
+                            : 'border-red-200 bg-white/90 text-slate-700'
+                        }`}
+                      >
+                        {fmtPx(val)}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* 核矩阵 */}
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/55 p-3">
+                <div className="text-sm font-semibold text-amber-800">Sobel 核</div>
+                <div className="mt-1 text-[11px] text-amber-700">与输入逐项对应相乘</div>
+                <div className="mt-3 space-y-3">
+                  <div>
+                    <div className="text-[10px] font-medium text-amber-700 mb-1">Gx 核</div>
+                    <div className="inline-grid gap-1" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
+                      {SOBEL_GX.map((row, ry) =>
+                        row.map((val, rx) => (
+                          <div
+                            key={`canny-detail-gx-${ry}-${rx}`}
+                            className={`flex h-8 w-8 items-center justify-center rounded border font-mono text-xs ${
+                              rx === 1 && ry === 1
+                                ? 'border-amber-400 bg-white text-amber-800 font-bold'
+                                : 'border-amber-200 bg-white/90 text-slate-700'
+                            }`}
+                          >
+                            {fmtK(val)}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-medium text-amber-700 mb-1">Gy 核</div>
+                    <div className="inline-grid gap-1" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
+                      {SOBEL_GY.map((row, ry) =>
+                        row.map((val, rx) => (
+                          <div
+                            key={`canny-detail-gy-${ry}-${rx}`}
+                            className={`flex h-8 w-8 items-center justify-center rounded border font-mono text-xs ${
+                              rx === 1 && ry === 1
+                                ? 'border-amber-400 bg-white text-amber-800 font-bold'
+                                : 'border-amber-200 bg-white/90 text-slate-700'
+                            }`}
+                          >
+                            {fmtK(val)}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 逐项乘积 (Gx) */}
+              <div className="rounded-2xl border border-sky-200 bg-sky-50/55 p-3">
+                <div className="text-sm font-semibold text-sky-800">逐项乘积 (Gx)</div>
+                <div className="mt-1 text-[11px] text-sky-700">每格: pixel × weight</div>
+                <div className="mt-3 inline-grid gap-1.5" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
+                  {inputRegion.map((row, ry) =>
+                    row.map((val, rx) => {
+                      const weight = SOBEL_GX[ry][rx];
+                      const product = val * weight;
+                      return (
+                        <div
+                          key={`canny-detail-prod-${ry}-${rx}`}
+                          title={`${fmtPx(val)} × ${weight} = ${fmtPx(product)}`}
+                          className={`flex flex-col items-center justify-center rounded-xl border px-1 py-1 text-center font-mono ${
+                            rx === 1 && ry === 1
+                              ? 'border-sky-400 bg-white text-sky-800'
+                              : 'border-sky-200 bg-white/90 text-slate-700'
+                          }`}
+                        >
+                          <span className="text-[9px] leading-none text-slate-500">
+                            {fmtPx(val)}×{weight}
+                          </span>
+                          <span className="mt-0.5 text-[10px] font-semibold leading-none text-sky-800">
+                            ={fmtPx(product)}
+                          </span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* 输出结果 */}
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/55 p-3">
+                <div className="text-sm font-semibold text-emerald-800">梯度输出</div>
+                <div className="mt-3 space-y-3">
+                  <div className="rounded-xl border border-emerald-200 bg-white px-3 py-2">
+                    <div className="text-[10px] text-emerald-600">水平梯度 Gx</div>
+                    <div className="font-mono text-lg font-bold text-emerald-700">{fmtPx(gxValue)}</div>
+                  </div>
+                  <div className="rounded-xl border border-emerald-200 bg-white px-3 py-2">
+                    <div className="text-[10px] text-emerald-600">垂直梯度 Gy</div>
+                    <div className="font-mono text-lg font-bold text-emerald-700">{fmtPx(gyValue)}</div>
+                  </div>
+                  <div className="rounded-xl border-2 border-emerald-400 bg-white px-3 py-2">
+                    <div className="text-[10px] text-emerald-600 font-semibold">原始梯度幅值</div>
+                    <div className="font-mono text-2xl font-bold text-emerald-700">{fmtPx(rawMag)}</div>
+                    <div className="mt-1 text-[10px] text-slate-400">√(Gx² + Gy²)</div>
+                  </div>
+                  <div className="rounded-xl border border-emerald-200 bg-white px-3 py-2">
+                    <div className="text-[10px] text-emerald-600">归一化幅值</div>
+                    <div className="font-mono text-sm font-bold text-emerald-700">{normalizedMag.toFixed(3)}</div>
+                  </div>
+                  <div className="rounded-xl border border-emerald-200 bg-white px-3 py-2">
+                    <div className="text-[10px] text-emerald-600">梯度方向</div>
+                    <div className="font-mono text-sm font-bold text-emerald-700">{dirDeg}&deg;</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </TeachingCard>
+        </div>
+      );
+    }
+
+    // ---- 通用梯度算子详情 (Roberts / Sobel / Prewitt / Laplace) ----
 
     const mainFormulaMathML = operator === 'laplace'
       ? buildLaplaceMathML(x, y, gxValue)
@@ -1628,7 +1840,7 @@ export default function EdgeDetectionPage() {
               { key: 'sobel', name: 'Sobel', size: '3×3', desc: '加权差分', pros: '抗噪较好', cons: '边缘较粗' },
               { key: 'prewitt', name: 'Prewitt', size: '3×3', desc: '简单差分', pros: '实现简单', cons: '权重均等' },
               { key: 'laplace', name: 'Laplace', size: '3×3', desc: '二阶微分', pros: '方向无关', cons: '噪声敏感' },
-              { key: 'canny', name: 'Canny', size: '多阶段', desc: '最优检测', pros: '细/连续', cons: '计算复杂' },
+              { key: 'canny', name: 'Canny', size: '多阶段', desc: 'Canny 准则下接近最优', pros: '细/连续', cons: '计算复杂' },
             ] as const).map(op => (
               <div
                 key={op.key}
@@ -1781,17 +1993,23 @@ export default function EdgeDetectionPage() {
           <SliderParam
             label="低阈值"
             value={lowThreshold}
-            onChange={setLowThreshold}
+            onChange={v => {
+              setLowThreshold(v);
+              if (v >= highThreshold) setHighThreshold(Math.min(200, v + 5));
+            }}
             min={10}
-            max={100}
+            max={highThreshold - 5}
             step={5}
           />
 
           <SliderParam
             label="高阈值"
             value={highThreshold}
-            onChange={setHighThreshold}
-            min={50}
+            onChange={v => {
+              setHighThreshold(v);
+              if (v <= lowThreshold) setLowThreshold(Math.max(10, v - 5));
+            }}
+            min={lowThreshold + 5}
             max={200}
             step={5}
           />

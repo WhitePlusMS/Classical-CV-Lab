@@ -56,6 +56,11 @@ const CONVOLUTION_CODE_TS = `function convolve2D(
   const resultWidth = width - kSize + 1;
   const result = create2DArray(resultHeight, resultWidth, 0);
 
+  // 真正卷积：先把核关于中心翻转，再与输入窗口逐项相乘
+  const flippedKernel = Array.from({ length: kSize }, (_, y) =>
+    Array.from({ length: kSize }, (_, x) => kernel[kSize - 1 - y][kSize - 1 - x])
+  );
+
   // 不补零，窗口只在图像内部滑动
   for (let y = 0; y < resultHeight; y++) {
     for (let x = 0; x < resultWidth; x++) {
@@ -63,7 +68,7 @@ const CONVOLUTION_CODE_TS = `function convolve2D(
 
       for (let ky = 0; ky < kSize; ky++) {
         for (let kx = 0; kx < kSize; kx++) {
-          sum += image[y + ky][x + kx] * kernel[ky][kx];
+          sum += image[y + ky][x + kx] * flippedKernel[ky][kx];
         }
       }
 
@@ -126,7 +131,7 @@ const KERNEL_PRESET_FAMILIES: KernelPresetFamily[] = [
     principle: '越靠近中心的像素权重越大，越远的像素权重越小，因此比等权平均更温和，也更符合局部邻域的自然衰减。',
     origin: '它来自高斯分布和尺度空间思想，是图像平滑里最经典、最标准的一类卷积核。',
     formulaMathML: buildInlineMathML('<mrow><mi>g</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo><mo>&#8733;</mo><msup><mi>e</mi><mrow><mo>-</mo><mfrac><mrow><msup><mi>i</mi><mn>2</mn></msup><mo>+</mo><msup><mi>j</mi><mn>2</mn></msup></mrow><mrow><mn>2</mn><msup><mi>&#963;</mi><mn>2</mn></msup></mrow></mfrac></mrow></msup></mrow>'),
-    formulaNote: '离中心越近，权重越高；核越大，平滑尺度也越大。',
+    formulaNote: '公式给出的是连续高斯函数的理想形式；页面实际生成的核矩阵采用帕斯卡三角的离散近似，便于直观对比不同尺寸下的权重分布。',
     visualTitle: '响应图示',
     visualLabels: ['中心更重', '周边更轻', '柔和平滑'],
   },
@@ -152,7 +157,7 @@ const KERNEL_PRESET_FAMILIES: KernelPresetFamily[] = [
     principle: '它把“水平方向一阶差分”和“垂直方向平滑”结合在一起；核越大，参与比较的邻域越宽。',
     origin: '它是经典的一阶导数卷积核族。3×3 最常见，5×5 和 7×7 则表示更大尺度的方向导数。',
     formulaMathML: buildInlineMathML('<mrow><msub><mi>G</mi><mi>x</mi></msub><mo>=</mo><mfrac><mrow><mi>&#8706;</mi><mi>f</mi></mrow><mrow><mi>&#8706;</mi><mi>x</mi></mrow></mfrac></mrow>'),
-    formulaNote: '如果右侧更亮，响应通常偏正；如果左侧更亮，响应通常偏负。',
+    formulaNote: '如果左侧更亮，响应通常偏正；如果右侧更亮，响应通常偏负。',
     visualTitle: '方向图示',
     visualLabels: ['左暗右亮'],
   },
@@ -165,7 +170,7 @@ const KERNEL_PRESET_FAMILIES: KernelPresetFamily[] = [
     principle: '它把“垂直方向一阶差分”和“水平方向平滑”结合在一起；核越大，参与比较的邻域越宽。',
     origin: '它是经典的一阶导数卷积核族。3×3 最常见，5×5 和 7×7 则表示更大尺度的方向导数。',
     formulaMathML: buildInlineMathML('<mrow><msub><mi>G</mi><mi>y</mi></msub><mo>=</mo><mfrac><mrow><mi>&#8706;</mi><mi>f</mi></mrow><mrow><mi>&#8706;</mi><mi>y</mi></mrow></mfrac></mrow>'),
-    formulaNote: '如果下侧更亮，响应通常偏正；如果上侧更亮，响应通常偏负。',
+    formulaNote: '如果上侧更亮，响应通常偏正；如果下侧更亮，响应通常偏负。',
     visualTitle: '方向图示',
     visualLabels: ['上暗下亮'],
   },
@@ -186,21 +191,6 @@ function getMatrixCellClass(size: number): string {
   if (size >= 7) return 'w-7 h-7 text-[9px]';
   if (size >= 5) return 'w-8 h-8 text-[10px]';
   return 'w-9 h-9 text-[11px]';
-}
-
-function getProductCellClass(size: number): string {
-  if (size >= 11) return 'w-[3rem] h-10 text-[7px]';
-  if (size >= 9) return 'w-[3.35rem] h-11 text-[8px]';
-  if (size >= 7) return 'w-[3.6rem] h-11 text-[8px]';
-  if (size >= 5) return 'w-16 h-[3.1rem] text-[9px]';
-  return 'w-[4.1rem] h-14 text-[10px]';
-}
-
-function getProductPreviewCount(size: number): number {
-  if (size >= 11) return 8;
-  if (size >= 9) return 10;
-  if (size >= 7) return 12;
-  return size * size;
 }
 
 function getFlowCellClass(size: number): string {
@@ -840,6 +830,7 @@ export default function ConvolutionPage() {
     kernelSize,
     selectedPresetFamily,
     selectedPresetKey,
+    inputMarkerWindowLabel,
   ]);
 
   const visualOverlayPaths = useMemo<AnchoredOverlayPath[]>(() => {
@@ -1078,6 +1069,7 @@ export default function ConvolutionPage() {
   }, [
     currentStep,
     kernelSize,
+    inputMarkerExpandHint,
   ]);
 
   const parameters = (

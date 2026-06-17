@@ -326,6 +326,12 @@ export default function PixelMatrixPage() {
           <div>总像素数：{imageDim.width * imageDim.height}</div>
           <div>当前窗口：{getWindowSizeLabel(windowSize)}</div>
           <div>当前模式：{displayMode === 'color' ? '彩色（RGB三通道）' : '灰度（单通道）'}</div>
+          {displayMode === 'color' && imageType !== 'color-checkerboard' && imageType !== 'color-gradient' && (
+            <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-700 leading-relaxed">
+              当前示例为灰度图，彩色模式下使用<span className="font-semibold">伪彩色可视化</span>
+              （仅用于突出灰度差异，不代表真实颜色）。
+            </div>
+          )}
         </div>
       </details>
     </div>
@@ -749,7 +755,7 @@ export default function PixelMatrixPage() {
                 ))}
               </div>
               <p className="text-[11px] text-red-500 mt-1">
-                当前边界处理使用 Clamp 策略（灰显策略为本页未实现的常见方案，仅作知识扩展参考）。
+                当前边界处理使用 Clamp 策略（灰显策略为当前页面未实现的常见方案，仅作知识扩展参考）。
               </p>
             </div>
           </TeachingCard>
@@ -771,6 +777,7 @@ export default function PixelMatrixPage() {
                   rowData.map((val, c) => {
                     const pixel = colorImage[r]?.[c] ?? { r: val, g: val, b: val, gray: val };
                     const isSelected = r === row && c === col;
+                    const grayVal = Math.round((pixel.gray ?? pixel.r) * 255);
                     return (
                       <button
                         key={`${r}-${c}`}
@@ -785,7 +792,9 @@ export default function PixelMatrixPage() {
                           height: '22px',
                           backgroundColor: isSelected
                             ? undefined
-                            : `rgb(${Math.round(pixel.r * 255)}, ${Math.round(pixel.g * 255)}, ${Math.round(pixel.b * 255)})`,
+                            : displayMode === 'grayscale'
+                              ? `rgb(${grayVal}, ${grayVal}, ${grayVal})`
+                              : `rgb(${Math.round(pixel.r * 255)}, ${Math.round(pixel.g * 255)}, ${Math.round(pixel.b * 255)})`,
                         }}
                         onClick={() => {
                           const idx = steps.findIndex(s => s.row === r && s.col === c);
@@ -816,7 +825,7 @@ export default function PixelMatrixPage() {
         </TeachingCard>
       </div>
     );
-  }, [currentStep, displayImage, displayMode, colorImage, steps, windowSize, neighborhoodType, imageDim]);
+  }, [currentStep, displayImage, displayMode, colorImage, steps, neighborhoodType, imageDim]);
 
   // -------------------------------------------------------------------------
   // 渲染

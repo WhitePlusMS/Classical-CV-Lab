@@ -7,13 +7,16 @@ import {
   FormulaCard,
   SelectParam,
   TeachingCard,
+  ProcessRail,
+  FlowColumns,
+  FlowColumn,
+  FlowNode,
   buildInlineMathML,
 } from '@/components';
 import {
   generateRgbImage,
   rgbToGrayscaleWeighted,
   rgbToGrayscaleAverage,
-  extractChannel,
   grayscaleSteps,
   getDisplayImage,
   type RgbImage,
@@ -228,20 +231,19 @@ export default function GrayscalePage() {
     if (!currentStep || !rgbImage) return null;
     const step = currentStep;
     const x = step.x, y = step.y, r = step.r, g = step.g, b = step.b;
-    const weightedGray = step.weightedGray, averageGray = step.averageGray;
     const r255 = (r * 255).toFixed(0), g255 = (g * 255).toFixed(0), b255 = (b * 255).toFixed(0);
-    const wg255 = (weightedGray * 255).toFixed(1), ag255 = (averageGray * 255).toFixed(1);
     const weights = method === 'weighted'
       ? { r: 0.299, g: 0.587, b: 0.114 }
       : { r: 1 / 3, g: 1 / 3, b: 1 / 3 };
-    const currentOutput = method === 'weighted' ? weightedGray : averageGray;
-    const currentOutput255 = method === 'weighted' ? wg255 : ag255;
     const rContribution = (r * weights.r * 255).toFixed(1);
     const gContribution = (g * weights.g * 255).toFixed(1);
     const bContribution = (b * weights.b * 255).toFixed(1);
+    // 让“输出结果”与“三项贡献之和”在视觉和数值上严格相等
+    const currentOutput255 = (parseFloat(rContribution) + parseFloat(gContribution) + parseFloat(bContribution)).toFixed(1);
+    const currentOutput = parseFloat(currentOutput255) / 255;
 
-    const weightedFormulaML = buildWeightedFormulaMathML(r255, g255, b255, wg255);
-    const averageFormulaML = buildAverageFormulaMathML(r255, g255, b255, ag255);
+    const weightedFormulaML = buildWeightedFormulaMathML(r255, g255, b255, currentOutput255);
+    const averageFormulaML = buildAverageFormulaMathML(r255, g255, b255, currentOutput255);
     const currentFormulaML = method === 'weighted' ? weightedFormulaML : averageFormulaML;
     const currentMethodLabel = method === 'weighted' ? '加权法' : '平均法';
 
@@ -270,7 +272,10 @@ export default function GrayscalePage() {
 
           <div className="mt-3 text-xs leading-6 text-slate-600 space-y-1">
             {method === 'weighted' ? (
-              <p>加权法使用 0.299、0.587、0.114 三个权重，反映人眼对绿色更敏感、对蓝色相对不敏感的视觉特性。</p>
+              <>
+                <p>加权法使用 0.299、0.587、0.114 三个权重，反映人眼对绿色更敏感、对蓝色相对不敏感的视觉特性。</p>
+                <p>当前页面采用 ITU-R BT.601 的精确系数；教材中常见的 0.3/0.59/0.11 是该组权重的常用近似。</p>
+              </>
             ) : (
               <p>平均法把 R、G、B 三个通道等权相加后除以 3，用于说明最直接的三通道合并方式。</p>
             )}
@@ -360,7 +365,7 @@ export default function GrayscalePage() {
             </div>
             <div className="flex flex-col items-center rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 min-w-[72px]">
               <span className="text-[10px] text-amber-600 mb-0.5">灰度</span>
-              <span className="text-lg font-bold text-amber-700">{(currentOutput * 255).toFixed(0)}</span>
+              <span className="text-lg font-bold text-amber-700">{currentOutput255}</span>
               <div className="mt-1 w-full h-3 rounded bg-amber-500" style={{ opacity: currentOutput }} />
             </div>
           </div>
@@ -368,6 +373,57 @@ export default function GrayscalePage() {
       </div>
     );
   }, [currentStep, rgbImage, method]);
+
+  // —— 流程预览区 ——
+
+  const analysisPreview = useMemo(function() {
+    if (!currentStep) return null;
+    const weights = method === 'weighted'
+      ? { r: 0.299, g: 0.587, b: 0.114, label: '加权' }
+      : { r: 1 / 3, g: 1 / 3, b: 1 / 3, label: '平均' };
+    const rContribution = (currentStep.r * weights.r * 255).toFixed(1);
+    const gContribution = (currentStep.g * weights.g * 255).toFixed(1);
+    const bContribution = (currentStep.b * weights.b * 255).toFixed(1);
+    const output255 = (parseFloat(rContribution) + parseFloat(gContribution) + parseFloat(bContribution)).toFixed(1);
+
+    return (
+      <ProcessRail>
+        <FlowColumns>
+          <FlowColumn align="start">
+            <FlowNode tone="red">
+              <div className="text-[11px] font-semibold uppercase text-red-700">RGB 输入</div>
+              <div className="mt-2 flex gap-2 text-xs">
+                <span className="rounded-lg bg-red-50 px-2 py-1 font-mono text-red-700">R {(currentStep.r * 255).toFixed(0)}</span>
+                <span className="rounded-lg bg-green-50 px-2 py-1 font-mono text-green-700">G {(currentStep.g * 255).toFixed(0)}</span>
+                <span className="rounded-lg bg-blue-50 px-2 py-1 font-mono text-blue-700">B {(currentStep.b * 255).toFixed(0)}</span>
+              </div>
+            </FlowNode>
+          </FlowColumn>
+
+          <FlowColumn align="start">
+            <FlowNode tone="amber">
+              <div className="text-[11px] font-semibold uppercase text-amber-700">{weights.label}权重相乘</div>
+              <div className="mt-2 space-y-1 text-xs font-mono text-slate-600">
+                <div className="text-red-600">R × {weights.r.toFixed(3)} = {rContribution}</div>
+                <div className="text-green-600">G × {weights.g.toFixed(3)} = {gContribution}</div>
+                <div className="text-blue-600">B × {weights.b.toFixed(3)} = {bContribution}</div>
+              </div>
+            </FlowNode>
+          </FlowColumn>
+
+          <FlowColumn align="start">
+            <FlowNode tone="emerald">
+              <div className="text-[11px] font-semibold uppercase text-emerald-700">求和输出</div>
+              <div className="mt-2 text-center">
+                <div className="font-mono text-lg font-bold text-emerald-800">{output255}</div>
+                <div className="mt-1 text-[10px] text-slate-500">灰度值（0-255）</div>
+              </div>
+            </FlowNode>
+          </FlowColumn>
+        </FlowColumns>
+      </ProcessRail>
+    );
+  }, [currentStep, method]);
 
   // —— 参数面板 ——
 
@@ -381,6 +437,9 @@ export default function GrayscalePage() {
           return { value: entry[0], label: entry[1].name };
         })}
       />
+      <p className="text-[11px] leading-5 text-slate-500">
+        除 Lena 外，渐变、棋盘等示例图的彩色显示由算法合成，用于观察 RGB 通道分离效果。
+      </p>
 
       <SelectParam
         label="通道显示"
@@ -443,10 +502,12 @@ export default function GrayscalePage() {
       resultImage={resultImage}
       parameters={parameters}
       stepDetails={stepDetails}
+      analysisPreview={analysisPreview}
       codeTab={<CodeViewer languages={[{ name: 'TypeScript', code: GRAYSCALE_CODE_TS }]} />}
       imageHints={imageHints}
       showOriginalGrid={shouldShowOriginalGrid}
       currentStep={currentStep ? { x: currentStep.x, y: currentStep.y, kernelSize: 1 } : null}
+      currentStepLabel="当前像素"
       stepInfo={steps.length > 0 ? { current: currentStepIndex, total: steps.length } : null}
       onStepChange={setCurrentStepIndex}
       onDirectionMove={handleDirectionMove}

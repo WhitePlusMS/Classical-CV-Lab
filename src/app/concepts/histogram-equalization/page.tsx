@@ -26,8 +26,10 @@ const EQUALIZATION_CODE_TS = `// 1. 计算直方图
 function computeHistogram(image) {
   const bins = new Array(256).fill(0);
   for (let y = 0; y < image.length; y++)
-    for (let x = 0; x < image[0].length; x++)
-      bins[Math.round(image[y][x] * 255)]++;
+    for (let x = 0; x < image[0].length; x++) {
+      const gray = Math.max(0, Math.min(1, image[y][x])); // clamp 到 [0, 1]
+      bins[Math.round(gray * 255)]++;
+    }
   return bins;
 }
 
@@ -48,7 +50,10 @@ function equalize(image) {
   const totalPixels = image.length * image[0].length;
   const mapping = computeMapping(bins, totalPixels);
   return image.map(row =>
-    row.map(pixel => mapping[Math.round(pixel * 255)] / 255)
+    row.map(pixel => {
+      const gray = Math.max(0, Math.min(1, pixel)); // clamp 到 [0, 1]
+      return mapping[Math.round(gray * 255)] / 255;
+    })
   );
 }`;
 
@@ -114,14 +119,17 @@ function HistogramBarChart({
     const currentGray = activeGray ?? 128;
     if (event.key === 'ArrowLeft') {
       event.preventDefault();
+      event.stopPropagation();
       onPinGray(Math.max(0, currentGray - 1));
       onHoverGrayChange?.(null);
     } else if (event.key === 'ArrowRight') {
       event.preventDefault();
+      event.stopPropagation();
       onPinGray(Math.min(255, currentGray + 1));
       onHoverGrayChange?.(null);
     } else if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
+      event.stopPropagation();
       onPinGray(currentGray);
       onHoverGrayChange?.(null);
     }
@@ -225,7 +233,7 @@ export default function HistogramEqualizationPage() {
 
   // 均衡化结果
   const eqResult = useMemo(() => equalizeHistogram(originalImage), [originalImage]);
-  const { result: eqImage, mapping, cdf } = eqResult;
+  const { result: eqImage, mapping, cdf, cdfCounts } = eqResult;
   const eqMaxCount = useMemo(() => Math.max(...eqResult.equalizedBins, 1), [eqResult]);
 
   // 悬停用于快速预览，点击后锁定；方向键只移动锁定位置。
@@ -241,6 +249,7 @@ export default function HistogramEqualizationPage() {
   const currentFormulaML = useMemo(() => {
     if (activeGray === null) return null;
     const cdfVal = cdf[activeGray];
+    const cdfCount = cdfCounts[activeGray];
     const mapped = mapping[activeGray];
     return buildInlineMathML(`
       <mrow>
@@ -251,7 +260,7 @@ export default function HistogramEqualizationPage() {
           <mn>255</mn>
           <mo>⋅</mo>
           <mfrac>
-            <mn>${Math.round(cdfVal * totalPixels)}</mn>
+            <mn>${cdfCount}</mn>
             <mn>${totalPixels}</mn>
           </mfrac>
           <mo>⌋</mo>
@@ -264,7 +273,7 @@ export default function HistogramEqualizationPage() {
         </mrow>
       </mrow>
     `);
-  }, [activeGray, cdf, mapping, totalPixels]);
+  }, [activeGray, cdf, cdfCounts, mapping, totalPixels]);
 
   // —— 事件处理 ——
 
@@ -404,12 +413,12 @@ export default function HistogramEqualizationPage() {
             mathClassName="[&_math]:text-lg"
           />
           <div className="mt-3 text-xs leading-6 text-slate-600 space-y-1">
-            <p><InlineMath mathML={inlineMath('<msub><mi>S</mi><mi>k</mi></msub>')} />: 均衡化后灰度级 k 的映射值</p>
+            <p><InlineMath mathML={inlineMath('<msub><mi>S</mi><mi>k</mi></msub>')} />: 原灰度级 k 经均衡化后映射到的新灰度值</p>
             <p><InlineMath mathML={inlineMath('<msub><mi>n</mi><mi>i</mi></msub>')} />: 原图中灰度级 i 的像素个数</p>
             <p><InlineMath mathML={inlineMath('<mi>n</mi>')} />: 图像总像素数（= {totalPixels}）</p>
             <p><InlineMath mathML={inlineMath('<munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>0</mn></mrow><mi>k</mi></munderover><msub><mi>n</mi><mi>i</mi></msub><mo>/</mo><mi>n</mi>')} />: 累积分布函数（CDF）</p>
             <p className="mt-1 text-slate-500 italic">
-              * 映射函数是单调递增的，保证输出图像保持灰度级的相对顺序。
+              * k 为输入灰度级索引；映射函数是单调递增的，保证输出图像保持灰度级的相对顺序。
             </p>
           </div>
         </TeachingCard>
@@ -456,6 +465,9 @@ export default function HistogramEqualizationPage() {
             <p className="mt-2">
               均衡化将 CDF 值线性放大到 0-255 范围，使输出图像的直方图尽可能平坦，
               从而增强图像的全局对比度。
+            </p>
+            <p className="text-slate-500 italic">
+              * 离散灰度级下只能逼近均匀分布，实际输出不会完全平坦。
             </p>
           </div>
         </TeachingCard>

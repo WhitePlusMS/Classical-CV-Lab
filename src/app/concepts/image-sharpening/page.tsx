@@ -40,22 +40,23 @@ const GRADIENT_CODE_TS = `function gradientSharpen(image: number[][], method: 'm
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      // 一阶差分：水平和垂直方向
-      const fiDiff = image[y][clamp(x + 1, 0, width - 1)] - image[y][x];
-      const fjDiff = image[clamp(y + 1, 0, height - 1)][x] - image[y][x];
+      // 一阶差分：水平方向 f_x' 与垂直方向 f_y'
+      const fxDiff = image[y][clamp(x + 1, 0, width - 1)] - image[y][x];
+      const fyDiff = image[clamp(y + 1, 0, height - 1)][x] - image[y][x];
 
-      const absFi = Math.abs(fiDiff);
-      const absFj = Math.abs(fjDiff);
+      const absFx = Math.abs(fxDiff);
+      const absFy = Math.abs(fyDiff);
 
       // 梯度幅值近似
       const grad = method === 'max'
-        ? Math.max(absFi, absFj)
-        : absFi + absFj;
+        ? Math.max(absFx, absFy)
+        : absFx + absFy;
 
       // 截断到有效范围
       result[y][x] = clamp(grad, 0, 1);
     }
   }
+  // 注：最右列与最下行使用复制边界，差分为 0，实际应用中也可采用镜像或忽略边界策略。
   return result;
 }`;
 
@@ -87,13 +88,13 @@ const LAPLACE_CODE_TS = `function laplaceEnhance(image: number[][]): number[][] 
 type SharpenMethod = 'gradient' | 'laplace';
 
 const METHOD_OPTIONS = [
-  { value: 'gradient', label: '梯度锐化' },
+  { value: 'gradient', label: '梯度边缘强度' },
   { value: 'laplace', label: 'Laplace 增强' },
 ];
 
 const GRADIENT_MODE_OPTIONS = [
-  { value: 'max', label: 'max(|fᵢ′|, |fⱼ′|)' },
-  { value: 'sum', label: '|fᵢ′| + |fⱼ′|' },
+  { value: 'max', label: 'max(|fₓ′|, |fᵧ′|)' },
+  { value: 'sum', label: '|fₓ′| + |fᵧ′|' },
 ];
 
 function FormulaLine({
@@ -150,17 +151,17 @@ function gradientModeMathML(mode: GradientMethod): string {
   if (mode === 'max') {
     return `
       <mi>max</mi><mo>(</mo>
-      <mo>|</mo><msub><mi>f</mi><mi>i</mi></msub><mo>′</mo><mo>|</mo>
+      <mo>|</mo><msub><mi>f</mi><mi>x</mi></msub><mo>′</mo><mo>|</mo>
       <mo>,</mo>
-      <mo>|</mo><msub><mi>f</mi><mi>j</mi></msub><mo>′</mo><mo>|</mo>
+      <mo>|</mo><msub><mi>f</mi><mi>y</mi></msub><mo>′</mo><mo>|</mo>
       <mo>)</mo>
     `;
   }
 
   return `
-    <mo>|</mo><msub><mi>f</mi><mi>i</mi></msub><mo>′</mo><mo>|</mo>
+    <mo>|</mo><msub><mi>f</mi><mi>x</mi></msub><mo>′</mo><mo>|</mo>
     <mo>+</mo>
-    <mo>|</mo><msub><mi>f</mi><mi>j</mi></msub><mo>′</mo><mo>|</mo>
+    <mo>|</mo><msub><mi>f</mi><mi>y</mi></msub><mo>′</mo><mo>|</mo>
   `;
 }
 
@@ -334,18 +335,18 @@ export default function ImageSharpeningPage() {
       const gs = currentStep as GradientSharpenStep;
       const rightX = Math.min(x + 1, imageWidth - 1);
       const bottomY = Math.min(y + 1, imageHeight - 1);
-      const fiPreviewML = buildInlineMathML(`
+      const fxPreviewML = buildInlineMathML(`
         <mrow>
-          <msub><mi>f</mi><mi>i</mi></msub><mo>′</mo>
+          <msub><mi>f</mi><mi>x</mi></msub><mo>′</mo>
           <mo>=</mo>${fAt(rightX, y)}<mo>-</mo>${fAt(x, y)}
-          <mo>=</mo>${numberNode(gs.fiDiff.toFixed(4))}
+          <mo>=</mo>${numberNode(gs.fxDiff.toFixed(4))}
         </mrow>
       `);
-      const fjPreviewML = buildInlineMathML(`
+      const fyPreviewML = buildInlineMathML(`
         <mrow>
-          <msub><mi>f</mi><mi>j</mi></msub><mo>′</mo>
+          <msub><mi>f</mi><mi>y</mi></msub><mo>′</mo>
           <mo>=</mo>${fAt(x, bottomY)}<mo>-</mo>${fAt(x, y)}
-          <mo>=</mo>${numberNode(gs.fjDiff.toFixed(4))}
+          <mo>=</mo>${numberNode(gs.fyDiff.toFixed(4))}
         </mrow>
       `);
       const gradPreviewML = buildInlineMathML(`
@@ -378,8 +379,8 @@ export default function ImageSharpeningPage() {
                   梯度差分
                 </div>
                 <div className="space-y-0.5 text-slate-600">
-                  <FormulaLine mathML={fiPreviewML} />
-                  <FormulaLine mathML={fjPreviewML} />
+                  <FormulaLine mathML={fxPreviewML} />
+                  <FormulaLine mathML={fyPreviewML} />
                   <FormulaLine mathML={gradPreviewML} className="mt-1 font-semibold text-amber-700" />
                 </div>
               </FlowNode>
@@ -505,13 +506,13 @@ export default function ImageSharpeningPage() {
     const methodComparisonCard = (
       <TeachingCard>
         <div className="text-sm font-semibold text-slate-800 mb-2">
-          一阶梯度锐化与 Laplace 增强的区别
+          一阶梯度（边缘强度）与 Laplace 增强的区别
         </div>
         <div className="grid gap-3 text-xs leading-6 text-slate-600 md:grid-cols-2">
           <div className="rounded-xl border border-amber-100 bg-amber-50/50 px-3 py-2">
-            <div className="font-semibold text-amber-700">一阶梯度锐化</div>
+            <div className="font-semibold text-amber-700">一阶梯度（边缘强度）</div>
             <p className="mt-1">
-              直接度量相邻像素的灰度变化，输出更接近“边缘强度图”。它能突出突变位置，但平坦区域通常接近 0。
+              直接度量相邻像素的灰度变化，输出为“边缘强度图”。它能突出突变位置，但平坦区域通常接近 0；完整锐化还需将梯度加回原图。
             </p>
           </div>
           <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 px-3 py-2">
@@ -528,38 +529,38 @@ export default function ImageSharpeningPage() {
       const gs = currentStep as GradientSharpenStep;
       const gradientFormulaML = buildInlineMathML(`
         <mrow>
-          <mi>grad</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo>
+          <mi>grad</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo>
           <mo>=</mo>${gradientModeMathML(gradientMode)}
         </mrow>
       `);
 
       const rightX = Math.min(x + 1, imageWidth - 1);
       const bottomY = Math.min(y + 1, imageHeight - 1);
-      const fiDetailML = buildInlineMathML(`
+      const fxDetailML = buildInlineMathML(`
         <mrow>
-          <msub><mi>f</mi><mi>i</mi></msub><mo>′</mo>
+          <msub><mi>f</mi><mi>x</mi></msub><mo>′</mo>
           <mo>=</mo>${fAt(rightX, y)}<mo>-</mo>${fAt(x, y)}
           <mo>=</mo>${numberNode(gs.inputRegion[1][2].toFixed(4))}
           <mo>-</mo>${numberNode(gs.inputRegion[1][1].toFixed(4))}
-          <mo>=</mo>${numberNode(gs.fiDiff.toFixed(4))}
+          <mo>=</mo>${numberNode(gs.fxDiff.toFixed(4))}
         </mrow>
       `);
-      const fjDetailML = buildInlineMathML(`
+      const fyDetailML = buildInlineMathML(`
         <mrow>
-          <msub><mi>f</mi><mi>j</mi></msub><mo>′</mo>
+          <msub><mi>f</mi><mi>y</mi></msub><mo>′</mo>
           <mo>=</mo>${fAt(x, bottomY)}<mo>-</mo>${fAt(x, y)}
           <mo>=</mo>${numberNode(gs.inputRegion[2][1].toFixed(4))}
           <mo>-</mo>${numberNode(gs.inputRegion[1][1].toFixed(4))}
-          <mo>=</mo>${numberNode(gs.fjDiff.toFixed(4))}
+          <mo>=</mo>${numberNode(gs.fyDiff.toFixed(4))}
         </mrow>
       `);
       const absDetailML = buildInlineMathML(`
         <mrow>
-          <mo>|</mo><msub><mi>f</mi><mi>i</mi></msub><mo>′</mo><mo>|</mo>
-          <mo>=</mo>${numberNode(Math.abs(gs.fiDiff).toFixed(4))}
+          <mo>|</mo><msub><mi>f</mi><mi>x</mi></msub><mo>′</mo><mo>|</mo>
+          <mo>=</mo>${numberNode(Math.abs(gs.fxDiff).toFixed(4))}
           <mo>,</mo>
-          <mo>|</mo><msub><mi>f</mi><mi>j</mi></msub><mo>′</mo><mo>|</mo>
-          <mo>=</mo>${numberNode(Math.abs(gs.fjDiff).toFixed(4))}
+          <mo>|</mo><msub><mi>f</mi><mi>y</mi></msub><mo>′</mo><mo>|</mo>
+          <mo>=</mo>${numberNode(Math.abs(gs.fyDiff).toFixed(4))}
         </mrow>
       `);
       const gradDetailML = buildInlineMathML(`
@@ -580,9 +581,9 @@ export default function ImageSharpeningPage() {
         <div className="space-y-4">
           {/* 公式 */}
           <FormulaCard
-            label="一阶梯度锐化公式"
+            label="一阶梯度（边缘强度）公式"
             mathML={gradientFormulaML}
-            note="梯度表示图像在行列方向上的灰度变化率。在离散图像中，偏导数用一阶差分近似。"
+            note="该模式展示梯度幅值（边缘强度图），是对锐化思想的简化；完整梯度锐化需将梯度加回原图。在离散图像中，偏导数用一阶差分近似。"
           />
 
           {/* 当前像素代入 */}
@@ -625,8 +626,8 @@ export default function ImageSharpeningPage() {
               <div>
                 <div className="text-xs text-slate-500 mb-1.5">一阶差分计算</div>
                 <div className="bg-[#f8f7f3] rounded-xl border border-slate-200 px-4 py-3 space-y-2 text-sm">
-                  <FormulaLine mathML={fiDetailML} className="text-slate-600" />
-                  <FormulaLine mathML={fjDetailML} className="text-slate-600" />
+                  <FormulaLine mathML={fxDetailML} className="text-slate-600" />
+                  <FormulaLine mathML={fyDetailML} className="text-slate-600" />
                 </div>
               </div>
 
@@ -871,9 +872,9 @@ export default function ImageSharpeningPage() {
   return (
     <ConceptLayout
       title="图像锐化"
-      subtitle="Image Sharpening - 梯度锐化与 Laplace 增强"
+      subtitle="Image Sharpening - 梯度边缘强度与 Laplace 增强"
       operationLabel="锐化处理"
-      parameterIntro="图像锐化通过增强灰度突变区域来突出边缘和轮廓；本页只围绕当前窗口比较一阶梯度、二阶 Laplace 与最终增强值。"
+      parameterIntro="图像锐化通过增强灰度突变区域来突出边缘和轮廓；左侧参数可切换教学示例、锐化方法及梯度合成方式，主区展示当前窗口的逐像素计算过程。"
       originalImage={originalImage}
       resultImage={resultImage}
       parameters={parameters}
