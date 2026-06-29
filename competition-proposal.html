@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>视界实验室 · Classical CV Lab — 交互式计算机视觉学习实验台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+SC:wght@300;400;500;600;700;900&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg-0: #07101f;
+    --bg-1: #0d1c33;
+    --bg-2: #142a48;
+    --ink: #eaf2ff;
+    --ink-soft: rgba(234, 242, 255, 0.72);
+    --ink-mute: rgba(234, 242, 255, 0.52);
+    --ink-faint: rgba(234, 242, 255, 0.36);
+    --line: rgba(255, 255, 255, 0.10);
+    --line-strong: rgba(255, 255, 255, 0.18);
+    --card: rgba(255, 255, 255, 0.045);
+    --card-hover: rgba(255, 255, 255, 0.07);
+    --sky: #7dd3fc;
+    --cyan: #67e8f9;
+    --blue: #60a5fa;
+    --indigo: #818cf8;
+    --emerald: #6ee7b7;
+    --amber: #fbbf24;
+    --rose: #fb7185;
+    --violet: #c4b5fd;
+    --display: "Bricolage Grotesque", "Noto Sans SC", system-ui, sans-serif;
+    --body: "Noto Sans SC", system-ui, -apple-system, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--body);
+    background: var(--bg-0);
+    color: var(--ink);
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  a { color: inherit; text-decoration: none; }
+
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 28px; }
+
+  /* ============ HERO ============ */
+  .hero {
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 18% 18%, rgba(125, 211, 252, 0.18), transparent 42%),
+      radial-gradient(circle at 82% 26%, rgba(96, 165, 250, 0.22), transparent 40%),
+      radial-gradient(circle at 50% 110%, rgba(20, 184, 166, 0.14), transparent 36%),
+      linear-gradient(135deg, #07101f 0%, #0d1c33 54%, #142a48 100%);
+    border-bottom: 1px solid var(--line);
+  }
+  .hero::before {
+    content: "";
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size: 56px 56px;
+    pointer-events: none;
+    mask-image: linear-gradient(to bottom, black 60%, transparent);
+  }
+
+  .nav {
+    position: relative; z-index: 5;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 22px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-mark {
+    width: 38px; height: 38px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--sky), var(--blue));
+    display: grid; place-items: center;
+    box-shadow: 0 8px 24px rgba(96, 165, 250, 0.35);
+  }
+  .brand-mark svg { width: 22px; height: 22px; color: #06121f; }
+  .brand-name { font-family: var(--display); font-weight: 700; font-size: 17px; letter-spacing: 0.01em; }
+  .brand-sub { font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em; color: var(--ink-faint); text-transform: uppercase; }
+
+  .nav-pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 16px; border-radius: 999px;
+    border: 1px solid var(--line-strong);
+    background: rgba(255,255,255,0.04);
+    font-size: 13px; color: var(--ink-soft);
+    backdrop-filter: blur(6px);
+  }
+  .nav-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--emerald); box-shadow: 0 0 10px var(--emerald); }
+
+  .hero-body { position: relative; z-index: 4; padding: 84px 0 96px; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 10px;
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.16em;
+    color: var(--cyan); text-transform: uppercase;
+    padding: 7px 14px; border: 1px solid rgba(103, 232, 249, 0.25);
+    border-radius: 999px; background: rgba(103, 232, 249, 0.06);
+    margin-bottom: 28px;
+  }
+  .eyebrow .bar { width: 18px; height: 1px; background: var(--cyan); }
+
+  h1.title {
+    font-family: var(--display);
+    font-weight: 800;
+    font-size: clamp(44px, 7vw, 84px);
+    line-height: 0.98;
+    letter-spacing: -0.045em;
+    margin-bottom: 14px;
+  }
+  .title .grad {
+    background: linear-gradient(100deg, var(--sky) 0%, var(--cyan) 45%, var(--blue) 100%);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .subtitle {
+    font-family: var(--display);
+    font-weight: 500;
+    font-size: clamp(22px, 3vw, 32px);
+    color: var(--ink-soft);
+    letter-spacing: -0.02em;
+    margin-bottom: 26px;
+  }
+  .lede {
+    max-width: 640px;
+    font-size: 16.5px;
+    color: var(--ink-mute);
+    line-height: 1.8;
+    margin-bottom: 40px;
+  }
+
+  .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; max-width: 720px; }
+  .metric {
+    padding: 22px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: var(--card);
+    backdrop-filter: blur(8px);
+  }
+  .metric .num { font-family: var(--display); font-weight: 800; font-size: 40px; line-height: 1; letter-spacing: -0.05em; }
+  .metric:nth-child(1) .num { color: var(--sky); }
+  .metric:nth-child(2) .num { color: var(--cyan); }
+  .metric:nth-child(3) .num { color: var(--emerald); }
+  .metric .lab { font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-faint); margin-top: 10px; }
+  .metric .desc { font-size: 12.5px; color: var(--ink-mute); margin-top: 8px; line-height: 1.6; }
+
+  .hero-cta { display: flex; gap: 14px; margin-top: 44px; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 9px;
+    padding: 14px 24px; border-radius: 999px;
+    font-weight: 600; font-size: 14.5px;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .btn-primary {
+    background: linear-gradient(100deg, #ffffff, #e0f2fe);
+    color: #06121f;
+    box-shadow: 0 14px 40px rgba(125, 211, 252, 0.28);
+  }
+  .btn-primary:hover { transform: translateY(-2px); }
+  .btn-ghost {
+    border: 1px solid var(--line-strong);
+    color: var(--ink-soft);
+    background: rgba(255,255,255,0.03);
+  }
+  .btn svg { width: 17px; height: 17px; }
+
+  /* ============ SECTION BASE ============ */
+  section.block { padding: 92px 0; border-bottom: 1px solid var(--line); }
+  .sec-head { margin-bottom: 52px; max-width: 760px; }
+  .sec-tag {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--cyan); display: inline-block; margin-bottom: 16px;
+  }
+  .sec-tag::before { content: "— "; color: var(--ink-faint); }
+  h2.sec-title {
+    font-family: var(--display); font-weight: 700;
+    font-size: clamp(30px, 4vw, 44px); line-height: 1.1; letter-spacing: -0.03em;
+    margin-bottom: 16px;
+  }
+  .sec-desc { font-size: 16px; color: var(--ink-mute); line-height: 1.8; }
+
+  /* ============ PROBLEM ============ */
+  .problem-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+  .pain, .gain {
+    padding: 34px; border-radius: 22px; border: 1px solid var(--line);
+  }
+  .pain { background: linear-gradient(160deg, rgba(251, 113, 133, 0.08), rgba(251, 113, 133, 0.02)); }
+  .gain { background: linear-gradient(160deg, rgba(110, 231, 183, 0.08), rgba(96, 165, 250, 0.03)); }
+  .panel-label {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+    margin-bottom: 22px; display: flex; align-items: center; gap: 10px;
+  }
+  .pain .panel-label { color: var(--rose); }
+  .gain .panel-label { color: var(--emerald); }
+  .panel-label .ico { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; }
+  .pain .ico { background: rgba(251, 113, 133, 0.14); }
+  .gain .ico { background: rgba(110, 231, 183, 0.14); }
+  .panel-label svg { width: 15px; height: 15px; }
+
+  .pain h3, .gain h3 { font-family: var(--display); font-weight: 700; font-size: 22px; margin-bottom: 18px; letter-spacing: -0.01em; }
+  .pain ul, .gain ul { list-style: none; }
+  .pain li, .gain li {
+    padding: 14px 0; border-top: 1px dashed var(--line);
+    font-size: 14.5px; color: var(--ink-soft); line-height: 1.7;
+    display: flex; gap: 12px;
+  }
+  .pain li:first-child, .gain li:first-child { border-top: none; }
+  .pain li::before { content: "✕"; color: var(--rose); font-weight: 700; flex-shrink: 0; }
+  .gain li::before { content: "✓"; color: var(--emerald); font-weight: 700; flex-shrink: 0; }
+
+  /* ============ USERS ============ */
+  .user-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  .user-card {
+    padding: 30px; border-radius: 20px; border: 1px solid var(--line);
+    background: var(--card); transition: background 0.2s, transform 0.2s;
+  }
+  .user-card:hover { background: var(--card-hover); transform: translateY(-4px); }
+  .user-ico {
+    width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center;
+    margin-bottom: 20px;
+  }
+  .user-card:nth-child(1) .user-ico { background: rgba(125, 211, 252, 0.14); color: var(--sky); }
+  .user-card:nth-child(2) .user-ico { background: rgba(196, 181, 253, 0.14); color: var(--violet); }
+  .user-card:nth-child(3) .user-ico { background: rgba(251, 191, 36, 0.14); color: var(--amber); }
+  .user-ico svg { width: 24px; height: 24px; }
+  .user-card h4 { font-family: var(--display); font-weight: 700; font-size: 19px; margin-bottom: 10px; }
+  .user-card .scene { font-size: 13px; color: var(--cyan); font-family: var(--mono); margin-bottom: 14px; letter-spacing: 0.02em; }
+  .user-card p { font-size: 14px; color: var(--ink-mute); line-height: 1.75; }
+
+  /* ============ VALUE ============ */
+  .value-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+  .value-card {
+    position: relative; padding: 32px; border-radius: 20px;
+    border: 1px solid var(--line); background: var(--card);
+    overflow: hidden;
+  }
+  .value-card::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  }
+  .value-card:nth-child(1)::before { background: linear-gradient(90deg, var(--sky), var(--blue)); }
+  .value-card:nth-child(2)::before { background: linear-gradient(90deg, var(--emerald), var(--cyan)); }
+  .value-card:nth-child(3)::before { background: linear-gradient(90deg, var(--amber), var(--rose)); }
+  .value-num { font-family: var(--mono); font-size: 12px; color: var(--ink-faint); letter-spacing: 0.1em; }
+  .value-card h4 { font-family: var(--display); font-weight: 700; font-size: 21px; margin: 12px 0 14px; }
+  .value-card p { font-size: 14px; color: var(--ink-mute); line-height: 1.8; }
+
+  /* ============ FEATURES ============ */
+  .feature-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+  .feature {
+    padding: 28px; border-radius: 18px; border: 1px solid var(--line);
+    background: var(--card); display: flex; gap: 20px;
+    transition: background 0.2s, border-color 0.2s;
+  }
+  .feature:hover { background: var(--card-hover); border-color: var(--line-strong); }
+  .feature-ico {
+    width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
+    display: grid; place-items: center;
+    background: linear-gradient(135deg, rgba(125, 211, 252, 0.16), rgba(96, 165, 250, 0.1));
+    color: var(--sky);
+  }
+  .feature-ico svg { width: 22px; height: 22px; }
+  .feature h4 { font-family: var(--display); font-weight: 700; font-size: 17px; margin-bottom: 8px; }
+  .feature p { font-size: 13.5px; color: var(--ink-mute); line-height: 1.7; }
+
+  /* ============ ARCH ============ */
+  .arch {
+    border: 1px solid var(--line); border-radius: 22px;
+    background: linear-gradient(160deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
+    overflow: hidden;
+  }
+  .arch-bar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 14px 20px; border-bottom: 1px solid var(--line);
+    background: rgba(255,255,255,0.02);
+  }
+  .arch-bar .d { width: 11px; height: 11px; border-radius: 50%; }
+  .arch-bar .d:nth-child(1) { background: #fb7185; }
+  .arch-bar .d:nth-child(2) { background: #fbbf24; }
+  .arch-bar .d:nth-child(3) { background: #6ee7b7; }
+  .arch-bar .file { margin-left: 12px; font-family: var(--mono); font-size: 12px; color: var(--ink-faint); }
+  .arch-body { padding: 34px; }
+  .arch-row {
+    display: grid; grid-template-columns: 120px 1fr; gap: 20px;
+    padding: 18px 0; border-top: 1px dashed var(--line);
+    align-items: center;
+  }
+  .arch-row:first-child { border-top: none; }
+  .arch-key {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--cyan);
+  }
+  .arch-val { font-size: 14.5px; color: var(--ink-soft); }
+  .arch-val .chip {
+    display: inline-block; padding: 4px 11px; border-radius: 7px;
+    background: rgba(125, 211, 252, 0.1); color: var(--sky);
+    font-family: var(--mono); font-size: 12px; margin-right: 6px; margin-bottom: 4px;
+    border: 1px solid rgba(125, 211, 252, 0.18);
+  }
+
+  /* ============ CHAPTERS ============ */
+  .chapters { display: flex; flex-direction: column; gap: 18px; }
+  .chapter {
+    display: grid; grid-template-columns: 90px 1fr; gap: 28px;
+    padding: 28px; border-radius: 18px; border: 1px solid var(--line);
+    background: var(--card); transition: background 0.2s;
+  }
+  .chapter:hover { background: var(--card-hover); }
+  .ch-num {
+    font-family: var(--display); font-weight: 800; font-size: 52px;
+    line-height: 1; letter-spacing: -0.05em;
+    background: linear-gradient(135deg, var(--sky), var(--blue));
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .ch-title { font-family: var(--display); font-weight: 700; font-size: 20px; margin-bottom: 14px; }
+  .ch-modules { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ch-mod {
+    padding: 7px 13px; border-radius: 999px;
+    background: rgba(255,255,255,0.04); border: 1px solid var(--line);
+    font-size: 12.5px; color: var(--ink-soft);
+  }
+  .ch-mod b { color: var(--cyan); font-weight: 600; margin-right: 4px; }
+
+  /* ============ CTA ============ */
+  .cta {
+    margin: 0 28px; max-width: 1120px;
+    margin-left: auto; margin-right: auto;
+    padding: 0 0 92px;
+  }
+  .cta-inner {
+    position: relative; overflow: hidden;
+    padding: 64px 48px; border-radius: 28px;
+    background:
+      radial-gradient(circle at 20% 20%, rgba(125, 211, 252, 0.2), transparent 50%),
+      radial-gradient(circle at 80% 80%, rgba(129, 140, 248, 0.18), transparent 50%),
+      linear-gradient(135deg, #0d1c33, #142a48);
+    border: 1px solid var(--line-strong);
+    text-align: center;
+  }
+  .cta-inner::before {
+    content: ""; position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size: 40px 40px; pointer-events: none;
+  }
+  .cta h2 { position: relative; font-family: var(--display); font-weight: 800; font-size: clamp(28px, 4vw, 42px); letter-spacing: -0.03em; margin-bottom: 16px; }
+  .cta p { position: relative; color: var(--ink-mute); font-size: 16px; margin-bottom: 32px; }
+  .cta-actions { position: relative; display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+
+  footer {
+    padding: 32px 0; border-top: 1px solid var(--line);
+    text-align: center; color: var(--ink-faint); font-size: 13px;
+  }
+  footer .mono { font-family: var(--mono); }
+
+  /* ============ ANIMATIONS ============ */
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .hero .eyebrow, .hero h1, .hero .subtitle, .hero .lede, .hero .metrics, .hero .hero-cta {
+    animation: rise 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  }
+  .hero .eyebrow { animation-delay: 0.05s; }
+  .hero h1 { animation-delay: 0.15s; }
+  .hero .subtitle { animation-delay: 0.28s; }
+  .hero .lede { animation-delay: 0.4s; }
+  .hero .metrics { animation-delay: 0.52s; }
+  .hero .hero-cta { animation-delay: 0.62s; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+
+  /* ============ RESPONSIVE ============ */
+  @media (max-width: 860px) {
+    .problem-grid, .feature-grid { grid-template-columns: 1fr; }
+    .user-grid, .value-grid { grid-template-columns: 1fr; }
+    .metrics { grid-template-columns: 1fr; max-width: 100%; }
+    .chapter { grid-template-columns: 1fr; gap: 14px; }
+    .ch-num { font-size: 40px; }
+    .arch-row { grid-template-columns: 1fr; gap: 6px; }
+    .hero-body { padding: 56px 0 64px; }
+    section.block { padding: 64px 0; }
+    .cta-inner { padding: 44px 26px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ HERO ============ -->
+<header class="hero">
+  <div class="wrap">
+    <div class="nav">
+      <div class="brand">
+        <div class="brand-mark">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <rect x="3" y="5" width="18" height="14" rx="2"/>
+            <circle cx="12" cy="12" r="3.2"/>
+            <path d="M7 5l1.5-2h7L17 5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div>
+          <div class="brand-name">视界实验室</div>
+          <div class="brand-sub">Classical · CV · Lab</div>
+        </div>
+      </div>
+      <div class="nav-pill"><span class="dot"></span> TRAE AI 创造力大赛 · 学习工作赛道</div>
+    </div>
+
+    <div class="hero-body">
+      <div class="eyebrow"><span class="bar"></span> 创意提案 · 报名展示</div>
+      <h1 class="title">从像素到<br><span class="grad">计算机视觉</span></h1>
+      <p class="subtitle">交互式学习实验台 · 让抽象算法可见、可调、可推演</p>
+      <p class="lede">
+        把灰度化、卷积、Canny、SIFT、HOG、张正友标定这些"写在黑板上的公式"，
+        拆成 31 个能在浏览器里拖动参数、实时看到像素级变化的实验模块。
+        纯前端 TypeScript 实现，零 OpenCV 依赖——打开网页就能上手。
+      </p>
+
+      <div class="metrics">
+        <div class="metric">
+          <div class="num">3</div>
+          <div class="lab">章节</div>
+          <div class="desc">从图像采集基础到目标检测，递进式学习路径。</div>
+        </div>
+        <div class="metric">
+          <div class="num">10</div>
+          <div class="lab">模块</div>
+          <div class="desc">按 Part 组织实验主题，便于课堂与课后复习。</div>
+        </div>
+        <div class="metric">
+          <div class="num">31</div>
+          <div class="lab">知识点</div>
+          <div class="desc">每张卡片都对应一个可进入的交互式概念页。</div>
+        </div>
+      </div>
+
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="https://whiteplusms.github.io/Classical-CV-Lab/" target="_blank" rel="noopener">
+          在线体验 Demo
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+        <a class="btn btn-ghost" href="https://github.com/WhitePlusMS/Classical-CV-Lab" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+          查看源码
+        </a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ============ 1. 创意介绍 ============ -->
+<section class="block">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-tag">01 · 创意介绍</div>
+      <h2 class="sec-title">把"看不懂的公式"变成"摸得到的光圈"</h2>
+      <p class="sec-desc">
+        传统计算机视觉课堂最大的难题：算法都写在公式里，学生只能死记硬背，
+        却看不到参数变化时图像到底发生了什么。视界实验室用一整套可交互的实验台，
+        让每个算法都变成可观察、可调参、可推演的"光学暗房"。
+      </p>
+    </div>
+
+    <div class="problem-grid">
+      <div class="pain">
+        <div class="panel-label">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          想解决的问题
+        </div>
+        <h3>课堂里"看得见摸不着"的 CV 算法</h3>
+        <ul>
+          <li>卷积核、阈值、高斯金字塔这些概念只存在于板书与公式里，调一个参数会发生什么全靠脑补。</li>
+          <li>OpenCV 调用一行代码就出结果，学生只学到了"调用"，没学到"原理"。</li>
+          <li>课后想验证一个想法，要先装环境、配 Python、装依赖，门槛高到劝退。</li>
+          <li>复杂流程（SIFT、Canny、OTSU）只有最终图，看不到中间每一步的中间结果。</li>
+        </ul>
+      </div>
+      <div class="gain">
+        <div class="panel-label">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          我们的产品形态
+        </div>
+        <h3>一个打开浏览器就能用的"CV 实验台"</h3>
+        <ul>
+          <li>纯前端网站（Next.js），无需安装任何环境，点开链接就进入实验。</li>
+          <li>31 个交互式概念页，覆盖预处理、标定、校正、目标检测全链路。</li>
+          <li>每个算法都用 TypeScript 从零实现，不依赖 OpenCV，源码可读可改。</li>
+          <li>滑动条实时调参，像素级查看灰度值、梯度、邻域，复杂流程分步可视化。</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 2. 目标用户与痛点 ============ -->
+<section class="block">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-tag">02 · 目标用户与痛点</div>
+      <h2 class="sec-title">为"想真正理解 CV"的人而做</h2>
+      <p class="sec-desc">
+        不论是第一次接触图像处理的学生，还是想把课堂讲"活"的老师，
+        亦或是需要快速回顾某个算法细节的工程师——都能在这里找到自己需要的那个实验。
+      </p>
+    </div>
+
+    <div class="user-grid">
+      <div class="user-card">
+        <div class="user-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg></div>
+        <h4>计算机视觉课程学生</h4>
+        <div class="scene">// 课前预习 · 课后复习</div>
+        <p>预习时看不懂公式推导，复习时想换个参数验证理解。视界实验室让每个概念都能"动手试一试"，把抽象的数学关系变成可见的图像变化，建立真正的直觉。</p>
+      </div>
+      <div class="user-card">
+        <div class="user-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 4h18v14H3z"/><path d="M8 4v3M16 4v3M3 9h18" stroke-linecap="round"/><circle cx="12" cy="14" r="2.2"/></svg></div>
+        <h4>CV / 图像处理教师</h4>
+        <div class="scene">// 课堂演示 · 实验作业</div>
+        <p>课堂上讲到 Canny、OTSU，切到对应页面拖动阈值，学生立刻看到边缘如何变化。可作为课堂演示工具，也可作为开放实验作业平台，省去自建实验环境的精力。</p>
+      </div>
+      <div class="user-card">
+        <div class="user-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="m18 16 4-4-4-4M6 8l-4 4 4 4M14.5 4l-5 16" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <h4>算法工程师 / 自学者</h4>
+        <div class="scene">// 算法回顾 · 原理深挖</div>
+        <p>用惯了 OpenCV 调用，偶尔需要回忆 SIFT 描述子到底怎么生成、HOG 的 cell/block 怎么划分。这里提供从零实现的源码与可视化，是原理深挖与快速回顾的便携手册。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 3. 价值与意义 ============ -->
+<section class="block">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-tag">03 · 价值与意义</div>
+      <h2 class="sec-title">让"理解原理"不再依赖环境与天赋</h2>
+      <p class="sec-desc">
+        从效率提升、教育普惠到工程示范三个角度，视界实验室试图把传统 CV 教育中
+        "看不见、摸不着、装不上"的三重门槛一次性拉平。
+      </p>
+    </div>
+
+    <div class="value-grid">
+      <div class="value-card">
+        <div class="value-num">VALUE · 01</div>
+        <h4>效率提升</h4>
+        <p>把"装环境 → 写代码 → 调参数 → 看结果"的传统闭环压缩成"打开网页 → 拖滑块 → 看变化"。一次实验从几十分钟缩短到几秒，让学习时间真正花在理解原理上，而非与依赖、版本、环境作斗争。</p>
+      </div>
+      <div class="value-card">
+        <div class="value-num">VALUE · 02</div>
+        <h4>教育普惠</h4>
+        <p>无需高性能电脑、无需安装配置，任何一台能上网的设备都能进入完整的 CV 实验室。降低硬件与门槛壁垒，让偏远地区学生、自学者也能获得与重点高校同等质量的"可动手"教学资源。</p>
+      </div>
+      <div class="value-card">
+        <div class="value-num">VALUE · 03</div>
+        <h4>工程示范</h4>
+        <p>所有算法以纯 TypeScript 从零实现并开源，本身即是一份"如何在浏览器里写好数值计算"的教学范本。展示前端不仅能做 UI，也能承担严肃的算法可视化与教学职责，为同类教具提供可复用范式。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 4. 功能亮点 ============ -->
+<section class="block">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-tag">04 · 功能亮点</div>
+      <h2 class="sec-title">五个让算法"活起来"的设计</h2>
+    </div>
+
+    <div class="feature-grid">
+      <div class="feature">
+        <div class="feature-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 3v18h18" stroke-linecap="round"/><path d="M7 17V9M12 17V6M17 17v-5" stroke-linecap="round"/></svg></div>
+        <div>
+          <h4>交互式参数调优</h4>
+          <p>每个概念页配备参数面板，滑动条 / 下拉选择 / 卷积核编辑器即时驱动算法重新计算，改一个数图像立刻变。</p>
+        </div>
+      </div>
+      <div class="feature">
+        <div class="feature-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
+        <div>
+          <h4>像素级导航</h4>
+          <p>方向键 + 点击可定位任意像素，查看灰度值、梯度、邻域窗口等细节，把"图像即矩阵"这句话变成可触摸的现实。</p>
+        </div>
+      </div>
+      <div class="feature">
+        <div class="feature-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 6h8v8H5zM11 10h8v8h-8z"/><path d="M15 5h4v4M19 5l-5 5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div>
+          <h4>步骤级可视化</h4>
+          <p>复杂算法（SIFT、Canny、OTSU）拆解为多步骤流水线，每一步都展示中间计算结果，看清楚算法"如何一步步走到答案"。</p>
+        </div>
+      </div>
+      <div class="feature">
+        <div class="feature-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3" stroke-linecap="round"/></svg></div>
+        <div>
+          <h4>纯前端零依赖</h4>
+          <p>所有 CV 算法（卷积、形态学、SIFT、HOG 等）以纯 TypeScript 实现，无后端、无 OpenCV 运行时，部署即用。</p>
+        </div>
+      </div>
+      <div class="feature">
+        <div class="feature-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 5h7v6H4zM13 5h7v6h-7zM4 13h7v6H4zM13 13h7v6h-7z"/><path d="M7.5 5v6M16.5 13v6" opacity="0.6"/></svg></div>
+        <div>
+          <h4>统一教学组件体系</h4>
+          <p>ConceptIntro、TeachingFlow、TeachingMath、TeachingPixel 等组件统一了"任务→思路→观察"的教学叙事，让 31 个页面风格一致、节奏可预期。</p>
+        </div>
+      </div>
+      <div class="feature">
+        <div class="feature-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 2 2 7l10 5 10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div>
+          <h4>3D 可视化辅助</h4>
+          <p>摄像机标定等空间概念借助 Three.js 提供三维场景，让内外参、畸变这些"想象不出"的几何关系变得直观可见。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 5. 技术架构 ============ -->
+<section class="block">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-tag">05 · 技术架构</div>
+      <h2 class="sec-title">现代前端 + 从零实现的算法内核</h2>
+      <p class="sec-desc">
+        用 Next.js 16 + React 19 构建交互层，所有 CV 算法以纯 TypeScript 在浏览器端实时运算。
+        架构上把"教学叙事组件"与"算法实现库"彻底分层，便于扩展与复用。
+      </p>
+    </div>
+
+    <div class="arch">
+      <div class="arch-bar">
+        <span class="d"></span><span class="d"></span><span class="d"></span>
+        <span class="file">architecture.md</span>
+      </div>
+      <div class="arch-body">
+        <div class="arch-row">
+          <div class="arch-key">框架</div>
+          <div class="arch-val"><span class="chip">Next.js 16</span><span class="chip">React 19</span><span class="chip">App Router</span></div>
+        </div>
+        <div class="arch-row">
+          <div class="arch-key">语言</div>
+          <div class="arch-val"><span class="chip">TypeScript 5</span>类型安全的算法实现与组件</div>
+        </div>
+        <div class="arch-row">
+          <div class="arch-key">样式</div>
+          <div class="arch-val"><span class="chip">Tailwind CSS 4</span>原子化样式 + 自定义教学组件主题</div>
+        </div>
+        <div class="arch-row">
+          <div class="arch-key">3D 可视化</div>
+          <div class="arch-val"><span class="chip">Three.js</span>摄像机标定等空间几何概念的三维呈现</div>
+        </div>
+        <div class="arch-row">
+          <div class="arch-key">算法内核</div>
+          <div class="arch-val"><span class="chip">纯 TypeScript</span><span class="chip">零 OpenCV 依赖</span>卷积 / 形态学 / SIFT / SURF / HOG / Haar / 张正友标定等从零实现</div>
+        </div>
+        <div class="arch-row">
+          <div class="arch-key">教学组件</div>
+          <div class="arch-val">ConceptIntro · TeachingFlow · TeachingMath · TeachingPixel · ParameterPanel · CodeViewer · FormulaWithExplanation</div>
+        </div>
+        <div class="arch-row">
+          <div class="arch-key">部署</div>
+          <div class="arch-val"><span class="chip">GitHub Pages</span>静态导出，访问即用</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 6. 章节总览 ============ -->
+<section class="block">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-tag">06 · 内容总览</div>
+      <h2 class="sec-title">三大章节 · 十大模块 · 三十一个实验</h2>
+    </div>
+
+    <div class="chapters">
+      <div class="chapter">
+        <div class="ch-num">01</div>
+        <div>
+          <div class="ch-title">图像采集与处理基础</div>
+          <div class="ch-modules">
+            <span class="ch-mod"><b>Part 1</b>课程导入：应用与发展现状 · 图像采集处理系统</span>
+          </div>
+        </div>
+      </div>
+      <div class="chapter">
+        <div class="ch-num">02</div>
+        <div>
+          <div class="ch-title">图像预处理与几何校正</div>
+          <div class="ch-modules">
+            <span class="ch-mod"><b>Part 1</b>灰度化 · 像素矩阵 · 直方图 · 均衡化 · 锐化 · 卷积 · 滤波 · 边缘检测 · 形态学</span>
+            <span class="ch-mod"><b>Part 2</b>成像模型 · 标定板角点 · 张正友标定</span>
+            <span class="ch-mod"><b>Part 3</b>畸变校正 · 几何变换 · 透视变换 · 图像配准</span>
+          </div>
+        </div>
+      </div>
+      <div class="chapter">
+        <div class="ch-num">03</div>
+        <div>
+          <div class="ch-title">目标检测</div>
+          <div class="ch-modules">
+            <span class="ch-mod"><b>Part 1</b>阈值与自动阈值 · 帧差与运动检测 · 背景建模与减除</span>
+            <span class="ch-mod"><b>Part 2</b>特征点匹配流程 · SIFT/SURF · ORB/BRIEF/BRISK</span>
+            <span class="ch-mod"><b>Part 3</b>颜色空间与直方图 · LBP/Gabor 纹理 · 模板匹配</span>
+            <span class="ch-mod"><b>Part 4</b>HOG 特征 · Haar/LBP 特征向量</span>
+            <span class="ch-mod"><b>Part 5</b>分类器与检测流程</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CTA ============ -->
+<div class="cta">
+  <div class="cta-inner">
+    <h2>打开链接，立刻进入实验台</h2>
+    <p>无需安装、无需注册——把计算机视觉的每一个概念都变成可动手的实验。</p>
+    <div class="cta-actions">
+      <a class="btn btn-primary" href="https://whiteplusms.github.io/Classical-CV-Lab/" target="_blank" rel="noopener">
+        在线体验 Demo
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </a>
+      <a class="btn btn-ghost" href="https://github.com/WhitePlusMS/Classical-CV-Lab" target="_blank" rel="noopener">
+        GitHub 仓库
+      </a>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <span class="mono">视界实验室 · Classical CV Lab</span> &nbsp;·&nbsp; TRAE AI 创造力大赛 · 学习工作赛道 &nbsp;·&nbsp; © 2026 WhitePlusMS
+</footer>
+
+</body>
+</html>
