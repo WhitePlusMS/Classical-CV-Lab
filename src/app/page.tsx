@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { resolveAssetPath } from '@/lib/utils/assetPath';
 
 type ConceptCard = {
   href?: string;
@@ -693,6 +694,7 @@ const totalConceptCount = learningChapters.reduce(
 
 const moduleCount = learningChapters.reduce((total, chapter) => total + chapter.modules.length, 0);
 const primaryEntryHref = chapterOneCards.applicationsOverview.href;
+const homeHeroImageSrc = resolveAssetPath('/assets/home/hero-cv-line-art-generated.png');
 
 // 首屏统计区控制为三项核心信息，避免信息块过多再次打散视觉重心。
 const heroMetrics = [
@@ -909,7 +911,7 @@ export default function Home() {
             <div className="pointer-events-none relative hidden min-h-[430px] items-center justify-center lg:flex">
               {/* 真实文生图资源使用 screen 混合，让深色底自然融入首页背景。 */}
               <img
-                src="/assets/home/hero-cv-line-art-generated.png"
+                src={homeHeroImageSrc}
                 alt=""
                 aria-hidden="true"
                 className="absolute right-[-285px] top-1/2 w-[980px] max-w-none -translate-y-1/2 select-none opacity-95 mix-blend-screen"
