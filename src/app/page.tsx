@@ -694,7 +694,7 @@ const totalConceptCount = learningChapters.reduce(
 
 const moduleCount = learningChapters.reduce((total, chapter) => total + chapter.modules.length, 0);
 const primaryEntryHref = chapterOneCards.applicationsOverview.href;
-const homeHeroImageSrc = resolveAssetPath('/assets/home/hero-cv-line-art-generated.png');
+const homeHeroImageSrc = resolveAssetPath('/assets/home/hero-cv-line-art-outline.png');
 
 // 首屏统计区控制为三项核心信息，避免信息块过多再次打散视觉重心。
 const heroMetrics = [
@@ -914,7 +914,7 @@ export default function Home() {
                 src={homeHeroImageSrc}
                 alt=""
                 aria-hidden="true"
-                className="absolute right-[-285px] top-1/2 w-[980px] max-w-none -translate-y-1/2 select-none opacity-95 mix-blend-screen"
+                className="absolute right-[-285px] top-1/2 w-[980px] max-w-none -translate-y-1/2 select-none opacity-90 drop-shadow-[0_0_20px_rgba(255,255,255,0.16)]"
                 style={{
                   maskImage: 'linear-gradient(to right, transparent 0%, black 18%, black 100%)',
                   WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 18%, black 100%)',
