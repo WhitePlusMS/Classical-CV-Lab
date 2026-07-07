@@ -872,36 +872,52 @@ export default function Home() {
 
         {/* Hero 内容 */}
         <div className="relative z-10 mx-auto max-w-6xl px-6 pb-16 pt-16 lg:pb-20 lg:pt-18">
-          <div className="max-w-3xl">
-            <h1 className="text-[44px] font-extrabold leading-[1.04] tracking-[-0.045em] text-white sm:text-[56px] lg:text-[64px]">
-              从像素到
-              <span className="bg-gradient-to-r from-sky-200 via-cyan-300 to-blue-300 bg-clip-text text-transparent">
-                计算机视觉
-              </span>
-            </h1>
-            <p className="mt-3 text-[28px] font-medium leading-[1.18] tracking-[-0.03em] text-white/72 sm:text-[34px]">
-              交互式学习实验台
-            </p>
-            <p className="mt-6 max-w-[620px] text-[16px] leading-7 text-white/64 sm:text-[17px]">
-              将图像采集、预处理、几何校正与目标检测整理成可观察、可调参、可推演的交互实验，
-              让课堂知识和页面中的真实反馈形成一条连续的学习路径。
-            </p>
+          <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,0.94fr)_minmax(360px,0.72fr)]">
+            <div className="max-w-3xl">
+              <h1 className="text-[44px] font-extrabold leading-[1.04] tracking-[-0.045em] text-white sm:text-[56px] lg:text-[64px]">
+                从像素到
+                <span className="bg-gradient-to-r from-sky-200 via-cyan-300 to-blue-300 bg-clip-text text-transparent">
+                  计算机视觉
+                </span>
+              </h1>
+              <p className="mt-3 text-[28px] font-medium leading-[1.18] tracking-[-0.03em] text-white/72 sm:text-[34px]">
+                交互式学习实验台
+              </p>
+              <p className="mt-6 max-w-[620px] text-[16px] leading-7 text-white/64 sm:text-[17px]">
+                将图像采集、预处理、几何校正与目标检测整理成可观察、可调参、可推演的交互实验，
+                让课堂知识和页面中的真实反馈形成一条连续的学习路径。
+              </p>
 
-            <div className="mt-10 grid gap-3 sm:grid-cols-3">
-              {heroMetrics.map((metric) => (
-                <div
-                  key={metric.label}
-                  className="rounded-2xl border border-white/10 bg-white/[0.055] px-4 py-4 shadow-[0_16px_42px_rgba(8,15,31,0.18)] backdrop-blur-sm"
-                >
-                  <div className={`text-[34px] font-extrabold leading-none tracking-[-0.05em] ${metric.accentClassName}`}>
-                    {metric.value}
+              <div className="mt-10 grid gap-3 sm:grid-cols-3">
+                {heroMetrics.map((metric) => (
+                  <div
+                    key={metric.label}
+                    className="rounded-2xl border border-white/10 bg-white/[0.055] px-4 py-4 shadow-[0_16px_42px_rgba(8,15,31,0.18)] backdrop-blur-sm"
+                  >
+                    <div className={`text-[34px] font-extrabold leading-none tracking-[-0.05em] ${metric.accentClassName}`}>
+                      {metric.value}
+                    </div>
+                    <div className="mt-2 text-[12px] font-semibold uppercase tracking-[0.16em] text-white/48">
+                      {metric.label}
+                    </div>
+                    <p className="mt-3 text-[13px] leading-6 text-white/56">{metric.description}</p>
                   </div>
-                  <div className="mt-2 text-[12px] font-semibold uppercase tracking-[0.16em] text-white/48">
-                    {metric.label}
-                  </div>
-                  <p className="mt-3 text-[13px] leading-6 text-white/56">{metric.description}</p>
-                </div>
-              ))}
+                ))}
+              </div>
+            </div>
+
+            <div className="pointer-events-none relative hidden min-h-[430px] items-center justify-center lg:flex">
+              {/* 真实文生图资源使用 screen 混合，让深色底自然融入首页背景。 */}
+              <img
+                src="/assets/home/hero-cv-line-art-generated.png"
+                alt=""
+                aria-hidden="true"
+                className="absolute right-[-285px] top-1/2 w-[980px] max-w-none -translate-y-1/2 select-none opacity-95 mix-blend-screen"
+                style={{
+                  maskImage: 'linear-gradient(to right, transparent 0%, black 18%, black 100%)',
+                  WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 18%, black 100%)',
+                }}
+              />
             </div>
           </div>
         </div>
