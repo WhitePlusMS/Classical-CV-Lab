@@ -156,7 +156,7 @@ const SIFT_GRADIENT_FORMULA = buildInlineMathML(
 );
 
 const SURF_INTEGRAL_FORMULA = buildInlineMathML(
-  '<mrow><mi>II</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>=</mo><munderover><mo>∑</mo><mrow><msup><mi>x</mi><mo>′</mo></msup><mo>≤</mo><mi>x</mi></mrow><mrow></mrow></munderover><munderover><mo>∑</mo><mrow><msup><mi>y</mi><mo>′</mo></msup><mo>≤</mo><mi>y</mi></mrow><mrow></mrow></munderover><mi>I</mi><mo>(</mo><msup><mi>x</mi><mo>′</mo></msup><mo>,</mo><msup><mi>y</mi><mo>′</mo></msup><mo>)</mo></mrow>'
+  '<mrow><mi>II</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>=</mo><munderover><mo>∑</mo><mrow><msup><mi>x</mi><mo>′</mo></msup><mo>≤</mo><mi>x</mi></mrow><mrow><mi>x</mi></mrow></munderover><munderover><mo>∑</mo><mrow><msup><mi>y</mi><mo>′</mo></msup><mo>≤</mo><mi>y</mi></mrow><mrow><mi>y</mi></mrow></munderover><mi>I</mi><mo>(</mo><msup><mi>x</mi><mo>′</mo></msup><mo>,</mo><msup><mi>y</mi><mo>′</mo></msup><mo>)</mo></mrow>'
 );
 
 const SURF_HESSIAN_FORMULA = buildInlineMathML(
@@ -196,7 +196,7 @@ const METHOD_PRINCIPLES: Record<FeatureMethod, MethodPrinciple> = {
     ],
     formulas: [
       { label: 'DoG 差分空间', mathML: SIFT_DOG_FORMULA, note: '两个尺度相减后，可把局部极值位置视作候选关键点，再结合后续条件继续筛选。', stage: 'detection' },
-      { label: '梯度方向与幅值', mathML: SIFT_GRADIENT_FORMULA, note: '梯度幅值和主方向共同决定局部结构的描述方式。', stage: 'description' },
+      { label: '梯度方向与幅值', mathML: SIFT_GRADIENT_FORMULA, note: '梯度幅值和主方向共同决定局部结构的描述方式。Δx、Δy 为邻域像素的有限差分（SIFT 常取 L(x+1,y)−L(x−1,y) 形式）。', stage: 'description' },
     ],
     strengths: ['尺度和旋转鲁棒性强，适合目标大小和姿态变化明显的场景。', '梯度直方图对局部亮度漂移有一定稳定性。'],
     limits: ['计算量较大，描述子维度高。', '纹理过少或重复纹理过强时仍可能产生误匹配。'],
@@ -223,7 +223,7 @@ const METHOD_PRINCIPLES: Record<FeatureMethod, MethodPrinciple> = {
     ],
     formulas: [
       { label: '积分图', mathML: SURF_INTEGRAL_FORMULA, note: '积分图让 SURF 能快速计算盒式滤波响应。', stage: 'detection' },
-      { label: '近似 Hessian 行列式', mathML: SURF_HESSIAN_FORMULA, note: '行列式越突出，该位置越可能成为稳定关键点。', stage: 'detection' },
+      { label: '近似 Hessian 行列式', mathML: SURF_HESSIAN_FORMULA, note: '行列式越突出，该位置越可能成为稳定关键点。其中 w 为盒式滤波对二阶高斯近似的补偿系数，典型取值 w≈0.9。', stage: 'detection' },
     ],
     strengths: ['速度通常高于 SIFT，适合需要较快局部特征提取的任务。', '64 维描述子比 SIFT 更短，匹配成本更低。'],
     limits: ['盒式滤波是近似计算，细节表达不如完整梯度统计精细。', '在低纹理或重复结构中仍需要后续几何一致性筛选。'],
@@ -277,7 +277,7 @@ const METHOD_PRINCIPLES: Record<FeatureMethod, MethodPrinciple> = {
     ],
     formulas: [
       { label: '灰度重心统计', mathML: ORB_IMAGE_MOMENT_FORMULA, note: 'm10 和 m01 统计灰度在水平、垂直方向上的偏移，用于后续把 BRIEF 点对旋转到当前关键点主方向。', stage: 'description' },
-      { label: 'Intensity Centroid 方向', mathML: ORB_CENTROID_FORMULA, note: 'atan2 根据垂直偏移和水平偏移得到主方向 θ，再据此执行旋转 BRIEF。', stage: 'description' },
+      { label: 'Intensity Centroid 方向', mathML: ORB_CENTROID_FORMULA, note: '灰度质心完整写法为 C=(m10/m00, m01/m00)，θ=atan2 中归一化分母 m00 相消，故公式可只写 m10/m01。', stage: 'description' },
     ],
     strengths: ['速度快，适合实时匹配和资源受限场景。', '比原始 BRIEF 更能处理旋转变化。'],
     limits: ['二进制描述能力通常弱于高维梯度描述子。', '尺度变化很大或纹理重复时仍可能产生不稳定匹配。'],
@@ -313,7 +313,8 @@ const METHOD_PRINCIPLES: Record<FeatureMethod, MethodPrinciple> = {
   },
 };
 
-const CODE_SNIPPET = `type DistanceType = 'euclidean' | 'hamming';
+const CODE_SNIPPET = `// 教学演示：本代码为算法文件 computeKeypointMatchingDemo / buildMatchesForKeypoint 的核心逻辑精简重写（教学简化）
+type DistanceType = 'euclidean' | 'hamming';
 type FeatureMethod = 'sift' | 'surf' | 'brief' | 'orb' | 'brisk';
 
 function getMethodDistanceType(method: FeatureMethod): DistanceType {
@@ -1294,7 +1295,7 @@ export default function KeypointMatchingPipelinePage() {
             高精度浮点描述子 + 欧氏距离
           </div>
           <p className="mt-3 text-xs leading-6 text-slate-600">
-            128/64 维梯度描述子，通常对尺度与旋转变化更稳。适合精度优先、目标变化较大的场景。
+            梯度（SIFT）/ Haar 响应（SURF）描述子（128/64 维），通常对尺度与旋转变化更稳。适合精度优先、目标变化较大的场景。
           </p>
         </TeachingCard>
         <TeachingCard>

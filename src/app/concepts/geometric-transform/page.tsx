@@ -46,9 +46,35 @@ import { centerCropRgbImage, loadImageAsRgb, resizeRgbImage } from '@/lib/utils/
 import { rgbToGrayscaleWeighted } from '@/lib/algorithms/grayscale';
 
 const GEOMETRIC_TRANSFORM_CODE = `// 辅助函数说明：
-// - applyInverseMapping(x', y', invM): 用逆矩阵把输出像素坐标映射回源图坐标
+// - imageToCartesian / cartesianToImage: 图像像素坐标与中心笛卡尔坐标互转（y 轴方向相反）
 // - sampleNearest(image, x, y): 四舍五入取最近像素；越界时返回 0
 // - sampleBilinear(image, x, y): 取 2×2 邻域加权平均；越界像素按 0 参与计算
+
+// 反向映射的关键一步：所有矩阵公式都建立在“图像中心为原点的笛卡尔坐标系”上，
+// 因此每个输出像素必须先中心化（并翻转 y 轴）再乘逆矩阵，最后映射回图像像素坐标。
+// 这与页面“坐标约定”章节的描述一致；若省略这一步，结果会整体错位、旋转方向也会颠倒。
+function applyInverseMapping(
+  xPrime: number,
+  yPrime: number,
+  inverseMatrix: number[][],
+  width: number,
+  height: number
+): [number, number] {
+  // 像素中心约定：中心位于 ((width-1)/2, (height-1)/2)
+  const centerX = (width - 1) / 2;
+  const centerY = (height - 1) / 2;
+
+  // 1) 输出像素坐标 → 中心笛卡尔坐标（y 轴向上）
+  const xc = xPrime - centerX;
+  const yc = centerY - yPrime;
+
+  // 2) 在中心笛卡尔坐标系里乘以逆矩阵，映射回源图坐标
+  const sx = inverseMatrix[0][0] * xc + inverseMatrix[0][1] * yc + inverseMatrix[0][2];
+  const sy = inverseMatrix[1][0] * xc + inverseMatrix[1][1] * yc + inverseMatrix[1][2];
+
+  // 3) 中心笛卡尔坐标 → 图像像素坐标（y 轴翻转回来）
+  return [sx + centerX, centerY - sy];
+}
 
 function warpAffine(
   image: number[][],
@@ -61,7 +87,7 @@ function warpAffine(
 
   for (let yPrime = 0; yPrime < height; yPrime++) {
     for (let xPrime = 0; xPrime < width; xPrime++) {
-      const [x, y] = applyInverseMapping(xPrime, yPrime, inverseMatrix);
+      const [x, y] = applyInverseMapping(xPrime, yPrime, inverseMatrix, width, height);
       output[yPrime][xPrime] =
         interpolation === 'nearest'
           ? sampleNearest(image, x, y)
@@ -332,6 +358,7 @@ function buildInversePointMathML(
 
 function buildNearestMathML(step: GeometricTransformStep): string {
   const nearest = step.nearestSource;
+  // 兜底分支：sampleNearest 始终返回最近邻坐标（图像外按 0），正常不会进入这里。
   if (!nearest) {
     return buildInlineMathML(`
       <mrow>
@@ -630,10 +657,12 @@ export default function GeometricTransformPage() {
         </div>
         <p className="mt-2 text-xs leading-6 text-slate-600">
           为了让旋转方向与角度定义保持一致，程序在画布中心建立笛卡尔坐标系，
-          再把结果映射回图像像素坐标。
+          再把结果映射回图像像素坐标。这里的“画布中心”按像素中心约定取
+          (N−1)/2（96×96 时中心为 47.5，落在像素之间）。
         </p>
         <p className="mt-2 text-xs leading-6 text-slate-600">
-          组合顺序固定为 {TRANSFORM_COMPOSITION_ORDER.join(' → ')}。
+          组合顺序固定为 {TRANSFORM_COMPOSITION_ORDER.join(' → ')}。对列向量与矩阵
+          M 相乘时按**从右往左**依次作用，因此 Flip 先作用于点、Translate 最后作用于点。
         </p>
       </div>
     </div>
@@ -779,7 +808,7 @@ export default function GeometricTransformPage() {
           <FormulaCard
             mathML={buildMatrixStatementMathML('<mi>M</mi>', matrix)}
             label="当前组合矩阵"
-            note={`按 ${TRANSFORM_COMPOSITION_ORDER.join(' → ')} 的顺序依次复合。`}
+            note={`按 ${TRANSFORM_COMPOSITION_ORDER.join(' → ')} 的顺序依次复合，即 M = T·R·Shear·Scale·Flip；列向量与 M 相乘时从右往左依次作用，故 Flip 先、Translate 最后。`}
             tone="embedded"
           />
           <FormulaCard
@@ -806,7 +835,7 @@ export default function GeometricTransformPage() {
           <FormulaCard
             mathML={SIMILAR_FAMILY_MATHML}
             label="相似"
-            note="允许整体等比例缩放，因此角度不变、长度按同一比例变化。这里的 A 表示线性部分，与纯旋转矩阵 R 区分。"
+            note="允许整体等比例缩放，因此角度不变、长度按同一比例变化。这里的 A 表示线性部分，与纯旋转矩阵 R 区分；由 A=k′·R（R 正交）得 A·Aᵀ=k′²·I，即上式中 k=k′²>0。"
             tone="embedded"
           />
           <FormulaCard

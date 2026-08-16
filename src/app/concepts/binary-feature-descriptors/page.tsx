@@ -114,9 +114,9 @@ const DEFAULT_PAIR_COUNTS: Record<AlgorithmMode, number> = {
 const SAMPLING_OPTIONS: { value: SamplingMethod; label: string; desc: string }[] = [
   { value: 'GI', label: 'GI - 均匀分布', desc: 'X、Y 在 Patch 内均匀分布，适合观察最直接的随机点对比较。（教学化变体，与原论文实现细节可能不同）' },
   { value: 'GII', label: 'GII - 高斯分布', desc: 'X、Y 更集中在 Patch 中心，常用于让描述子更关注关键点附近结构。（教学化变体，与原论文实现细节可能不同）' },
-  { value: 'GIII', label: 'GIII - X 中心取 Y', desc: '先取 X，再在 X 附近取 Y，点对更偏向局部纹理关系。（教学化变体，与原论文实现细节可能不同）' },
+  { value: 'GIII', label: 'GIII - X 中心取 Y', desc: '用偏移的两个高斯分布分别采样 X 与 Y，点对更偏向局部纹理关系。（教学化变体，与原论文实现细节可能不同）' },
   { value: 'GIV', label: 'GIV - 极坐标量化', desc: '按极坐标半径和角度取点，便于理解方向归一化。（教学化变体，与原论文实现细节可能不同）' },
-  { value: 'GV', label: 'GV - 中心固定极坐标遍历', desc: '中心固定（X=Y=Patch 中心），采样点沿周围分布，适合观察中心与邻域的亮暗关系。（教学化变体，与原论文实现细节可能不同）' },
+  { value: 'GV', label: 'GV - 中心固定极坐标遍历', desc: '一点固定在 Patch 中心，另一点围绕中心分布，适合观察中心与邻域的亮暗关系。（教学化变体，与原论文实现细节可能不同）' },
 ];
 
 const PAIR_OPTIONS: { value: number; label: string }[] = [
@@ -225,6 +225,7 @@ function generatePairs(method: SamplingMethod, count: number, seed = 42): Pair[]
       x2 = Math.floor(rand() * PATCH_SIZE);
       y2 = Math.floor(rand() * PATCH_SIZE);
     } else if (method === 'GII') {
+      // 各向同性二维高斯采样：r·cosθ、r·sinθ（r 服从瑞利分布）在数学上等价于横纵独立同方差的高斯采样（教学简化）。
       const sampleGauss = (): number => {
         const u1 = rand();
         const u2 = rand();
@@ -768,7 +769,7 @@ export default function BinaryFeatureDescriptorsPage() {
           <TeachingCard>
             <h2 className="mb-3 text-sm font-semibold text-slate-800">描述子编码与汉明距离</h2>
             <p className="mb-3 text-xs leading-6 text-slate-600">
-              真实算法里，完整描述子通常会一次生成很多位。当前页面把前 {currentPairIndex + 1} 次点对比较按顺序逐位展开。数学上也可以把这串 bit 看成按 2 的幂加权得到的整数编码，但这里先把重点放在“每一位怎样产生”。输出图中接近黑色的格子表示 bit=1，接近白色的格子表示 bit=0，中灰色表示两条描述子在该位不同；算法阶段当前位用更深的蓝色灰度额外标出，以便看清当前 τ 测试落在哪一位。
+              真实算法里，完整描述子通常会一次生成很多位。当前页面把前 {currentPairIndex + 1} 次点对比较按顺序逐位展开。数学上也可以把这串 bit 看成按 2 的幂加权得到的整数编码，但这里先把重点放在“每一位怎样产生”。需要注明位序：加权视角把最左边（由第一对点比较得到）的这一位当作最低位，权重为 2⁰=1，也就是串从左到右权重递增，这与“二进制整数把最高位写在最左边”的常规读法相反。因此不要用这串 bit 去换算成单个大整数去估算它有多大——实际存储与匹配仍以逐位 bit 串为准，逐位比较汉明距离。输出图中接近黑色的格子表示 bit=1，接近白色的格子表示 bit=0，中灰色表示两条描述子在该位不同；算法阶段当前位用更深的蓝色灰度额外标出，以便看清当前 τ 测试落在哪一位。
             </p>
             <p className="mb-3 text-xs leading-6 text-slate-600">
               这里用于比较的第二条描述子仍来自当前局部图像块，只是采样点对或方向略有变化，目的是单独观察“bit 差异怎样累计成汉明距离”。真实匹配时，被比较的两条描述子通常来自两个候选关键点，而不一定来自同一个局部图像块。
@@ -778,7 +779,7 @@ export default function BinaryFeatureDescriptorsPage() {
                 label="BRIEF 描述子"
                 mathML={BRIEF_DESCRIPTOR_FORMULA}
                 tone="embedded"
-                note={`当前描述子前 ${Math.min(binaryString.length, 24)} 位：${binaryString.slice(0, 24)}${binaryString.length > 24 ? '...' : ''}`}
+                note={`当前描述子前 ${Math.min(binaryString.length, 24)} 位：${binaryString.slice(0, 24)}${binaryString.length > 24 ? '...' : ''}。公式中的“加权整数和”仅是编码的一个视角，实际存储与按汉明距离匹配仍以逐位 bit 串为准。`}
               />
               <FormulaCard
                 label="汉明距离"

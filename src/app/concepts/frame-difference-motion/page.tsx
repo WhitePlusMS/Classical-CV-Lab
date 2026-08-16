@@ -36,6 +36,7 @@ const FRAME_CODE_TS = `function frameDifference(frames, t, threshold, mode) {
 
   // 帧差法只看前一帧；对称差分要求前后两次差分同时成立
   const motion = mode === 'twoFrame' ? bPrev : (bPrev && bNext);
+  // 对整幅二值图做闭运算（先膨胀后腐蚀）
   return close(motion);
 }`;
 
@@ -101,7 +102,8 @@ const SYMMETRIC_EXPERIMENT_STEPS = [
 ] as const;
 
 function grayAt(image: GrayscaleImage, x: number, y: number): number {
-  return Math.round((image[y]?.[x] ?? 0) * 255);
+  // 保留一位小数，与 diffGrayAt 口径一致，保证公式链 |I_t - I_{t-1}| = diffGray 算术自洽
+  return Math.round((image[y]?.[x] ?? 0) * 2550) / 10;
 }
 
 // 差分图取值保留一位小数，避免四舍五入到整数后与真实阈值边界不一致
@@ -544,14 +546,14 @@ export default function FrameDifferenceMotionPage() {
           label={method === 'twoFrame' ? '帧差法判定' : '对称差分判定'}
           mathML={activeFormula}
           note={method === 'twoFrame'
-            ? `当前位置前向差分为 ${previousDiffGray}（保留一位小数），阈值 T = ${threshold}。`
-            : `当前位置前向差分为 ${previousDiffGray}，后向差分为 ${nextDiffGray}（均保留一位小数），两者同时超过 T 才保留。`}
+            ? `当前位置前向差分为 ${previousDiffGray}，阈值 T = ${threshold}。其中灰度与差分均保留一位小数，公式链 |I_t - I_{t-1}| = diffGray 自洽；判定采用严格大于（差分等于阈值时判为背景）。`
+            : `当前位置前向差分为 ${previousDiffGray}，后向差分为 ${nextDiffGray}（均保留一位小数），两者同时超过 T 才保留；灰度同样保留一位小数、判定采用严格大于。`}
           tone="embedded"
         />
         <FormulaCard
           label="形态学清理"
           mathML={morphologyFormulaMathML()}
-          note={`原始运动像素 ${result.motionPixelCount} 个，清理后 ${result.cleanedPixelCount} 个。闭运算用于填充小空洞、平滑边缘；本页不做连通区域提取。`}
+          note={`原始运动像素 ${result.motionPixelCount} 个，清理后 ${result.cleanedPixelCount} 个。闭运算用于填充小空洞、平滑边缘；本页不做连通区域提取。边界像素按背景 0 处理，简化了标准形态学的边界填充。`}
           tone="embedded"
         />
       </TeachingCard>

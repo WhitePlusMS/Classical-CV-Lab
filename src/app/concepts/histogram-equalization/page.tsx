@@ -418,7 +418,7 @@ export default function HistogramEqualizationPage() {
             <p><InlineMath mathML={inlineMath('<mi>n</mi>')} />: 图像总像素数（= {totalPixels}）</p>
             <p><InlineMath mathML={inlineMath('<munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>0</mn></mrow><mi>k</mi></munderover><msub><mi>n</mi><mi>i</mi></msub><mo>/</mo><mi>n</mi>')} />: 累积分布函数（CDF）</p>
             <p className="mt-1 text-slate-500 italic">
-              * k 为输入灰度级索引；映射函数是单调递增的，保证输出图像保持灰度级的相对顺序。
+              * k 为输入灰度级索引；映射函数是单调非减的（连续情形下单调递增），保证输出图像保持灰度级的相对顺序。
             </p>
           </div>
         </TeachingCard>
@@ -482,9 +482,9 @@ export default function HistogramEqualizationPage() {
               <table className="w-full text-xs border-collapse">
                 <thead>
                   <tr className="border-b border-amber-200">
-                    <th className="py-2 pr-3 text-left font-semibold text-amber-800">原灰度 <InlineMath mathML={inlineMath('<msub><mi>s</mi><mi>k</mi></msub>')} /></th>
+                    <th className="py-2 pr-3 text-left font-semibold text-amber-800">原灰度 <InlineMath mathML={inlineMath('<mi>k</mi>')} /></th>
                     <th className="py-2 px-3 text-left font-semibold text-amber-800">出现次数 <InlineMath mathML={inlineMath('<msub><mi>n</mi><mi>k</mi></msub>')} /></th>
-                    <th className="py-2 px-3 text-left font-semibold text-amber-800">概率 <InlineMath mathML={inlineMath('<mi>P</mi><mo>(</mo><msub><mi>s</mi><mi>k</mi></msub><mo>)</mo>')} /></th>
+                    <th className="py-2 px-3 text-left font-semibold text-amber-800">概率 <InlineMath mathML={inlineMath('<mi>P</mi><mo>(</mo><mi>k</mi><mo>)</mo>')} /></th>
                     <th className="py-2 px-3 text-left font-semibold text-amber-800">CDF 累积</th>
                     <th className="py-2 pl-3 text-left font-semibold text-amber-800">映射值 <InlineMath mathML={inlineMath('<msub><mi>S</mi><mi>k</mi></msub>')} /></th>
                   </tr>

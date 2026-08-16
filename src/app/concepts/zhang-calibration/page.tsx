@@ -109,6 +109,9 @@ function StageStepper({
 }
 
 const ZHANG_CODE = `// 当前页面实现的是张正友标定的线性部分（未做非线性优化 / 畸变估计）
+// 注：下方为示意性伪代码，函数名做了教学化简化；
+//     对应真实实现为 estimateHomographyConstraints / estimateIntrinsicsFromHomographies /
+//     estimateExtrinsicsFromHomography（见 src/lib/algorithms/cameraCalibration.ts）。
 
 // 1. 准备同一张棋盘格角点的两组坐标
 const objectPoints = boardCorners.map(c => ({ x: c.world.x, y: c.world.y }));
@@ -121,11 +124,11 @@ const homographies = views.map(view =>
 
 // 3. 由 H 构造约束 V b = 0，最小奇异向量给出 b
 //    B = [[b1,b2,b4],[b2,b3,b5],[b4,b5,b6]] = K^{-T} K^{-1}
-const b = solveHomogeneous(buildV(homographies));
-const K = recoverIntrinsicMatrix(b);
+const b = solveHomogeneous(buildV(homographies));      // 伪代码：buildV≈estimateHomographyConstraints
+const K = recoverIntrinsicMatrix(b);                   // 伪代码：recoverIntrinsicMatrix≈estimateIntrinsicsFromHomographies
 
 // 4. 已知 K，从每个 H 恢复该图外参
-const extrinsics = homographies.map(H => recoverExtrinsics(K, H));
+const extrinsics = homographies.map(H => recoverExtrinsics(K, H)); // 伪代码：recoverExtrinsics≈estimateExtrinsicsFromHomography
 
 // 5. 用 K, R, t 把棋盘角点重投影回图像，计算误差
 const error = computeReprojectionError(K, extrinsics, objectPoints, imagePoints);`;
@@ -690,8 +693,8 @@ export default function ZhangCalibrationPage() {
           />
           <FormulaCard
             label="Hartley 归一化"
-            mathML={math('<mover><mi>H</mi><mo>^</mo></mover><mo>=</mo><msup><mi>T</mi><mrow><mo>-</mo><mn>1</mn></mrow></msup><mi>H</mi><mi>T</mi>')}
-            note="对图像点和世界点分别做平移缩放，提高数值稳定性。"
+            mathML={math('<mi>H</mi><mo>=</mo><msup><mi>T</mi><mrow><mi>img</mi><mo>-</mo><mn>1</mn></mrow></msup><mover><mi>H</mi><mo>~</mo></mover><msub><mi>T</mi><mi>obj</mi></msub>')}
+            note="对图像点和世界点分别做平移缩放（H = T_img⁻¹ H̃ T_obj），提高数值稳定性。"
           />
         </div>
       </TeachingCard>
@@ -713,13 +716,13 @@ export default function ZhangCalibrationPage() {
         <div className="mt-4 grid gap-4 xl:grid-cols-2">
           <FormulaCard
             label="正交约束"
-            mathML={math('<msub><mi>h</mi><mn>1</mn></msup><msup><mi>K</mi><mrow><mo>-</mo><mi>T</mi></mrow></msup><msup><mi>K</mi><mrow><mo>-</mo><mn>1</mn></mrow></msup><msub><mi>h</mi><mn>2</mn></msub><mo>=</mo><mn>0</mn>')}
-            note="r1 与 r2 正交。"
+            mathML={math('<msup><msub><mi>h</mi><mn>1</mn></msub><mi>T</mi></msup><msup><mi>K</mi><mrow><mo>-</mo><mi>T</mi></mrow></msup><msup><mi>K</mi><mrow><mo>-</mo><mn>1</mn></mrow></msup><msub><mi>h</mi><mn>2</mn></msub><mo>=</mo><mn>0</mn>')}
+            note="r1 与 r2 正交（h₁ᵀ K⁻ᵀ K⁻¹ h₂ = 0）。"
           />
           <FormulaCard
             label="等模约束"
-            mathML={math('<msub><mi>h</mi><mn>1</mn></msup><msup><mi>K</mi><mrow><mo>-</mo><mi>T</mi></mrow></msup><msup><mi>K</mi><mrow><mo>-</mo><mn>1</mn></mrow></msup><msub><mi>h</mi><mn>1</mn></msub><mo>=</mo><msub><mi>h</mi><mn>2</mn></msup><msup><mi>K</mi><mrow><mo>-</mo><mi>T</mi></mrow></msup><msup><mi>K</mi><mrow><mo>-</mo><mn>1</mn></mrow></msup><msub><mi>h</mi><mn>2</mn></msub>')}
-            note="r1 与 r2 模长均为 1。"
+            mathML={math('<msup><msub><mi>h</mi><mn>1</mn></msub><mi>T</mi></msup><msup><mi>K</mi><mrow><mo>-</mo><mi>T</mi></mrow></msup><msup><mi>K</mi><mrow><mo>-</mo><mn>1</mn></mrow></msup><msub><mi>h</mi><mn>1</mn></msub><mo>=</mo><msup><msub><mi>h</mi><mn>2</mn></msub><mi>T</mi></msup><msup><mi>K</mi><mrow><mo>-</mo><mi>T</mi></mrow></msup><msup><mi>K</mi><mrow><mo>-</mo><mn>1</mn></mrow></msup><msub><mi>h</mi><mn>2</mn></msub>')}
+            note="r1 与 r2 模长均为 1（h₁ᵀ K⁻ᵀ K⁻¹ h₁ = h₂ᵀ K⁻ᵀ K⁻¹ h₂）。"
           />
           <FormulaCard
             label="向量形式"
@@ -729,7 +732,7 @@ export default function ZhangCalibrationPage() {
           <FormulaCard
             label="B 与 K 的关系"
             mathML={math('<mi>B</mi><mo>=</mo><msup><mi>K</mi><mrow><mo>-</mo><mi>T</mi></mrow></msup><msup><mi>K</mi><mrow><mo>-</mo><mn>1</mn></mrow></msup>')}
-            note="B 对称正定，对其做 Cholesky/解析分解得到 K。"
+            note="B 对称正定，用张正友闭式公式解析分解得到 K。"
           />
         </div>
       </TeachingCard>
@@ -745,12 +748,12 @@ export default function ZhangCalibrationPage() {
       <TeachingCard>
         <div className="text-sm font-semibold text-slate-800">为什么至少需要三张有效图像</div>
         <p className="mt-1 text-xs leading-5 text-slate-500">
-          K 有 5 个自由参数（当假设 skew=0 时降为 4 参数），每张图的 H 提供 2 条线性约束。
+          b 含 6 个未知分量（是齐次的，整体尺度任意），每张图的 H 提供 2 条线性约束，故需 2N ≥ 6 → N ≥ 3。
         </p>
         <div className="mt-4 grid gap-4 xl:grid-cols-2">
           <FormulaCard
             mathML={math(`<mn>2</mn><mi>N</mi><mo>&#8805;</mo><mn>6</mn><mo>,</mo><mi>N</mi><mo>&#8805;</mo><mn>3</mn>`)}
-            note="三张图给出 6 条方程，才开始足以约束 5 个内参自由度。"
+            note="b 含 6 个未知分量（齐次，整体尺度任意），故需 2N ≥ 6 → N ≥ 3 张图。"
           />
           <div className={`rounded-2xl border px-4 py-4 text-sm leading-6 ${enoughEquations ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-red-200 bg-red-50 text-red-800'}`}>
             当前选择 {activeViews.length} 张图像，共 {equationCount} 条约束。
@@ -917,11 +920,14 @@ export default function ZhangCalibrationPage() {
       <div className={`rounded-2xl border px-3 py-3 ${enoughEquations ? 'border-emerald-200 bg-emerald-50' : 'border-red-200 bg-red-50'}`}>
         <div className={`text-xs font-semibold ${enoughEquations ? 'text-emerald-700' : 'text-red-700'}`}>约束数量</div>
         <p className={`mt-2 text-xs leading-5 ${enoughEquations ? 'text-emerald-700' : 'text-red-700'}`}>
-          当前 {activeViews.length} 张图像，共 {equationCount} 条约束。
+          当前 {activeViews.length} 张图像，共 {equationCount} 条内参约束。
+        </p>
+        <p className={`mt-2 text-xs leading-5 ${enoughEquations ? 'text-emerald-700/90' : 'text-red-600/90'}`}>
+          注：本页展示的内参由全部 {allViews.length} 张视图估计（下方「显示/浏览视图数」仅控制显示范围）。
         </p>
       </div>
 
-      <SliderParam label="参与求解图像数" value={viewCount} onChange={setViewCount} min={1} max={allViews.length} step={1} unit=" 张" />
+      <SliderParam label="显示/浏览视图数" value={viewCount} onChange={setViewCount} min={1} max={allViews.length} step={1} unit=" 张" />
       <SelectParam
         label="当前查看视图"
         value={safeActiveViewId}

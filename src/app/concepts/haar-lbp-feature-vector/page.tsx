@@ -625,7 +625,7 @@ export default function HaarLbpFeatureVectorPage() {
             </h2>
             <p className="text-xs leading-6 text-slate-600">
               <TeachingTerm term="Haar-like 特征" explanation="把窗口划分成黑白矩形区域，只比较区域灰度和的差异，用一个数描述边缘、线或亮斑结构。" className="mr-1" />
-              把检测窗口切成黑白矩形区域，用黑色区域灰度和减去白色区域灰度和得到一个标量特征。
+              把检测窗口划分成黑白矩形区域（部分模板有重叠），用黑色区域灰度和减去白色区域灰度和得到一个标量特征。
               <TeachingTerm term="积分图" explanation="每个位置保存左上角累计和，任意矩形区域求和可由四个角点加减得到。" className="mx-1" />
               把任意矩形求和转化为四个角点的加减，因此适合大量滑动窗口扫描。
             </p>
@@ -637,7 +637,7 @@ export default function HaarLbpFeatureVectorPage() {
               label="Haar 特征值当前代入"
               mathML={buildHaarValueFormula(haarStep)}
               tone="embedded"
-              note={`当前模板为 ${HAAR_TEMPLATE_LABELS[haarTemplateType]}，窗口左上角为 (${haarStep.x}, ${haarStep.y})。`}
+              note={`当前模板为 ${HAAR_TEMPLATE_LABELS[haarTemplateType]}，窗口左上角为 (${haarStep.x}, ${haarStep.y})。本页特征值取「黑区 − 白区」，该符号仅为约定、整体取反等价；实际检测中常用其绝对值。`}
             />
             <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">

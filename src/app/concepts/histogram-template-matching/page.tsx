@@ -197,7 +197,7 @@ function histogramFormulaMathML(
       <mrow>
         <mi>${name}</mi><mo>(</mo><msub><mi>H</mi><mi>T</mi></msub><mo>,</mo><msub><mi>H</mi><mi>C</mi></msub><mo>)</mo>
         <mo>=</mo><msqrt><mrow><mn>1</mn><mo>-</mo><mo>(</mo>${coefficientTerms}<mo>+</mo><mo>⋯</mo><mo>)</mo></mrow></msqrt>
-        <mo>=</mo><mn>${formatScore(score)}</mn>
+        <mo>≈</mo><mn>${formatScore(score)}</mn>
       </mrow>
     `);
   }
@@ -509,7 +509,7 @@ export default function HistogramTemplateMatchingPage() {
           <div className="mb-3 flex items-center justify-between gap-2">
             <div>
               <div className="text-sm font-semibold text-emerald-700">响应热力图</div>
-              <div className="mt-1 text-xs text-slate-500">红点表示当前窗口响应位置；绿框只在热力图中辅助标出非自身最佳响应。</div>
+              <div className="mt-1 text-xs text-slate-500">红点表示当前窗口响应位置；模板邻域（约 0.6×模板尺寸）被排除出最佳搜索，该区域置为最深色；灰色亮点为排除后的最佳（非自身）响应位置。</div>
             </div>
             <span className="font-mono text-xs text-slate-400">
               {templateResult.heatmap[0]?.length ?? 0}×{templateResult.heatmap.length}
@@ -674,7 +674,11 @@ export default function HistogramTemplateMatchingPage() {
             mathML={histFormula}
             note={histMethod === 'bhattacharyya'
               ? `上式展开的是巴氏系数的前 ${histogramResult.sampleContributions.length} 个根号项，完整巴氏距离 = sqrt(1 - 系数)，使用 16 个 bin 汇总；该方法${scoreDirectionText(histMethod)}。`
-              : `上式只展开前 ${histogramResult.sampleContributions.length} 个 bin，完整分数使用 16 个 bin 汇总；该方法${scoreDirectionText(histMethod)}。`}
+              : histMethod === 'correlation'
+                ? `上式即完整归一化相关（皮尔逊）公式：分子为去均值协方差、分母为两分布标准差之积，直接使用 16 个 bin 汇总；该方法${scoreDirectionText(histMethod)}。`
+                : histMethod === 'chi-square'
+                  ? `本节采用对称卡方距离 Σ((hT-hC)²/(hT+hC))，使用 16 个 bin 汇总；注意 OpenCV compareHist 的 CHISQR 默认是非对称形式（分母仅用第一个直方图），两者数值不同；该方法${scoreDirectionText(histMethod)}。`
+                  : `上式只展开前 ${histogramResult.sampleContributions.length} 个 bin，完整分数使用 16 个 bin 汇总；该方法${scoreDirectionText(histMethod)}。`}
             tone="embedded"
           />
         )}

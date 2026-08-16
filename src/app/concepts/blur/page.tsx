@@ -991,7 +991,7 @@ export default function BlurPage() {
                   <div className="font-semibold text-blue-700">Sigma参数</div>
                   <p className="mt-1 text-blue-600">
                     sigma 控制权重的集中程度：sigma 越小，中心权重越大，平滑效果越弱；
-                    sigma 越大，权重越均匀，越接近均值滤波。
+                    在极限情况下 sigma 越大，权重越均匀，越接近均值滤波。
                   </p>
                 </div>
               </>

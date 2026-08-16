@@ -29,7 +29,9 @@ import {
   undistortImage,
 } from '@/lib/algorithms/imageGeometry';
 
-const DISTORTION_CODE = `const { mapX, mapY } = initUndistortRectifyMap(K, distCoeffs, I, newK, size);
+const DISTORTION_CODE = `// 教学简化：真实签名经压缩；无矫正时旋转矩阵 R 取单位阵（I = eye(3)）
+// initUndistortRectifyMap(K, distCoeffs, R, newK, size, m1type, mapX, mapY)
+const { mapX, mapY } = initUndistortRectifyMap(K, distCoeffs, I, newK, size);
 
 for (let y = 0; y < height; y++) {
   for (let x = 0; x < width; x++) {
@@ -65,7 +67,7 @@ export default function DistortionCorrectionPage() {
   const [sampleMode, setSampleMode] = useState<SampleMode>('checkerboard');
   const [distortionMode, setDistortionMode] = useState<DistortionMode>('barrel');
   const [strength, setStrength] = useState(0.32);
-  const [selectedPixel, setSelectedPixel] = useState({ x: 60, y: 60 });
+  const [selectedPixel, setSelectedPixel] = useState({ x: 30, y: 30 });
   const [lenaRgb, setLenaRgb] = useState<ReturnType<typeof createCheckerboardRgbImage> | null>(null);
 
   useEffect(() => {
@@ -91,6 +93,7 @@ export default function DistortionCorrectionPage() {
 
   const coefficients = useMemo<DistortionCoefficients>(() => {
     // OpenCV 标准：k1>0 产生桶形畸变，k1<0 产生枕形畸变
+    // 完整畸变模型还含切向项 p1、p2（p1/p2 表示切向/偏心畸变），本演示取 p1=p2=0（径向主导）
     const sign = distortionMode === 'barrel' ? 1 : -1;
     return {
       k1: sign * strength,
@@ -244,7 +247,7 @@ export default function DistortionCorrectionPage() {
           <FormulaCard
             label="输出像素的归一化坐标"
             mathML={math(`<mi>x</mi><mo>=</mo><mfrac><mrow><mo>(</mo><msup><mi>u</mi><mo>&prime;</mo></msup><mo>-</mo><msub><mi>c</mi><mi>x</mi></msub><mo>)</mo></mrow><msub><mi>f</mi><mi>x</mi></msub></mfrac><mo>=</mo><mfrac><mrow><mo>(</mo><mn>${selectedPixel.x}</mn><mo>-</mo><mn>${(width / 2).toFixed(0)}</mn><mo>)</mo></mrow><mn>${(width / 2).toFixed(0)}</mn></mfrac><mo>=</mo><mn>${normalizedX}</mn><mo>,</mo><mi>y</mi><mo>=</mo><mfrac><mrow><mo>(</mo><msup><mi>v</mi><mo>&prime;</mo></msup><mo>-</mo><msub><mi>c</mi><mi>y</mi></msub><mo>)</mo></mrow><msub><mi>f</mi><mi>y</mi></msub></mfrac><mo>=</mo><mfrac><mrow><mo>(</mo><mn>${selectedPixel.y}</mn><mo>-</mo><mn>${(height / 2).toFixed(0)}</mn><mo>)</mo></mrow><mn>${(height / 2).toFixed(0)}</mn></mfrac><mo>=</mo><mn>${normalizedY}</mn>`)}
-            note="此处简化假设主点在图像中心（cₓ=w/2）且焦距等于半宽（fₓ=w/2），实际标定中这些值来自内参矩阵。"
+            note="此处简化假设主点在图像中心（cₓ=w/2）且焦距等于半宽（fₓ=w/2），实际标定中这些值来自内参矩阵，且 fₓ、f_y 通常不相等。"
             tone="embedded"
           />
           <FormulaCard

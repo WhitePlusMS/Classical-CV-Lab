@@ -45,7 +45,8 @@ import {
 } from '@/lib/utils/imageProcessing';
 import { useGridNavigation } from '@/hooks/useGridNavigation';
 
-const CONVOLUTION_CODE_TS = `function convolve2D(
+const CONVOLUTION_CODE_TS = `// 教学简化片段：仅展示“翻转核 + 不补零”，完整版（含 padding/stride）见 lib/algorithms/convolution.ts
+function convolve2D(
   image: number[][],
   kernel: number[][]
 ): number[][] {
@@ -105,7 +106,7 @@ const KERNEL_PRESET_FAMILIES: KernelPresetFamily[] = [
     principle: '无论核大小是多少，只有中心位置权重为 1，其余位置全为 0，因此邻域像素不会参与输出。',
     origin: '它对应离散情形下的单位冲激思想：只保留中心项时，卷积结果尽量保持原信号本身。',
     formulaMathML: buildInlineMathML('<mrow><mi>G</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>=</mo><mi>f</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo></mrow>'),
-    formulaNote: '扩大到 5×5、7×7 或 11×11 时，本质仍然不变：只有中心项真正生效。',
+    formulaNote: '扩大到 5×5、7×7 或 11×11 时，本质仍然不变：只有中心项真正生效。无补零时输出为原图的平移拷贝，补 same 边界时即 f(x,y)。',
     visualTitle: '响应图示',
     visualLabels: ['邻域忽略', '中心保留', '原样输出'],
   },
@@ -118,7 +119,7 @@ const KERNEL_PRESET_FAMILIES: KernelPresetFamily[] = [
     principle: '每个像素都以相同权重参与求和；若再除以全部权重之和，就得到标准的均值滤波。',
     origin: '它来自局部平均的统计思想：不再只看中心点，而是把周围像素一起纳入估计，用整体趋势抑制随机波动。',
     formulaMathML: buildInlineMathML('<mrow><mi>G</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>=</mo><mfrac><mn>1</mn><mi>Z</mi></mfrac><munderover><mo>&#8721;</mo><mi>i</mi><mi></mi></munderover><munderover><mo>&#8721;</mo><mi>j</mi><mi></mi></munderover><mi>f</mi><mo>(</mo><mi>x</mi><mo>+</mo><mi>i</mi><mo>,</mo><mi>y</mi><mo>+</mo><mi>j</mi><mo>)</mo></mrow>'),
-    formulaNote: '等权核矩阵保留“等权结构”便于观察；若除以全部权重和，就对应标准均值核。',
+    formulaNote: '本页展示的是未除以 Z 的等权核，故“当前输出值”=原始窗口和；要得到归一化均值需再除以全部权重之和 Z。等权核矩阵保留“等权结构”便于观察。',
     visualTitle: '响应图示',
     visualLabels: ['周围像素', '同权汇总', '平滑输出'],
   },
@@ -157,7 +158,7 @@ const KERNEL_PRESET_FAMILIES: KernelPresetFamily[] = [
     principle: '它把“水平方向一阶差分”和“垂直方向平滑”结合在一起；核越大，参与比较的邻域越宽。',
     origin: '它是经典的一阶导数卷积核族。3×3 最常见，5×5 和 7×7 则表示更大尺度的方向导数。',
     formulaMathML: buildInlineMathML('<mrow><msub><mi>G</mi><mi>x</mi></msub><mo>=</mo><mfrac><mrow><mi>&#8706;</mi><mi>f</mi></mrow><mrow><mi>&#8706;</mi><mi>x</mi></mrow></mfrac></mrow>'),
-    formulaNote: '如果左侧更亮，响应通常偏正；如果右侧更亮，响应通常偏负。',
+    formulaNote: '如果左侧更亮，响应通常偏正；如果右侧更亮，响应通常偏负。此符号基于页面所用的翻转核（true convolution）。',
     visualTitle: '方向图示',
     visualLabels: ['左暗右亮'],
   },
@@ -170,7 +171,7 @@ const KERNEL_PRESET_FAMILIES: KernelPresetFamily[] = [
     principle: '它把“垂直方向一阶差分”和“水平方向平滑”结合在一起；核越大，参与比较的邻域越宽。',
     origin: '它是经典的一阶导数卷积核族。3×3 最常见，5×5 和 7×7 则表示更大尺度的方向导数。',
     formulaMathML: buildInlineMathML('<mrow><msub><mi>G</mi><mi>y</mi></msub><mo>=</mo><mfrac><mrow><mi>&#8706;</mi><mi>f</mi></mrow><mrow><mi>&#8706;</mi><mi>y</mi></mrow></mfrac></mrow>'),
-    formulaNote: '如果上侧更亮，响应通常偏正；如果下侧更亮，响应通常偏负。',
+    formulaNote: '如果上侧更亮，响应通常偏正；如果下侧更亮，响应通常偏负。此符号基于页面所用的翻转核（true convolution）。',
     visualTitle: '方向图示',
     visualLabels: ['上暗下亮'],
   },
@@ -219,8 +220,8 @@ function buildMainFormulaMathML(x: number, y: number, outputValue: number): stri
     <mrow>
       <mi>G</mi><mo>(</mo><mn>${x}</mn><mo>,</mo><mn>${y}</mn><mo>)</mo>
       <mo>=</mo>
-      <munderover><mo>&#8721;</mo><mi>i</mi><mi></mi></munderover>
-      <munderover><mo>&#8721;</mo><mi>j</mi><mi></mi></munderover>
+      <munderover><mo>&#8721;</mo><mrow><mi>i</mi><mo>=</mo><mo>-</mo><mo>&#8970;</mo><mfrac><mi>k</mi><mn>2</mn></mfrac><mo>&#8971;</mo></mrow><mrow><mo>&#8970;</mo><mfrac><mi>k</mi><mn>2</mn></mfrac><mo>&#8971;</mo></mrow></munderover>
+      <munderover><mo>&#8721;</mo><mrow><mi>j</mi><mo>=</mo><mo>-</mo><mo>&#8970;</mo><mfrac><mi>k</mi><mn>2</mn></mfrac><mo>&#8971;</mo></mrow><mrow><mo>&#8970;</mo><mfrac><mi>k</mi><mn>2</mn></mfrac><mo>&#8971;</mo></mrow></munderover>
       <mi>f</mi><mo>(</mo><mn>${x}</mn><mo>+</mo><mi>i</mi><mo>,</mo><mn>${y}</mn><mo>+</mo><mi>j</mi><mo>)</mo>
       <mo>&#x22C5;</mo>
       <mi>g</mi><mo>(</mo><mo>-</mo><mi>i</mi><mo>,</mo><mo>-</mo><mi>j</mi><mo>)</mo>

@@ -58,7 +58,8 @@ const LAPLACE_8 = [[-1, -1, -1], [-1, 8, -1], [-1, -1, -1]];
 
 // ---- 代码片段 ----
 
-const SOBEL_CODE = `function sobelEdgeDetection(image: number[][]): {
+const SOBEL_CODE = `// 示意代码：省略了数组初始化与边界处理，展示核心算法逻辑
+function sobelEdgeDetection(image: number[][]): {
   magnitude: number[][]; direction: number[][]; gx: number[][]; gy: number[][]
 } {
   const gxKernel = [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]];
@@ -83,7 +84,8 @@ const SOBEL_CODE = `function sobelEdgeDetection(image: number[][]): {
   return { magnitude, direction, gx, gy };
 }`;
 
-const ROBERTS_CODE = `function robertsEdgeDetection(image: number[][]): EdgeResult {
+const ROBERTS_CODE = `// 示意代码：省略了数组初始化与边界处理，展示核心算法逻辑
+function robertsEdgeDetection(image: number[][]): EdgeResult {
   const Gx = [[1, 0], [0, -1]];  // 2×2 对角差分 — 主对角线
   const Gy = [[0, 1], [-1, 0]];  // 2×2 对角差分 — 副对角线
 
@@ -107,7 +109,8 @@ const ROBERTS_CODE = `function robertsEdgeDetection(image: number[][]): EdgeResu
   return { magnitude, direction, gx, gy };
 }`;
 
-const PREWITT_CODE = `function prewittEdgeDetection(image: number[][]): EdgeResult {
+const PREWITT_CODE = `// 示意代码：省略了数组初始化与边界处理，展示核心算法逻辑
+function prewittEdgeDetection(image: number[][]): EdgeResult {
   const gxKernel = [[-1, 0, 1], [-1, 0, 1], [-1, 0, 1]];
   const gyKernel = [[-1,-1,-1], [ 0, 0, 0], [ 1, 1, 1]];
 
@@ -126,7 +129,8 @@ const PREWITT_CODE = `function prewittEdgeDetection(image: number[][]): EdgeResu
   }
 }`;
 
-const LAPLACE_CODE = `function laplaceEdgeDetection(
+const LAPLACE_CODE = `// 示意代码：省略了数组初始化与边界处理，展示核心算法逻辑
+function laplaceEdgeDetection(
   image: number[][], use8Neighbor?: boolean
 ): { magnitude: number[][] } {
   const k4 = [[ 0,-1, 0], [-1, 4,-1], [ 0,-1, 0]]; // 4-邻域
@@ -148,7 +152,8 @@ const LAPLACE_CODE = `function laplaceEdgeDetection(
   return { magnitude };
 }`;
 
-const CANNY_CODE = `function cannyEdgeDetection(
+const CANNY_CODE = `// 示意代码：省略了辅助函数与中间数组初始化，展示 Canny 五步流程
+function cannyEdgeDetection(
   image: number[][], lowThreshold: number, highThreshold: number
 ): CannyResult {
   // 1. 高斯去噪 — 5×5 高斯滤波，降低噪声干扰
@@ -264,11 +269,11 @@ function buildGradientDirMathML(x: number, y: number, gy: number, gx: number, an
     <mrow>
       <mi>&#x3B8;</mi><mo>(</mo><mn>${x}</mn><mo>,</mo><mn>${y}</mn><mo>)</mo>
       <mo>=</mo>
-      <msup><mi>tan</mi><mrow><mo>-</mo><mn>1</mn></mrow></msup>
-      <mrow><mo>(</mo><mfrac><msub><mi>G</mi><mi>y</mi></msub><msub><mi>G</mi><mi>x</mi></msub></mfrac><mo>)</mo></mrow>
+      <mi>atan2</mi>
+      <mrow><mo>(</mo><msub><mi>G</mi><mi>y</mi></msub><mo>,</mo><msub><mi>G</mi><mi>x</mi></msub><mo>)</mo></mrow>
       <mo>=</mo>
-      <msup><mi>tan</mi><mrow><mo>-</mo><mn>1</mn></mrow></msup>
-      <mrow><mo>(</mo><mfrac><mn>${gy.toFixed(2)}</mn><mn>${gx.toFixed(2)}</mn></mfrac><mo>)</mo></mrow>
+      <mi>atan2</mi>
+      <mrow><mo>(</mo><mn>${gy.toFixed(2)}</mn><mo>,</mo><mn>${gx.toFixed(2)}</mn><mo>)</mo></mrow>
       <mo>=</mo>
       <mn>${angle.toFixed(0)}</mn><mo>&#xB0;</mo>
     </mrow>
@@ -994,8 +999,8 @@ export default function EdgeDetectionPage() {
                 </div>
                 <div className="max-w-[12rem] rounded-xl bg-red-50 px-3 py-2 text-center text-xs leading-5 text-red-700">
                   {operator === 'canny' && cs === 'gradient'
-                    ? `来自高斯模糊图像 第 ${y + 1}-${y + kernelSize} 行 / 第 ${x + 1}-${x + kernelSize} 列`
-                    : `原图第 ${y + 1}-${y + kernelSize} 行 / 第 ${x + 1}-${x + kernelSize} 列`}
+                    ? `来自高斯模糊图像 第 ${y}-${y + kernelSize - 1} 行 / 第 ${x}-${x + kernelSize - 1} 列`
+                    : `原图第 ${y}-${y + kernelSize - 1} 行 / 第 ${x}-${x + kernelSize - 1} 列`}
                 </div>
               </div>
             </FlowNode>
@@ -1650,7 +1655,7 @@ export default function EdgeDetectionPage() {
                 输入邻域 ({kernelSize}×{kernelSize})
               </div>
               <div className="mt-1 text-[11px] text-red-600">
-                第 {y + 1}-{y + kernelSize} 行 / 第 {x + 1}-{x + kernelSize} 列
+                第 {y}-{y + kernelSize - 1} 行 / 第 {x}-{x + kernelSize - 1} 列
               </div>
               <div
                 className="mt-3 inline-grid gap-1"
@@ -2016,7 +2021,7 @@ export default function EdgeDetectionPage() {
 
           <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-5 text-slate-600">
             <p>高阈值确定强边缘（直接保留）；低阈值用于弱边缘筛选。</p>
-            <p className="mt-1">梯度幅值 &gt; 高阈值 = 强边缘；介于两者之间 = 弱边缘（需连通强边缘才保留）；&lt; 低阈值 = 丢弃。</p>
+            <p className="mt-1">梯度幅值 &ge; 高阈值 = 强边缘；介于两者之间 = 弱边缘（需连通强边缘才保留）；非 &ge; 低阈值 = 丢弃。</p>
           </div>
         </>
       )}

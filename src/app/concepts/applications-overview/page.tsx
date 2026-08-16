@@ -45,7 +45,7 @@ const applicationDomains = [
     tone: 'border-rose-200 bg-rose-50/70 text-rose-700',
     marker: 'bg-rose-500',
     input: '遥感、红外、远距离观测图像',
-    tasks: ['弱小目标', '景像匹配', '图像配准', '图像融合'],
+    tasks: ['弱小目标', '景象匹配', '图像配准', '图像融合'],
     challenge: '目标小、背景复杂、尺度差异、成像噪声',
     output: '目标位置、地貌变化、融合图像',
   },
@@ -143,8 +143,8 @@ const militaryRemoteCases = [
     detail: '低对比度目标、复杂背景抑制、噪声与虚警控制',
   },
   {
-    title: '景像匹配',
-    detail: '预存数字景像图、飞行过程区域相关、偏离航线判定',
+    title: '景象匹配',
+    detail: '预存数字景象图、飞行过程区域相关、偏离航线判定',
   },
   {
     title: '遥感图像处理',
@@ -432,7 +432,7 @@ export default function ApplicationsOverviewPage() {
         <section className="mt-8 grid gap-6 lg:grid-cols-2">
           <div className="rounded-2xl border border-slate-200/80 bg-white p-7 shadow-sm">
             <p className="text-xs font-semibold tracking-wide text-rose-600">军事与遥感</p>
-            <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">红外、景像匹配、遥感处理</h2>
+            <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">红外、景象匹配、遥感处理</h2>
             <div className="mt-5 overflow-hidden rounded-2xl border border-rose-100 bg-rose-50/50">
               <div className="relative aspect-[16/9] overflow-hidden bg-slate-100">
                 <Image
@@ -552,6 +552,9 @@ export default function ApplicationsOverviewPage() {
               <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 text-xs leading-5 text-slate-500">
                 车道线、红绿灯、交通标志、行人、车辆、障碍物和平台姿态共同组成环境状态。
               </div>
+              <p className="mt-3 text-[10px] leading-4 text-slate-400">
+                注：此处为教学编排的感知流水线（将定位/检测归入感知、省略控制环节），并非某一固定工业软件栈的标准分层。
+              </p>
             </div>
           </div>
         </section>

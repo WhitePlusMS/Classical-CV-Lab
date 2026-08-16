@@ -507,7 +507,7 @@ export default function LBPGaborTexturePage() {
                       >
                         <span className="text-amber-800">p{index + 1} {position.label}</span>
                         <span className="font-mono text-slate-700">
-                          {grayByte(pixelValue)} {grayByte(pixelValue) >= grayByte(lbpStep.center) ? '>=' : '<'} {grayByte(lbpStep.center)}
+                          {grayByte(pixelValue)} {bit === 1 ? '>=' : '<'} {grayByte(lbpStep.center)}
                         </span>
                         <span className="font-mono font-semibold text-amber-800">
                           b={bit}, 2^{index}
@@ -703,6 +703,9 @@ export default function LBPGaborTexturePage() {
                 </tbody>
               </table>
             </div>
+            <p className="mt-2 text-[11px] leading-5 text-slate-500">
+              说明：表格中的 I(p)/I(c) 与差分展示为四舍五入后的字节值以便阅读；bit 由归一化浮点值直接比较（pixel ≥ center）判定，以上表 bit 列为准。
+            </p>
           </TeachingCard>
 
           {mode === 'lbp-rotation' && rotationStep && (
@@ -753,7 +756,7 @@ export default function LBPGaborTexturePage() {
           <FormulaCard
             label="当前 Gabor 核参数代入"
             mathML={buildGaborKernelFormula(gaborParams)}
-            note={`当前参数：λ=${gaborParams.wavelength} 控制条纹间隔，θ=${gaborParams.orientation}° 控制响应方向，σ=${gaborParams.sigma} 控制核覆盖范围，γ=${formatFloat(gaborParams.gamma, 1)}，核大小=${gaborParams.kernelSize}x${gaborParams.kernelSize}。`}
+            note={`当前参数：λ=${gaborParams.wavelength} 控制条纹间隔，θ=${gaborParams.orientation}° 控制响应方向，σ=${gaborParams.sigma} 控制核覆盖范围，γ=${formatFloat(gaborParams.gamma, 1)}，核大小=${gaborParams.kernelSize}x${gaborParams.kernelSize}；本页相位 ψ 固定为 0°（无相位调节控件）。`}
             tone="embedded"
           />
           </TeachingCard>
@@ -788,7 +791,7 @@ export default function LBPGaborTexturePage() {
           <FormulaCard
             label="当前 Gabor 响应代入"
             mathML={buildGaborResponseFormula(gaborStep.rawSum, gaborStep.kernelAbsSum, gaborStep.normalizedResponse, gaborStep.outputValue)}
-            note="先对窗口与核逐项相乘求和，再除以核绝对值和做归一化，最后映射回 [0,1] 作为结果图灰度。"
+            note="先对窗口与核逐项相乘求和，再除以核绝对值和做归一化，最后映射回 [0,1] 作为结果图灰度。注意：此除以 Σ|h| 的归一化仅用于本页可视化显示，并非 Gabor 滤波器的标准输出。"
             tone="embedded"
           />
           </TeachingCard>

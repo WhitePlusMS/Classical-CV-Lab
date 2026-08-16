@@ -1044,7 +1044,7 @@ export default function ClassifierDetectionPipelinePage() {
           <FormulaCard
             label="当前 Haar 特征值"
             mathML={buildHaarFeatureFormula(currentScanStep)}
-            note="黑区与白区来自当前窗口内的 Haar 模板划分。特征值越能区分目标结构，越适合作为分类器输入。"
+            note="黑区与白区来自当前窗口内的 Haar 模板划分。Haar 响应符号为约定，可整体取反，此处取黑减白；特征值越能区分目标结构，越适合作为分类器输入。"
             tone="embedded"
           />
           </TeachingCard>
@@ -1061,7 +1061,7 @@ export default function ClassifierDetectionPipelinePage() {
           <FormulaCard
             label="当前 Cascade 阶段判定"
             mathML={buildCascadeFormula(currentScanStep)}
-            note="任一级拒绝后，后续级不再计算；只有全部通过的窗口才进入候选集合。当前级联阈值是教学示意值，未从上述训练样本学习得到。"
+            note="任一级拒绝后，后续级不再计算；只有全部通过的窗口才进入候选集合。单一 |V| 阈值法仅为便于课堂教学的近似，真实 Cascade 是对弱分类器输出和做阈值比较；当前级联阈值是教学示意值，未从上述训练样本学习得到。"
             tone="embedded"
           />
           </TeachingCard>
@@ -1100,7 +1100,7 @@ export default function ClassifierDetectionPipelinePage() {
           <FormulaCard
             label="候选框合并"
             mathML={buildScanProgressFormula(fullProgress)}
-            note="多个相邻候选窗口通常对应同一个目标，需要合并成少量最终检测框。"
+            note="多个相邻候选窗口通常对应同一个目标，需要合并成少量最终检测框。此处为教学合并规则（IoU>0.22 聚合，再取最高分前 4 个），与标准 NMS 不同。"
             tone="embedded"
           />
           </TeachingCard>
@@ -1180,7 +1180,7 @@ export default function ClassifierDetectionPipelinePage() {
       imageHints={canUseResponseMap
         ? {
           input: '点击图像可选择一个候选窗口',
-          output: '点击响应图可定位窗口左上角',
+          output: '点击响应图可定位窗口左上角；响应图显示窗口 Haar 特征强度，用于定位，不等于级联判定概率',
         }
         : undefined}
       showOriginalGrid

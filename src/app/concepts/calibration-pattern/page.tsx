@@ -138,8 +138,9 @@ export default function CalibrationPatternPage() {
 
   const handleInputRegionSelect = useCallback(
     (x: number, y: number) => {
-      const col = clamp(Math.round(x / BOARD_CELL_PIXELS), 0, boardSpec.cols - 1);
-      const row = clamp(Math.round(y / BOARD_CELL_PIXELS), 0, boardSpec.rows - 1);
+      // 角点真实像素位置为 (col+1, row+1) 个格子，反推时先减去一个格子
+      const col = clamp(Math.round((x - BOARD_CELL_PIXELS) / BOARD_CELL_PIXELS), 0, boardSpec.cols - 1);
+      const row = clamp(Math.round((y - BOARD_CELL_PIXELS) / BOARD_CELL_PIXELS), 0, boardSpec.rows - 1);
       setSelectedCornerIndex(row * boardSpec.cols + col);
     },
     [boardSpec.cols, boardSpec.rows]
@@ -237,7 +238,7 @@ export default function CalibrationPatternPage() {
               className="mt-3"
               mathML={pairFormula}
               formulaClassName="rounded-xl px-3 py-3 shadow-none"
-              note={`${activeViews.length} 张姿态图可提供 ${countCalibrationEquations(activeViews.length)} 条内参约束。`}
+              note={`${activeViews.length} 张姿态图可提供 ${countCalibrationEquations(activeViews.length)} 条内参约束。b 含 6 个未知分量（齐次、整体尺度任意），故通常需 2N≥6 → N≥3 张图才能唯一求解内参；本页滑块只控制“展示/浏览”的视图数，内参估计始终基于全部可用的 5 张图。`}
             />
           </FlowNode>
         </FlowColumn>
@@ -248,9 +249,11 @@ export default function CalibrationPatternPage() {
   const stepDetails = selectedCorner && selectedPreviewCorner ? (
     <div className="space-y-4">
       <TeachingCard>
-        <div className="text-sm font-semibold text-emerald-900">求解相机参数前，需要准备四类输入</div>
+        <div className="text-sm font-semibold text-emerald-900">求解相机参数需要准备的输入</div>
         <p className="mt-1 text-xs leading-5 text-slate-600">
           标定步骤通常包括：读取多张棋盘图，检测角点，亚像素细化，再把图像角点坐标和世界物理坐标送入标定函数。
+          本页纯 TS 求解器（calibrateCameraFromViews）主要由 object_points 与 image_points 求解；
+          point_counts、image_size 是 OpenCV/MATLAB 风格接口的额外输入（分别用于校验角点数一致、畸变/初始化）。
         </p>
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
@@ -286,8 +289,8 @@ export default function CalibrationPatternPage() {
               showGrid
               selectedRegionMarker="dot"
               selectedRegion={{
-                x: selectedCorner.col * BOARD_CELL_PIXELS,
-                y: selectedCorner.row * BOARD_CELL_PIXELS,
+                x: (selectedCorner.col + 1) * BOARD_CELL_PIXELS,
+                y: (selectedCorner.row + 1) * BOARD_CELL_PIXELS,
                 size: 1,
               }}
               interactive

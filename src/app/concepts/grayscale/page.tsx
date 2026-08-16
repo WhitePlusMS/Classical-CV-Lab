@@ -47,7 +47,7 @@ function buildWeightedFormulaMathML(r255: string, g255: string, b255: string, re
       <mn>0.587</mn><mo>&#x22C5;</mo><mn>${g255}</mn>
       <mo>+</mo>
       <mn>0.114</mn><mo>&#x22C5;</mo><mn>${b255}</mn>
-      <mo>=</mo>
+      <mo>&#x2248;</mo>
       <mn>${result}</mn>
     </mrow>
   `);
@@ -67,7 +67,7 @@ function buildAverageFormulaMathML(r255: string, g255: string, b255: string, res
         <mrow><mn>${r255}</mn><mo>+</mo><mn>${g255}</mn><mo>+</mo><mn>${b255}</mn></mrow>
         <mn>3</mn>
       </mfrac>
-      <mo>=</mo>
+      <mo>&#x2248;</mo>
       <mn>${result}</mn>
     </mrow>
   `);
@@ -233,6 +233,8 @@ export default function GrayscalePage() {
     const step = currentStep;
     const x = step.x, y = step.y, r = step.r, g = step.g, b = step.b;
     const r255 = (r * 255).toFixed(0), g255 = (g * 255).toFixed(0), b255 = (b * 255).toFixed(0);
+    // 与下方贡献值同源的精确浮点通道值（保留 1 位小数），保证代入行/标签与显示结果一致
+    const r255f = (r * 255).toFixed(1), g255f = (g * 255).toFixed(1), b255f = (b * 255).toFixed(1);
     const weights = method === 'weighted'
       ? { r: 0.299, g: 0.587, b: 0.114 }
       : { r: 1 / 3, g: 1 / 3, b: 1 / 3 };
@@ -243,8 +245,8 @@ export default function GrayscalePage() {
     const currentOutput255 = (parseFloat(rContribution) + parseFloat(gContribution) + parseFloat(bContribution)).toFixed(1);
     const currentOutput = parseFloat(currentOutput255) / 255;
 
-    const weightedFormulaML = buildWeightedFormulaMathML(r255, g255, b255, currentOutput255);
-    const averageFormulaML = buildAverageFormulaMathML(r255, g255, b255, currentOutput255);
+    const weightedFormulaML = buildWeightedFormulaMathML(r255f, g255f, b255f, currentOutput255);
+    const averageFormulaML = buildAverageFormulaMathML(r255f, g255f, b255f, currentOutput255);
     const currentFormulaML = method === 'weighted' ? weightedFormulaML : averageFormulaML;
     const currentMethodLabel = method === 'weighted' ? '加权法' : '平均法';
 
@@ -306,31 +308,31 @@ export default function GrayscalePage() {
           <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(14rem,0.85fr)]">
             <div className="rounded-2xl border border-red-200 bg-red-50/55 p-3">
               <div className="text-sm font-semibold text-red-700">R 通道贡献</div>
-              <div className="mt-1 text-[11px] text-red-600">权重 × {weights.r.toFixed(3)}</div>
+              <div className="mt-1 text-[11px] text-red-600">权重 {weights.r.toFixed(3)}</div>
               <div className="mt-2 text-xs leading-5 text-red-700">红色通道值 × 权重</div>
               <div className="mt-3 rounded-xl border border-red-200 bg-white/90 px-3 py-3 text-center">
                 <div className="font-mono text-lg font-bold text-red-700">{rContribution}</div>
-                <div className="mt-1 font-mono text-[10px] text-red-500">{r255} × {weights.r.toFixed(3)}</div>
+                <div className="mt-1 font-mono text-[10px] text-red-500">{r255f} × {weights.r.toFixed(3)}</div>
               </div>
             </div>
 
             <div className="rounded-2xl border border-green-200 bg-green-50/55 p-3">
               <div className="text-sm font-semibold text-green-700">G 通道贡献</div>
-              <div className="mt-1 text-[11px] text-green-600">权重 × {weights.g.toFixed(3)}</div>
+              <div className="mt-1 text-[11px] text-green-600">权重 {weights.g.toFixed(3)}</div>
               <div className="mt-2 text-xs leading-5 text-green-700">绿色通道值 × 权重</div>
               <div className="mt-3 rounded-xl border border-green-200 bg-white/90 px-3 py-3 text-center">
                 <div className="font-mono text-lg font-bold text-green-700">{gContribution}</div>
-                <div className="mt-1 font-mono text-[10px] text-green-500">{g255} × {weights.g.toFixed(3)}</div>
+                <div className="mt-1 font-mono text-[10px] text-green-500">{g255f} × {weights.g.toFixed(3)}</div>
               </div>
             </div>
 
             <div className="rounded-2xl border border-blue-200 bg-blue-50/55 p-3">
               <div className="text-sm font-semibold text-blue-700">B 通道贡献</div>
-              <div className="mt-1 text-[11px] text-blue-600">权重 × {weights.b.toFixed(3)}</div>
+              <div className="mt-1 text-[11px] text-blue-600">权重 {weights.b.toFixed(3)}</div>
               <div className="mt-2 text-xs leading-5 text-blue-700">蓝色通道值 × 权重</div>
               <div className="mt-3 rounded-xl border border-blue-200 bg-white/90 px-3 py-3 text-center">
                 <div className="font-mono text-lg font-bold text-blue-700">{bContribution}</div>
-                <div className="mt-1 font-mono text-[10px] text-blue-500">{b255} × {weights.b.toFixed(3)}</div>
+                <div className="mt-1 font-mono text-[10px] text-blue-500">{b255f} × {weights.b.toFixed(3)}</div>
               </div>
             </div>
 

@@ -271,6 +271,7 @@ function buildStepFormulaMathML(
         <mi>f</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo>
         <mo>|</mo>
         <mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo><mo>&#x2208;</mo><msub><mi>N</mi><mi>B</mi></msub>
+        <mo>,</mo><mi>B</mi><mo>[</mo><mi>i</mi><mo>]</mo><mo>[</mo><mi>j</mi><mo>]</mo><mo>=</mo><mn>1</mn>
         <mo>}</mo>
         <mo>=</mo>
         <mn>${outputValue.toFixed(0)}</mn>
@@ -286,6 +287,7 @@ function buildStepFormulaMathML(
       <mi>f</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo>
       <mo>|</mo>
       <mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo><mo>&#x2208;</mo><msub><mi>N</mi><mi>B</mi></msub>
+      <mo>,</mo><mi>B</mi><mo>[</mo><mi>i</mi><mo>]</mo><mo>[</mo><mi>j</mi><mo>]</mo><mo>=</mo><mn>1</mn>
       <mo>}</mo>
       <mo>=</mo>
       <mn>${outputValue.toFixed(0)}</mn>
@@ -1149,12 +1151,12 @@ export default function MorphologyPage() {
               当前结构元素（{size}&#x00D7;{size} {SHAPE_LABELS[seShape as SeShape]}）以像素 ({x}, {y}) 为中心，
               覆盖图像第 {Math.max(0, y - center) + 1} 到 {Math.min(inputHeight, y + center + 1)} 行、
               第 {Math.max(0, x - center) + 1} 到 {Math.min(inputWidth, x + center + 1)} 列区域。
-              若结构元素落到图像外，越界位置按背景 0 处理。
+              若结构元素落到图像外，越界位置按背景 0 处理。公式中的 N_B 即结构元素覆盖的邻域（仅激活格子参与求最值，见公式中的 B[i][j]=1 限定）。
             </p>
             <p>
               {isErosionStep
                 ? `腐蚀取该区域内的最小值：min = ${minVal.toFixed(0)}，这意味着只有当结构元素完全落在前景内时，输出才为 1。`
-                : `膨胀取该区域内的最大值：max = ${maxVal.toFixed(0)}，这意味着只要结构元素与前景有交集，输出即为 1。`}
+                : `膨胀取该区域内的最大值：max = ${maxVal.toFixed(0)}，这意味着只要结构元素与前景有交集，输出即为 1。严格定义要用反射后的结构元素 (B_hat)，本页矩形/十字/椭圆结构元素均中心对称，反射为恒等，故直接用 B。`}
             </p>
           </div>
         </TeachingCard>

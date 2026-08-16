@@ -18,9 +18,10 @@ import { computeHistogram, fixedThreshold, otsuSteps, otsuThreshold } from '@/li
 import { sampleImages, type SampleImageType } from '@/lib/utils/sampleImages';
 import { useLenaGrayscaleImage } from '@/hooks/useLenaGrayscaleImage';
 
+// 示意代码：下方 splitByThreshold / applyThreshold 仅为教学分段，完整 Otsu 扫描与二值化见 otsuThreshold / otsuSteps。
 const OTSU_CODE_TS = `const histogram = computeHistogram(image);
 let bestThreshold = 0;
-let bestVariance = -1;
+let bestVariance = 0;
 
 for (let t = 0; t < 256; t++) {
   const { wB, wF, mB, mF } = splitByThreshold(histogram, t);
@@ -77,11 +78,28 @@ export default function OtsuPage() {
   );
 
   const currentVariance = currentStep?.variance ?? 0;
+
+  // 全部像素的总灰度均值：边界情形（T 超出最大灰度）时背景类即全体像素，其均值等于全局均值。
+  const totalMean = useMemo(() => {
+    let sum = 0;
+    let count = 0;
+    for (let i = 0; i < 256; i++) {
+      sum += i * (histogram[i] ?? 0);
+      count += histogram[i] ?? 0;
+    }
+    return count > 0 ? sum / count : 0;
+  }, [histogram]);
+
+  // otsuSteps 在 wF===0 时提前 break，不再产出更高灰度的 step；
+  // 当候选 T 超过最后一个 step 的阈值时，说明没有灰度高于 T（ω0=1、ω1=0、σB²=0），
+  // currentStep 只能回退到最后一步，需单独提示并对齐显示。
+  const lastStepForStats = steps[steps.length - 1] ?? null;
+  const isAboveGrayRange = lastStepForStats !== null && safeThreshold > lastStepForStats.currentThreshold;
   const previousBestStep = useMemo(() => {
     let best = steps[0] ?? null;
     for (const step of steps) {
       if (step.currentThreshold > activeThreshold) break;
-      if (!best || step.variance >= best.variance) {
+      if (!best || step.variance > best.variance) {
         best = step;
       }
     }
@@ -135,18 +153,24 @@ export default function OtsuPage() {
             <div className="mt-3 grid gap-2 text-xs md:grid-cols-2">
               <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
                 <div className="text-[10px] text-slate-500">背景类灰度 ≤ T</div>
-                <div className="mt-1 font-mono text-slate-700">ω0={(currentStep.wB / Math.max(1, currentStep.wB + currentStep.wF)).toFixed(3)}</div>
-                <div className="font-mono text-slate-700">μ0={currentStep.mB.toFixed(1)}</div>
+                <div className="mt-1 font-mono text-slate-700">ω0={isAboveGrayRange ? '1.000' : (currentStep.wB / Math.max(1, currentStep.wB + currentStep.wF)).toFixed(3)}</div>
+                <div className="font-mono text-slate-700">μ0={isAboveGrayRange ? totalMean.toFixed(1) : currentStep.mB.toFixed(1)}</div>
               </div>
               <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2">
                 <div className="text-[10px] text-blue-500">前景类灰度 &gt; T</div>
-                <div className="mt-1 font-mono text-blue-700">ω1={(currentStep.wF / Math.max(1, currentStep.wB + currentStep.wF)).toFixed(3)}</div>
-                <div className="font-mono text-blue-700">μ1={currentStep.mF.toFixed(1)}</div>
+                <div className="mt-1 font-mono text-blue-700">ω1={isAboveGrayRange ? '0.000' : (currentStep.wF / Math.max(1, currentStep.wB + currentStep.wF)).toFixed(3)}</div>
+                <div className="font-mono text-blue-700">μ1={isAboveGrayRange ? '—' : currentStep.mF.toFixed(1)}</div>
               </div>
             </div>
-            <p className="mt-3 text-xs leading-5 text-slate-600">
-              证据不是“看起来像不像分开了”，而是看这两类的均值差和各自像素占比共同决定的类间方差。
-            </p>
+            {isAboveGrayRange ? (
+              <p className="mt-3 text-xs leading-5 text-amber-700">
+                当前 T 已超出图像最大灰度：没有灰度高于 T，故 ω0=1、ω1=0，类间方差 σB²=0，此时所有像素都被归入背景类。
+              </p>
+            ) : (
+              <p className="mt-3 text-xs leading-5 text-slate-600">
+                证据不是“看起来像不像分开了”，而是看这两类的均值差和各自像素占比共同决定的类间方差。
+              </p>
+            )}
           </FlowNode>
         </FlowColumn>
 
@@ -155,7 +179,7 @@ export default function OtsuPage() {
             <div className="text-[11px] font-semibold uppercase text-emerald-700">3. 当前结果：类间方差与历史最大值</div>
             <div className="mt-3 grid gap-2 text-xs">
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-800">
-                当前 σ² = {currentVariance.toFixed(2)}
+                当前 σ² = {(isAboveGrayRange ? 0 : currentVariance).toFixed(2)}
               </div>
               <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-700">
                 历史最大 T = {previousBestStep?.currentThreshold ?? bestThreshold}

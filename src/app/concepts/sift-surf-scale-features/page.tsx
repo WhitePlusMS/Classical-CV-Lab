@@ -1046,13 +1046,13 @@ function getStepEvidenceText(
       return `关键点 (${kp!.x}, ${kp!.y}) 在 σ=${kp!.scale.toFixed(2)} 处被检出。不同 σ 下的高斯响应揭示该局部结构的尺度稳定性：若同一结构跨 3 层以上仍保持相似的 DoG 响应轮廓，则被判定为稳定候选点。`;
     case 'dog-detection': {
       if (neighborData) {
-        const upG = neighborData.prevComparisons.filter(c => c.relation === 'greater').length;
+        const lowerG = neighborData.prevComparisons.filter(c => c.relation === 'greater').length;
         const sameG = neighborData.sameComparisons.filter(c => c.relation === 'greater').length;
-        const dnG = neighborData.nextComparisons.filter(c => c.relation === 'greater').length;
+        const upperG = neighborData.nextComparisons.filter(c => c.relation === 'greater').length;
         const total = neighborData.prevComparisons.length + neighborData.sameComparisons.length + neighborData.nextComparisons.length;
-        const allG = upG + sameG + dnG;
+        const allG = lowerG + sameG + upperG;
         const allType = allG === total ? '极大值（全部大于）' : allG === 0 ? '极小值（全部小于）' : '非极值';
-        return `26 邻域比较：DoG 值 ${neighborData.currentValue.toFixed(4)} vs 上层 ${upG}/9 邻居 + 同层 ${sameG}/8 邻居 + 下层 ${dnG}/9 邻居 → ${allType}`;
+        return `26 邻域比较：DoG 值 ${neighborData.currentValue.toFixed(4)} vs 下层 ${lowerG}/9 邻居 + 同层 ${sameG}/8 邻居 + 上层 ${upperG}/9 邻居 → ${allType}`;
       }
       return `DoG 极值检测通过 26 邻域跨尺度比较：同一点在上/中/下三层 DoG 中必须同时大于（或同时小于）全部 26 个邻居。`;
     }
@@ -1061,7 +1061,7 @@ function getStepEvidenceText(
     case 'descriptor':
       return `16×16 邻域划分为 4×4=16 个子区域，每个子区域统计 8 方向梯度累加 → 128 维向量。L2 归一化消除光照影响，坐标旋转到主方向消除旋转影响。当前实现为教学简化版，子区域采样密度低于标准 SIFT。`;
     case 'matching':
-      return `对查询图中的每个关键点描述子，在参考图中找欧氏距离最近和次近的两个候选。实现中对平方欧氏距离做比值检验：d₁² / d₂² < 0.8（等价于欧氏距离比 d₁ / d₂ < √0.8 ≈ 0.894），通过则为可靠匹配。`;
+      return `对查询图中的每个关键点描述子，在参考图中找欧氏距离最近和次近的两个候选。实现中对欧氏距离做比值检验：d₁ / d₂ < 0.8，通过则为可靠匹配。`;
     default:
       return '从概览进入任一步骤，检查关键点如何一路从候选点变成可匹配特征。每一步的证据都基于具体数值和判定结果。';
   }
@@ -1083,13 +1083,13 @@ function getStepResultText(
       return `当前锁定的关键点位于 (${currentKeypoint.x}, ${currentKeypoint.y})，σ = ${currentKeypoint.scale.toFixed(2)}。它之所以值得继续分析，是因为该局部结构在当前尺度链里仍能保持稳定。`;
     case 'dog-detection': {
       if (neighborData) {
-        const upG = neighborData.prevComparisons.filter(c => c.relation === 'greater').length;
+        const lowerG = neighborData.prevComparisons.filter(c => c.relation === 'greater').length;
         const sameG = neighborData.sameComparisons.filter(c => c.relation === 'greater').length;
-        const dnG = neighborData.nextComparisons.filter(c => c.relation === 'greater').length;
+        const upperG = neighborData.nextComparisons.filter(c => c.relation === 'greater').length;
         const allG = neighborData.prevComparisons.length + neighborData.sameComparisons.length + neighborData.nextComparisons.length;
-        const totalG = upG + sameG + dnG;
+        const totalG = lowerG + sameG + upperG;
         const allType = totalG === allG ? '全部大于' : '全部小于';
-        return `DoG 值 ${neighborData.currentValue.toFixed(4)}，26 邻域 上层${upG}/9 同层${sameG}/8 下层${dnG}/9 ${allType}邻居，被判定为${neighborData.isExtremum ? '候选关键点' : '非极值点'}。`;
+        return `DoG 值 ${neighborData.currentValue.toFixed(4)}，26 邻域 下层${lowerG}/9 同层${sameG}/8 上层${upperG}/9 ${allType}邻居，被判定为${neighborData.isExtremum ? '候选关键点' : '非极值点'}。`;
       }
       return `当前关键点 DoG 值 ${currentKeypoint.magnitude.toFixed(4)}。26 邻域跨尺度比较需查看具体比较明细表。`;
     }
@@ -1103,9 +1103,9 @@ function getStepResultText(
         const bestDist = sorted[0]?.distance ?? 0;
         const worstDist = sorted[sorted.length - 1]?.distance ?? 0;
         const avgDist = sorted.reduce((s, m) => s + m.distance, 0) / sorted.length;
-        return `${matches.length} 对匹配通过比值检验（d₁²/d₂² < 0.8，等价于欧氏距离比 < √0.8 ≈ 0.894）。最近距离 ${bestDist.toFixed(3)}，平均 ${avgDist.toFixed(3)}，最远 ${worstDist.toFixed(3)}。`;
+        return `${matches.length} 对匹配通过比值检验（对欧氏距离做 d₁/d₂ < 0.8）。最近距离 ${bestDist.toFixed(3)}，平均 ${avgDist.toFixed(3)}，最远 ${worstDist.toFixed(3)}。`;
       }
-      return `当前教学演示没有通过比值检验的匹配。阈值 0.8（作用于平方欧氏距离）过滤掉了模棱两可的匹配对。可尝试调整参数或切换图像。`;
+      return `当前教学演示没有通过比值检验的匹配。阈值 0.8（作用于欧氏距离 d₁/d₂ < 0.8）过滤掉了模棱两可的匹配对。可尝试调整参数或切换图像。`;
     }
     default:
       return '现在可以从概览进入任一步骤，检查这个关键点是如何一路从候选点变成可匹配特征的。';
@@ -1375,7 +1375,7 @@ export default function SiftSurfScaleFeaturesPage() {
       <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3">
         <div className="text-[11px] font-semibold text-amber-800">检测到的关键点</div>
         <div className="mt-1 text-[10px] text-amber-700">
-          共 {keypoints.length} 个（按响应值排序，显示前 10 个）。
+          共 {keypoints.length} 个关键点（N 为按响应值截断后的演示数量，图上绘制全部、列表显示前 10 个）。
         </div>
         <div className="mt-2 grid grid-cols-5 gap-1">
           {keypoints.slice(0, 10).map((kp, i) => (
@@ -1468,6 +1468,10 @@ export default function SiftSurfScaleFeaturesPage() {
                   SURF 使用 64 维描述子进行匹配，相比 SIFT 的 128 维减少了一半的存储和计算量。
                   相同的比值检验策略用于判断匹配可靠性。
                 </p>
+                <p className="mt-1 text-[10px] leading-4 text-slate-400">
+                  教学简化：本页的匹配结果由 SIFT 128 维描述子计算而来，用于对比差异；
+                  SURF 64 维描述子已在检测阶段生成，但独立于 SURF 的匹配流程未实现。
+                </p>
                 <div className="mt-4 grid grid-cols-2 gap-4">
                   <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center">
                     <div className="text-2xl font-bold text-amber-700">{crossMatches.length}</div>
@@ -1486,8 +1490,13 @@ export default function SiftSurfScaleFeaturesPage() {
             {(activeTab === 'sift' || activeTab === 'surf') && crossMatches.length > 0 && (
               <TeachingCard>
                 <div className="mb-2 text-xs font-semibold text-slate-700">
-                  {activeTab === 'sift' ? 'SIFT' : 'SURF'} 匹配距离列表（{crossMatches.length} 对通过比值检验）
+                  SIFT 128D 匹配距离列表（{crossMatches.length} 对通过比值检验）
                 </div>
+                {activeTab === 'surf' && (
+                  <p className="mb-2 text-[10px] leading-4 text-amber-600">
+                    本列表距离仍由 SIFT 128 维描述子计算；SURF 描述子（64 维）
+                  </p>
+                )}
                 <div className="space-y-1">
                   {crossMatches.slice(0, 10).map((m, i) => (
                     <div key={i} className="flex items-center gap-2 rounded bg-slate-50 px-3 py-1.5 text-xs">
@@ -1503,7 +1512,7 @@ export default function SiftSurfScaleFeaturesPage() {
                     </div>
                   ))}
                 </div>
-                <div className="mt-2 text-[10px] text-slate-500">比值检验阈值 0.8：d₁² / d₂² &lt; 0.8（等价于欧氏距离比 &lt; 0.894）</div>
+                <div className="mt-2 text-[10px] text-slate-500">比值检验阈值 0.8：对欧氏距离做 d₁ / d₂ &lt; 0.8</div>
               </TeachingCard>
             )}
             {(activeTab === 'sift' || activeTab === 'surf') && crossMatches.length === 0 && (
@@ -1571,6 +1580,9 @@ export default function SiftSurfScaleFeaturesPage() {
                     </FlowColumn>
                   </FlowColumns>
                 </ProcessRail>
+                <TeachingCard tone="amber">
+                  <div className="text-[10px] text-slate-500">教学简化：本步仅做 26 邻域极值 + 低对比度过滤，未实现标准 SIFT 的二次曲面亚像素精化与边缘响应(Hessian)剔除。</div>
+                </TeachingCard>
               </div>
             )}
             {activeTab === 'surf' && (
@@ -2092,7 +2104,7 @@ export default function SiftSurfScaleFeaturesPage() {
                     <FlowNode tone="emerald">
                       <div className="mb-2 text-[11px] font-semibold text-emerald-700">检测结果</div>
                       <ImageCanvas image={keypointImage} maxDisplaySize={110} showGrid={false} />
-                      <p className="mt-2 text-[10px] text-slate-500">相同图像，与 SIFT 相同的 {keypoints.length} 个关键点</p>
+                      <p className="mt-2 text-[10px] text-slate-500">相同图像，与 SIFT 相同的 {keypoints.length} 个关键点（教学简化示意，检测流程见后续 DoG 步骤说明）</p>
                     </FlowNode>
                   </FlowColumn>
                 </FlowColumns>

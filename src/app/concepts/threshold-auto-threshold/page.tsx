@@ -76,7 +76,8 @@ const OUTPUT_OPTIONS = [
    },
  };
  
-// 教学简化版：下方函数签名仅用于展示核心循环，实际库函数接受整幅灰度图并返回 { image, threshold }。
+// 教学简化版：下方函数签名仅用于展示核心循环，实际库函数接受整幅灰度图并返回 { image, threshold }；
+// 库函数 fixedThreshold 按归一化 0–1 值、严格大于（>）比较，本片段按字节并用 >=，仅边界像素相差 1 灰阶。
 const THRESHOLD_CODE_TS = `function fixedThreshold(image: number[][], threshold: number): number[][] {
   return image.map(row =>
     row.map(gray => (gray * 255 >= threshold ? 1 : 0))
@@ -477,7 +478,7 @@ export default function ThresholdAutoThresholdPage() {
 
   const sampleSrc = byteValue(originalImage[samplePoint.y]?.[samplePoint.x] ?? 0);
   const sampleDst = byteValue(resultImage[samplePoint.y]?.[samplePoint.x] ?? 0);
-  const sampleFixedDst = sampleSrc >= threshold ? 255 : 0;
+  const sampleFixedDst = sampleSrc >= manualThreshold ? 255 : 0;
   const bestOtsuVariance = Math.max(...otsuProfile.map(point => point.variance), 0);
 
   const handleMethodChange = useCallback((value: string) => {
@@ -537,7 +538,7 @@ export default function ThresholdAutoThresholdPage() {
         </div>
         <ImageCanvas image={resultImage} maxDisplaySize={360} showGrid={false} />
         <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-600">
-          {OUTPUT_MODE_TEXT[outputMode].name}，非零输出 {nonZeroPixels} / {totalPixels}
+          {OUTPUT_MODE_TEXT[outputMode].name}，{(outputMode === 'tozero' || outputMode === 'tozeroInv' || outputMode === 'trunc') ? '保留/非零输出像素数' : '非零输出像素数'} {nonZeroPixels} / {totalPixels}
         </span>
       </div>
     </div>
@@ -554,13 +555,13 @@ export default function ThresholdAutoThresholdPage() {
       {method === 'kittler' && (
         <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4">
           <div className="mb-3">
-            <div className="text-sm font-semibold text-slate-800">Kittler 梯度加权可视化</div>
+            <div className="text-sm font-semibold text-slate-800">Kittler 梯度加权（教学简化）可视化</div>
             <p className="mt-1 text-xs leading-5 text-slate-500">
               左图为归一化后的梯度幅度，右图为归一化后的梯度加权灰度
               {' '}
               <InlineMath mathML={buildInlineMathML('<mrow><mi>g</mi><mi>r</mi><mi>a</mi><mi>d</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo><mo>·</mo><mi>f</mi><mo>(</mo><mi>i</mi><mo>,</mo><mi>j</mi><mo>)</mo></mrow>')} className="[&_math]:text-xs" />
               {' '}
-              分布。Kittler 阈值由未归一化的加权灰度总和除以梯度总和计算得到。
+              分布。Kittler 梯度阈值由未归一化的加权灰度总和除以梯度总和计算得到。
             </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -595,7 +596,7 @@ export default function ThresholdAutoThresholdPage() {
         <div className="space-y-4">
           <FormulaCard
             label="固定阈值分割"
-            mathML={fixedThresholdFormulaMathML(threshold, sampleSrc, sampleFixedDst)}
+            mathML={fixedThresholdFormulaMathML(manualThreshold, sampleSrc, sampleFixedDst)}
             note="固定阈值由人工给定，适合光照稳定、目标与背景灰度差异明确的场景。"
             tone="embedded"
           />
@@ -608,7 +609,7 @@ export default function ThresholdAutoThresholdPage() {
           <FormulaCard
             label="Kittler 梯度加权阈值"
             mathML={kittlerFormulaMathML(kittlerResult.threshold, kittlerResult.weightedGraySum, kittlerResult.gradientSum)}
-            note="教材版 Kittler 使用梯度作为权重，使边缘附近的灰度对全局阈值贡献更大。公式中 f(i,j) 为 0–255 字节灰度，与代码中的 image[y][x] * 255 对应。"
+            note="梯度加权平均阈值（本课对 Kittler 思想的教学简化）：用梯度作为权重，使边缘附近的灰度对全局阈值贡献更大。真实 Kittler–Illingworth 是最小误差准则，本页取其“用边缘/梯度强调边界”的简化形式。公式中 f(i,j) 为 0–255 字节灰度，与代码中的 image[y][x] * 255 对应。"
             tone="embedded"
           />
         </div>
@@ -623,7 +624,7 @@ export default function ThresholdAutoThresholdPage() {
         <div className="mt-3 grid gap-3 text-xs leading-6 text-slate-600 md:grid-cols-2">
           <div className="border-l-2 border-amber-300 pl-3">
             <div className="font-semibold text-amber-700">阈值来源</div>
-            <p>固定阈值由滑杆给定；OTSU 由直方图类间方差最大化得到；Kittler 由梯度加权灰度平均得到。</p>
+            <p>固定阈值由滑杆给定；OTSU 由直方图类间方差最大化得到；Kittler（梯度加权平均，教学简化）由梯度加权灰度平均得到。</p>
           </div>
           <div className="border-l-2 border-emerald-300 pl-3">
             <div className="font-semibold text-emerald-700">输出规则</div>
@@ -637,6 +638,9 @@ export default function ThresholdAutoThresholdPage() {
               <InlineMath mathML={buildInlineMathML('<mi>T</mi>')} className="[&_math]:text-xs" />
               {' '}
               比较后写入 0、最大值、阈值或原灰度。
+            </p>
+            <p className="mt-1 text-[11px] leading-5 text-slate-400">
+              边界约定：本节统一采用“大于等于（≥）阈值”判定。OpenCV 的 cv::threshold 使用严格“大于（&gt;）”，在像素值恰等于整数阈值 T 时二者相差 1 个灰阶。
             </p>
           </div>
         </div>
@@ -683,7 +687,7 @@ export default function ThresholdAutoThresholdPage() {
         <div className="mt-2 space-y-1.5 text-xs leading-6 text-slate-600">
           <p>固定阈值适合验证阈值线移动对分割结果的直接影响，但对光照和场景变化敏感。</p>
           <p>OTSU 适合直方图具有较明显双峰的图像；当真实图像灰度分布复杂时，阈值仍可能只得到粗分割。</p>
-          <p>Kittler 使用梯度信息强调边界附近灰度，对边缘清晰的目标更敏感，但对噪声和纹理同样敏感。</p>
+          <p>Kittler（梯度加权平均，教学简化）使用梯度信息强调边界附近灰度，对边缘清晰的目标更敏感，但对噪声和纹理同样敏感。</p>
         </div>
       </TeachingCard>
     </div>

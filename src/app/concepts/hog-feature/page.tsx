@@ -72,6 +72,7 @@ const HOG_CODE = `function computeHogCell(image, cellX, cellY, cellSize, nbins) 
       const px = cellX * cellSize + x;
       const py = cellY * cellSize + y;
       const theta = unsigned180(gradient.direction[py][px]);
+      // 注：真实实现会在取整后再做 Math.min(nbins-1, bin) 边界钳制，防止方向恰好折到 180° 时越界。
       const bin = Math.floor(theta / anglePerBin);
       histogram[bin] += gradient.magnitude[py][px];
     }
@@ -508,7 +509,7 @@ export default function HogFeaturePage() {
               再按方向 bin 累加梯度幅值，最后把所属 block 内的 cell 直方图串联并归一化。
             </p>
             <p className="mt-2 text-xs leading-6 text-slate-500">
-              当前页面为教学演示，采用硬投票（每个像素只投入最近的一个方向 bin）和固定左上角 block 策略；
+              当前页面为教学演示，采用硬投票（每个像素只投入最近的一个方向 bin）；block 以当前 cell 作为左上角锚定，不滑动。
               标准 HOG 还会对相邻 bin 做线性插值、使用 L2-Hys 归一化，并让 block 以 stride 滑动重叠。
             </p>
           </div>
@@ -564,7 +565,7 @@ export default function HogFeaturePage() {
               覆盖 {cellsPerBlock}×{cellsPerBlock} 个 cell。先串联这些 cell 的方向直方图，再做 L2 归一化。
             </div>
             <div className="mt-2 text-xs leading-6 text-slate-500">
-              当前页面为演示，把当前 cell 固定分配到包含它的最左上角 block；若 cell 靠近图像边界，block 会自动贴近边缘。
+              当前页面为演示，以当前 cell 作为 block 的左上角（贴近右下边界时 block 自动内缩）。
               标准 HOG 中 block 会以 stride 滑动，一个 cell 可能参与多个重叠 block 的归一化。
             </div>
             <div className="mt-3">

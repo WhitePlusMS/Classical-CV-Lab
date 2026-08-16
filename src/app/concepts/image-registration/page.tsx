@@ -356,7 +356,7 @@ export default function ImageRegistrationPage() {
                 当前{scenario.activeEstimate.mode === 'all-matches' ? '全部匹配' : scenario.activeEstimate.inlierCount > 0 ? '内点' : '匹配'}平均残差：{formatRegistrationValue(scenario.activeEstimate.meanResidual, 2)} px
               </div>
               <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-slate-700">
-                叠加强度误差：{formatRegistrationValue(scenario.activeEstimate.meanIntensityError, 3)}
+                归一化强度 MAE（无量纲）：{formatRegistrationValue(scenario.activeEstimate.meanIntensityError, 3)}
               </div>
               <div className={`rounded-xl border px-3 py-2 ${residualTone(activeMatch)}`}>
                 当前点
@@ -420,7 +420,9 @@ export default function ImageRegistrationPage() {
             <FormulaCard
               label={`当前估计矩阵（${scenario.activeEstimate.label}）`}
               mathML={transformMatrixStatement(model, activeMatrixRows, 'est')}
-              note={`模型至少需要 ${scenario.modelInfo.minimumPairs} 对点；当前有 ${scenario.activeEstimate.inlierCount} 对内点参与稳定估计。`}
+              note={scenario.activeEstimate.mode === 'all-matches'
+                ? `模型至少需要 ${scenario.modelInfo.minimumPairs} 对点；当前策略使用全部 ${scenario.activeEstimate.matches.length} 对匹配直接估计（含误匹配）。`
+                : `模型至少需要 ${scenario.modelInfo.minimumPairs} 对点；当前策略筛选出 ${scenario.activeEstimate.inlierCount} 对内点参与最终最小二乘细化。`}
             />
           </div>
         </TeachingCard>
@@ -436,8 +438,8 @@ export default function ImageRegistrationPage() {
               当前矩阵预测点：{formatPoint(activeMatch.predictedTarget)}
             </div>
             <div className={`rounded-2xl border px-4 py-3 text-sm leading-6 ${residualTone(activeMatch)}`}>
-              残差定义为
-              <MathText className="mx-1" mathML={math('<mi>e</mi><mo>=</mo><msqrt><msup><mrow><mo>(</mo><msup><mi>x</mi><mo>&prime;</mo></msup><mo>-</mo><msup><mover><mi>x</mi><mo>^</mo></mover><mo>&prime;</mo></msup><mo>)</mo></mrow><mn>2</mn></msup><mo>+</mo><msup><mrow><mo>(</mo><msup><mi>y</mi><mo>&prime;</mo></msup><mo>-</mo><msup><mover><mi>y</mi><mo>^</mo></mover><mo>&prime;</mo></msup><mo>)</mo></mrow><mn>2</mn></msqrt>')} />
+              残差定义为（观测点 (u,v)、预测点 (x̂,ŷ)）
+              <MathText className="mx-1" mathML={math('<mi>e</mi><mo>=</mo><msqrt><msup><mrow><mo>(</mo><mi>u</mi><mo>-</mo><mover><mi>x</mi><mo>^</mo></mover><mo>)</mo></mrow><mn>2</mn></msup><mo>+</mo><msup><mrow><mo>(</mo><mi>v</mi><mo>-</mo><mover><mi>y</mi><mo>^</mo></mover><mo>)</mo></mrow><mn>2</mn></msqrt>')} />
               ，当前值为 {formatRegistrationValue(activeMatch.residual, 2)} px。
             </div>
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
@@ -459,11 +461,11 @@ export default function ImageRegistrationPage() {
             <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-700">
               直接估计：全部匹配平均残差 {formatRegistrationValue(scenario.directEstimate.meanResidual, 2)} px，
               其中满足阈值的有 {scenario.directEstimate.inlierCount} 对；
-              叠加强度误差 {formatRegistrationValue(scenario.directEstimate.meanIntensityError, 3)}。
+              归一化强度 MAE（无量纲）{formatRegistrationValue(scenario.directEstimate.meanIntensityError, 3)}。
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-700">
               稳健筛选：内点平均残差 {formatRegistrationValue(scenario.robustEstimate.meanResidual, 2)} px，
-              叠加强度误差 {formatRegistrationValue(scenario.robustEstimate.meanIntensityError, 3)}。
+              归一化强度 MAE（无量纲）{formatRegistrationValue(scenario.robustEstimate.meanIntensityError, 3)}。
             </div>
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
               当前页面为合成示例，内点无噪声、外点偏离极大，因此稳健策略通常能完全恢复真实矩阵；
@@ -671,7 +673,7 @@ export default function ImageRegistrationPage() {
               </div>
             </div>
             <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-slate-600">
-              强度误差 {formatRegistrationValue(scenario.activeEstimate.meanIntensityError, 3)}
+              强度误差（归一化 MAE，无量纲）{formatRegistrationValue(scenario.activeEstimate.meanIntensityError, 3)}
             </span>
           </div>
           <div className="mt-4">

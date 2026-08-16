@@ -63,7 +63,7 @@ const cameraParams = [
   { param: '帧率', desc: '每秒输出图像数（面阵：fps；线阵：lines/s）' },
   { param: '像元深度', desc: '每像素比特数（位深），决定灰度级数：8bit=256级，10bit=1024级，12bit=4096级' },
   { param: '光学接口', desc: 'C 口(17.526mm) / CS 口(12.5mm) / F 口(46.5mm)，指镜头与相机的法兰距标准' },
-  { param: '光谱响应', desc: '可见光及近红外(400~1000nm) / 红外 / 紫外，按被测物选择' },
+  { param: '光谱响应', desc: '可见光及近红外(400~1000nm，为一般硅基传感器近似) / 红外 / 紫外，按被测物选择' },
 ] as const;
 
 const lensParams = [
@@ -78,8 +78,8 @@ const lensParams = [
 ] as const;
 
 const interfaceStandards = [
-  { type: '模拟', standard: 'PAL', fps: '25fps, 625线/场', region: '中国、欧洲' },
-  { type: '模拟', standard: 'NTSC', fps: '30fps, 525线/场', region: '美、日' },
+  { type: '模拟', standard: 'PAL', fps: '25fps, 625线/帧（隔行，每场约312.5线）', region: '中国、欧洲' },
+  { type: '模拟', standard: 'NTSC', fps: '≈29.97fps, 525线/帧（隔行，每场约262.5线）', region: '美、日' },
   { type: '数字', standard: 'CameraLink', fps: '高带宽差分串行', region: '工业相机' },
   { type: '数字', standard: 'USB 3.0', fps: '即插即用，中等带宽', region: '通用' },
   { type: '数字', standard: 'GigE', fps: '长距离网络传输', region: '网络相机' },

@@ -326,6 +326,11 @@ export default function PixelMatrixPage() {
           <div>总像素数：{imageDim.width * imageDim.height}</div>
           <div>当前窗口：{getWindowSizeLabel(windowSize)}</div>
           <div>当前模式：{displayMode === 'color' ? '彩色（RGB三通道）' : '灰度（单通道）'}</div>
+          {displayMode === 'color' && (
+            <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] text-slate-500 leading-relaxed">
+              彩色模式下，主影像与下方矩阵/分析区均以 RGB 三通道呈现：矩阵格按像素的 R、G、B 分量着色，不再叠加灰度数值（仅在灰度模式下显示标量值），步骤详情中则逐个给出选中像素的 R/G/B 通道值。
+            </div>
+          )}
           {displayMode === 'color' && imageType !== 'color-checkerboard' && imageType !== 'color-gradient' && (
             <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-700 leading-relaxed">
               当前示例为灰度图，彩色模式下使用<span className="font-semibold">伪彩色可视化</span>
@@ -602,7 +607,7 @@ export default function PixelMatrixPage() {
                     <span>B = {(color.b * 255).toFixed(0)}</span>
                   </div>
                   <div className="text-slate-400 mt-1">
-                    灰度合成 ≈ {(color.gray ?? (0.299 * color.r + 0.587 * color.g + 0.114 * color.b)).toFixed(3)}
+                    {color.gray != null ? `存储灰度 ≈ ${color.gray.toFixed(3)}` : `灰度合成（加权 0.299R+0.587G+0.114B）≈ ${(0.299 * color.r + 0.587 * color.g + 0.114 * color.b).toFixed(3)}`}
                   </div>
                 </>
               ) : (

@@ -156,10 +156,6 @@ function projectionSubstitutionMath(
       ${matrixSymbol === 'T' ? '<mi>&omega;</mi>' : ''}
       <msub><mi>p</mi><mi>dst</mi></msub>
       <mo>=</mo>
-      <mi>${matrixSymbol}</mi>
-      <mo>&#x22C5;</mo>
-      <msub><mi>p</mi><mi>src</mi></msub>
-      <mo>=</mo>
       ${unwrapMath(matrix(matrixValues.map(row => row.map(value => formatTransformNumber(value, Math.abs(value) < 0.05 ? 4 : 3)))))}
       <mo>&#x22C5;</mo>
       ${unwrapMath(matrix([
@@ -504,7 +500,7 @@ export default function PerspectiveTransformPage() {
           <FormulaCard
             label="透视变换"
             mathML={math('<mi>&omega;</mi><mfenced open="[" close="]"><mtable><mtr><mtd><msup><mi>x</mi><mo>&prime;</mo></msup></mtd></mtr><mtr><mtd><msup><mi>y</mi><mo>&prime;</mo></msup></mtd></mtr><mtr><mtd><mn>1</mn></mtd></mtr></mtable></mfenced><mo>=</mo><mfenced open="[" close="]"><mtable><mtr><mtd><msub><mi>t</mi><mn>11</mn></msub></mtd><mtd><msub><mi>t</mi><mn>12</mn></msub></mtd><mtd><msub><mi>t</mi><mn>13</mn></msub></mtd></mtr><mtr><mtd><msub><mi>t</mi><mn>21</mn></msub></mtd><mtd><msub><mi>t</mi><mn>22</mn></msub></mtd><mtd><msub><mi>t</mi><mn>23</mn></msub></mtd></mtr><mtr><mtd><msub><mi>t</mi><mn>31</mn></msub></mtd><mtd><msub><mi>t</mi><mn>32</mn></msub></mtd><mtd><msub><mi>t</mi><mn>33</mn></msub></mtd></mtr></mtable></mfenced><mfenced open="[" close="]"><mtable><mtr><mtd><mi>x</mi></mtd></mtr><mtr><mtd><mi>y</mi></mtd></mtr><mtr><mtd><mn>1</mn></mtd></mtr></mtable></mfenced>')}
-            note="t31、t32 描述透视失真；它们为 0 时，矩阵会退化为仿射形式。"
+            note="t31、t32 描述透视失真；它们为 0 时，矩阵会退化为仿射形式。公式中的矩阵 T 即代码中的单应矩阵 H（两者指同一 3×3 齐次矩阵）。"
             tone="embedded"
           />
           <FormulaCard
@@ -589,7 +585,7 @@ export default function PerspectiveTransformPage() {
           <div className="text-sm font-semibold text-slate-800">为什么透视变换需要四对点</div>
           <p className="mt-2 text-sm leading-6 text-slate-700">
             3×3 齐次矩阵共有 9 个元素，但整体只差一个比例因子，因此有效自由度是 8。
-            一对点给出两个独立方程，四对点正好提供 8 个约束，所以求解过程和 OpenCV 实现都要求使用四对点。
+            一对点给出两个独立方程，四对点正好提供 8 个约束，所以这里用四对点建立 8 个方程求解（与 <code className="font-mono">getPerspectiveTransform</code> 一致，它要求恰好四对点）；若要使用多于四对点做稳健估计，可改用 <code className="font-mono">findHomography</code>（RANSAC/最小二乘）。
           </p>
           <FormulaCard
             className="mt-4"

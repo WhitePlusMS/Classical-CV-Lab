@@ -31,7 +31,7 @@ const BACKGROUND_CODE_TS = `/**
  * 四种经典背景建模方法：
  *   1. 均值模型     — 前 N 帧像素均值作为背景
  *   2. 自适应背景   — 学习率 α 控制的递归更新
- *   3. 单高斯模型   — 每个像素用高斯分布 N(μ, δ²) 建模
+ *   3. 单高斯模型   — 每个像素用高斯分布 N(μ, σ²) 建模
  *   4. 混合高斯模型 — 多模态背景用 K 个加权高斯分布描述
  */
 
@@ -79,18 +79,18 @@ function updateAdaptiveBackground(
 /** 单高斯分布参数 */
 interface SingleGaussianParams {
   mean: number;     // μ
-  variance: number; // δ²
-  sigma: number;    // δ（标准差）
+  variance: number; // σ²
+  sigma: number;    // σ（标准差）
 }
 
-/** 初始化：用前 N 帧训练像素估计 μ₀、δ₀ */
+/** 初始化：用前 N 帧训练像素估计 μ₀、σ₀ */
 function initSingleGaussian(trainingPixels: number[]): SingleGaussianParams {
   const mean = trainingPixels.reduce((sum, p) => sum + p, 0) / trainingPixels.length;
   const variance = trainingPixels.reduce((sum, p) => (p - mean) ** 2, 0) / trainingPixels.length;
   return { mean, variance, sigma: Math.sqrt(Math.max(0.0001, variance)) };
 }
 
-/** 前景判定：|I_t - μ| > λ·δ */
+/** 前景判定：|I_t - μ| > λ·σ */
 function singleGaussianDetect(
   pixel: number,
   params: SingleGaussianParams,
@@ -99,7 +99,7 @@ function singleGaussianDetect(
   return Math.abs(pixel - params.mean) > lambda * params.sigma;
 }
 
-/** 模型更新：μ 与 δ² */
+/** 模型更新：μ 与 σ² */
 function updateSingleGaussian(
   pixel: number,
   params: SingleGaussianParams,
@@ -123,7 +123,7 @@ const D = 2.5;     // 标准差倍数（统一阈值参数）
 interface GaussianComponent {
   weight: number;  // ω_i
   mean: number;    // μ_i
-  sigma: number;   // δ_i
+  sigma: number;   // σ_i
 }
 
 /**
@@ -132,8 +132,8 @@ interface GaussianComponent {
  * 教学说明：教学演示中的前景掩膜使用简化阈值判定 |I-B|>T；
  * 下方函数展示完整 GMM 的匹配、更新与背景选择逻辑，用于理解多分布建模思想。
  *
- * ① 匹配：按 ω/δ 降序，检查 |I_t - μ_i| ≤ D·δ_i
- * ② 更新：匹配分布更新 μ、δ²、ω；不匹配分布 ω 按 (1-α) 衰减
+ * ① 匹配：按 ω/σ 降序，检查 |I_t - μ_i| ≤ D·σ_i
+ * ② 更新：匹配分布更新 μ、σ²、ω；不匹配分布 ω 按 (1-α) 衰减
  * ③ 背景选择：B = argmin_B ( Σ_{k=1}^{B} ω_k ≥ T_BG )
  * ④ 前景判定：若当前像素与前 B 个背景分布均不匹配 → 前景
  */
@@ -142,7 +142,7 @@ function mixtureGaussianProcess(
   components: GaussianComponent[],
   alpha: number
 ): { isForeground: boolean; components: GaussianComponent[] } {
-  // 按 ω/δ 降序排列
+  // 按 ω/σ 降序排列
   const sorted = [...components].sort(
     (a, b) => b.weight / b.sigma - a.weight / a.sigma
   );
@@ -181,7 +181,7 @@ function mixtureGaussianProcess(
     weight: c.weight / totalW,
   }));
 
-  // 背景选择：按 ω/δ 排序后累计权重达阈值
+  // 背景选择：按 ω/σ 排序后累计权重达阈值
   normalized.sort((a, b) => b.weight / b.sigma - a.weight / a.sigma);
   let cumWeight = 0;
   const bgCount =
@@ -220,24 +220,24 @@ const ADAPTIVE_BG_FORMULA = buildInlineMathML(
 /* 单高斯概率密度函数 */
 const GAUSSIAN_PDF = buildInlineMathML(
   '<mrow><mi>P</mi><mo>(</mo><mi>I</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>,</mo><mi>t</mi><mo>)</mo><mo>)</mo><mo>=</mo>' +
-  '<mi>G</mi><mo>(</mo><mi>I</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>,</mo><mi>t</mi><mo>)</mo><mo>;</mo><msub><mi>μ</mi><mi>t</mi></msub><mo>,</mo><msub><mi>δ</mi><mi>t</mi></msub><mo>)</mo><mo>=</mo>' +
-  '<mfrac><mn>1</mn><mrow><msub><mi>δ</mi><mi>t</mi></msub><msqrt><mn>2</mn><mi>π</mi></msqrt></mrow></mfrac>' +
-  '<msup><mi>e</mi><mrow><mo>-</mo><mfrac><msup><mrow><mo>(</mo><mi>I</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>,</mo><mi>t</mi><mo>)</mo><mo>-</mo><msub><mi>μ</mi><mi>t</mi></msub><mo>)</mo></mrow><mn>2</mn></msup><mrow><mn>2</mn><msubsup><mi>δ</mi><mi>t</mi><mn>2</mn></msubsup></mrow></mfrac></mrow></msup></mrow>'
+  '<mi>G</mi><mo>(</mo><mi>I</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>,</mo><mi>t</mi><mo>)</mo><mo>;</mo><msub><mi>μ</mi><mi>t</mi></msub><mo>,</mo><msub><mi>σ</mi><mi>t</mi></msub><mo>)</mo><mo>=</mo>' +
+  '<mfrac><mn>1</mn><mrow><msub><mi>σ</mi><mi>t</mi></msub><msqrt><mn>2</mn><mi>π</mi></msqrt></mrow></mfrac>' +
+  '<msup><mi>e</mi><mrow><mo>-</mo><mfrac><msup><mrow><mo>(</mo><mi>I</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>,</mo><mi>t</mi><mo>)</mo><mo>-</mo><msub><mi>μ</mi><mi>t</mi></msub><mo>)</mo></mrow><mn>2</mn></msup><mrow><mn>2</mn><msubsup><mi>σ</mi><mi>t</mi><mn>2</mn></msubsup></mrow></mfrac></mrow></msup></mrow>'
 );
 
 /* 单高斯前景判定 */
 const GAUSSIAN_DETECT = buildInlineMathML(
   '<mrow><mi>D</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>=</mo>' +
-  '<mrow><mo>{</mo><mtable><mtr><mtd><mn>1</mn></mtd><mtd><mtext>当 </mtext><mo>|</mo><msub><mi>I</mi><mi>t</mi></msub><mo>-</mo><msub><mi>μ</mi><mi>t</mi></msub><mo>|</mo><mo>&gt;</mo><mi>λ</mi><msub><mi>δ</mi><mi>t</mi></msub></mtd></mtr>' +
+  '<mrow><mo>{</mo><mtable><mtr><mtd><mn>1</mn></mtd><mtd><mtext>当 </mtext><mo>|</mo><msub><mi>I</mi><mi>t</mi></msub><mo>-</mo><msub><mi>μ</mi><mi>t</mi></msub><mo>|</mo><mo>&gt;</mo><mi>λ</mi><msub><mi>σ</mi><mi>t</mi></msub></mtd></mtr>' +
   '<mtr><mtd><mn>0</mn></mtd><mtd><mtext>其他</mtext></mtd></mtr></mtable></mrow></mrow>'
 );
 
-/* 单高斯初始化：用前 N 帧训练像素估计 μ₀、δ₀ */
+/* 单高斯初始化：用前 N 帧训练像素估计 μ₀、σ₀ */
 const GAUSSIAN_INIT = buildInlineMathML(
   '<mrow><msub><mi>μ</mi><mn>0</mn></msub><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>=</mo>' +
   '<mfrac><mn>1</mn><mi>N</mi></mfrac><munderover><mo>∑</mo><mrow><mi>j</mi><mo>=</mo><mn>1</mn></mrow><mi>N</mi></munderover>' +
   '<msub><mi>I</mi><mi>j</mi></msub><mo>,</mo>' +
-  '<msubsup><mi>δ</mi><mn>0</mn><mn>2</mn></msubsup><mo>=</mo>' +
+  '<msubsup><mi>σ</mi><mn>0</mn><mn>2</mn></msubsup><mo>=</mo>' +
   '<mfrac><mn>1</mn><mi>N</mi></mfrac><munderover><mo>∑</mo><mrow><mi>j</mi><mo>=</mo><mn>1</mn></mrow><mi>N</mi></munderover>' +
   '<msup><mrow><mo>(</mo><msub><mi>I</mi><mi>j</mi></msub><mo>-</mo><msub><mi>μ</mi><mn>0</mn></msub><mo>)</mo></mrow><mn>2</mn></msup></mrow>'
 );
@@ -245,7 +245,7 @@ const GAUSSIAN_INIT = buildInlineMathML(
 /* 单高斯模型更新 */
 const GAUSSIAN_UPDATE = buildInlineMathML(
   '<mrow><mtable><mtr><mtd><msub><mi>μ</mi><mi>t</mi></msub><mo>=</mo><mo>(</mo><mn>1</mn><mo>-</mo><mi>α</mi><mo>)</mo><msub><mi>μ</mi><mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow></msub><mo>+</mo><mi>α</mi><msub><mi>I</mi><mi>t</mi></msub></mtd></mtr>' +
-  '<mtr><mtd><msubsup><mi>δ</mi><mi>t</mi><mn>2</mn></msubsup><mo>=</mo><mo>(</mo><mn>1</mn><mo>-</mo><mi>α</mi><mo>)</mo><msubsup><mi>δ</mi><mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow><mn>2</mn></msubsup><mo>+</mo><mi>α</mi><msup><mrow><mo>(</mo><msub><mi>I</mi><mi>t</mi></msub><mo>-</mo><msub><mi>μ</mi><mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow></msub><mo>)</mo></mrow><mn>2</mn></msup></mtd></mtr></mtable></mrow>'
+  '<mtr><mtd><msubsup><mi>σ</mi><mi>t</mi><mn>2</mn></msubsup><mo>=</mo><mo>(</mo><mn>1</mn><mo>-</mo><mi>α</mi><mo>)</mo><msubsup><mi>σ</mi><mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow><mn>2</mn></msubsup><mo>+</mo><mi>α</mi><msup><mrow><mo>(</mo><msub><mi>I</mi><mi>t</mi></msub><mo>-</mo><msub><mi>μ</mi><mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow></msub><mo>)</mo></mrow><mn>2</mn></msup></mtd></mtr></mtable></mrow>'
 );
 
 /* 混合高斯概率：P(X_t) = Σ w_i·G_i */
@@ -253,13 +253,13 @@ const MIXTURE_FORMULA = buildInlineMathML(
   '<mrow><mi>P</mi><mo>(</mo><msub><mi>X</mi><mi>t</mi></msub><mo>)</mo><mo>=</mo>' +
   '<munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>K</mi></munderover>' +
   '<msub><mi>w</mi><mrow><mi>i</mi><mo>,</mo><mi>t</mi></mrow></msub>' +
-  '<mi>G</mi><mo>(</mo><msub><mi>X</mi><mi>t</mi></msub><mo>,</mo><msub><mi>μ</mi><mrow><mi>i</mi><mo>,</mo><mi>t</mi></mrow></msub><mo>,</mo><msub><mi>δ</mi><mrow><mi>i</mi><mo>,</mo><mi>t</mi></mrow></msub><mo>)</mo></mrow>'
+  '<mi>G</mi><mo>(</mo><msub><mi>X</mi><mi>t</mi></msub><mo>,</mo><msub><mi>μ</mi><mrow><mi>i</mi><mo>,</mo><mi>t</mi></mrow></msub><mo>,</mo><msub><mi>σ</mi><mrow><mi>i</mi><mo>,</mo><mi>t</mi></mrow></msub><mo>)</mo></mrow>'
 );
 
-/* 混合高斯匹配条件：|I_t - μ_{i,t-1}| ≤ D_1·δ_{i,t-1} */
+/* 混合高斯匹配条件：|I_t - μ_{i,t-1}| ≤ D·σ_{i,t-1} */
 const MIXTURE_MATCH = buildInlineMathML(
  '<mrow><mo>|</mo><msub><mi>I</mi><mi>t</mi></msub><mo>-</mo><msub><mi>μ</mi><mrow><mi>i</mi><mo>,</mo><mi>t</mi><mo>-</mo><mn>1</mn></mrow></msub><mo>|</mo>' +
- '<mo>≤</mo><mi>D</mi><msub><mi>δ</mi><mrow><mi>i</mi><mo>,</mo><mi>t</mi><mo>-</mo><mn>1</mn></mrow></msub></mrow>'
+ '<mo>≤</mo><mi>D</mi><msub><mi>σ</mi><mrow><mi>i</mi><mo>,</mo><mi>t</mi><mo>-</mo><mn>1</mn></mrow></msub></mrow>'
 );
 
 
@@ -268,13 +268,13 @@ const MIXTURE_MATCH = buildInlineMathML(
 const MIXTURE_UPDATE = buildInlineMathML(
   '<mrow><mtable><mtr><mtd><mi>ω</mi><mo>=</mo><mo>(</mo><mn>1</mn><mo>-</mo><mi>α</mi><mo>)</mo><msub><mi>ω</mi><mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow></msub><mo>+</mo><mi>α</mi></mtd></mtr>' +
   '<mtr><mtd><mi>μ</mi><mo>=</mo><mo>(</mo><mn>1</mn><mo>-</mo><mi>ρ</mi><mo>)</mo><msub><mi>μ</mi><mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow></msub><mo>+</mo><mi>ρ</mi><msub><mi>I</mi><mi>t</mi></msub></mtd></mtr>' +
-  '<mtr><mtd><msup><mi>δ</mi><mn>2</mn></msup><mo>=</mo><mo>(</mo><mn>1</mn><mo>-</mo><mi>ρ</mi><mo>)</mo><msubsup><mi>δ</mi><mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow><mn>2</mn></msubsup><mo>+</mo><mi>ρ</mi><msup><mrow><mo>(</mo><msub><mi>I</mi><mi>t</mi></msub><mo>-</mo><msub><mi>μ</mi><mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow></msub><mo>)</mo></mrow><mn>2</mn></msup></mtd></mtr></mtable></mrow>'
+  '<mtr><mtd><msup><mi>σ</mi><mn>2</mn></msup><mo>=</mo><mo>(</mo><mn>1</mn><mo>-</mo><mi>ρ</mi><mo>)</mo><msubsup><mi>σ</mi><mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow><mn>2</mn></msubsup><mo>+</mo><mi>ρ</mi><msup><mrow><mo>(</mo><msub><mi>I</mi><mi>t</mi></msub><mo>-</mo><msub><mi>μ</mi><mrow><mi>t</mi><mo>-</mo><mn>1</mn></mrow></msub><mo>)</mo></mrow><mn>2</mn></msup></mtd></mtr></mtable></mrow>'
 );
 
 /* 混合高斯判定与背景选择合并 */
 const MIXTURE_DETECT_ALL = buildInlineMathML(
   '<mrow><mtable><mtr><mtd><mtext>背景:</mtext><mi>B</mi><mo>=</mo><munder><mrow><mo>argmin</mo></mrow><mi>B</mi></munder><mo>(</mo><munderover><mo>∑</mo><mrow><mi>k</mi><mo>=</mo><mn>1</mn></mrow><mi>B</mi></munderover><msub><mi>ω</mi><mi>k</mi></msub><mo>≥</mo><mi>T</mi><mo>)</mo></mtd></mtr>' +
-  '<mtr><mtd><mtext>前景:</mtext><mo>|</mo><msub><mi>I</mi><mi>t</mi></msub><mo>-</mo><msub><mi>μ</mi><mi>i</mi></msub><mo>|</mo><mo>&gt;</mo><mi>D</mi><msub><mi>δ</mi><mi>i</mi></msub><mo>,</mo><mi>i</mi><mo>=</mo><mn>1</mn><mo>,</mo><mn>2</mn><mo>,</mo><mo>⋯</mo><mo>,</mo><mi>B</mi></mtd></mtr></mtable></mrow>'
+  '<mtr><mtd><mtext>前景:</mtext><mo>|</mo><msub><mi>I</mi><mi>t</mi></msub><mo>-</mo><msub><mi>μ</mi><mi>i</mi></msub><mo>|</mo><mo>&gt;</mo><mi>D</mi><msub><mi>σ</mi><mi>i</mi></msub><mo>,</mo><mi>i</mi><mo>=</mo><mn>1</mn><mo>,</mo><mn>2</mn><mo>,</mo><mo>⋯</mo><mo>,</mo><mi>B</mi></mtd></mtr></mtable></mrow>'
 );
 
 function inlineMath(body: string): string {
@@ -308,9 +308,9 @@ function modelDescription(model: BackgroundModelType): string {
     case 'adaptive':
       return '用学习率 α 持续更新背景，能适应缓慢光照变化。';
     case 'singleGaussian':
-      return '每个像素用一个高斯分布描述背景，依据均值和标准差 δ 判定异常像素。';
+      return '每个像素用一个高斯分布描述背景，依据均值和标准差 σ 判定异常像素。';
     case 'mixtureGaussian':
-      return '每个像素用 K 个加权高斯分布表示多模态背景，按 ω/δ 排序后通过累计权重选择背景分布，适合树叶、水面、风扇等动态背景。';
+      return '每个像素用 K 个加权高斯分布表示多模态背景，按 ω/σ 排序后通过累计权重选择背景分布，适合树叶、水面、风扇等动态背景。';
   }
 }
 
@@ -371,24 +371,26 @@ export default function BackgroundModelingSubtractionPage() {
   const totalPixels = width * height;
   const foregroundPercent = totalPixels > 0 ? (foregroundCount / totalPixels) * 100 : 0;
   const alphaValue = learningRate / 100;
-  const gaussianLimit = Math.round(2.5 * deviationGray);
+  const gaussianLimit = Math.round(2.5 * (result.deviation[currentPosition.y]?.[currentPosition.x] ?? 0) * 255);
   const activeLimit = model === 'singleGaussian' ? gaussianLimit : threshold;
   const activeRuleText = model === 'singleGaussian'
-    ? '|I-μ| > 2.5·δ'
+    ? '|I-μ| > 2.5·σ'
     : '|I-B| > T';
   const activeComparisonText = model === 'singleGaussian'
-    ? `|${currentGray} - ${backgroundGray}| = ${diffGray}，2.5·δ = ${gaussianLimit}`
+    ? `|${currentGray} - ${backgroundGray}| = ${diffGray}，2.5·σ = ${gaussianLimit}`
     : `|${currentGray} - ${backgroundGray}| = ${diffGray}，T = ${threshold}`;
   const decisionText = maskValue > 0 ? '前景运动目标（D=1）' : '背景（D=0）';
   const decisionClassName = maskValue > 0 ? 'font-semibold text-red-600' : 'font-semibold text-emerald-600';
   const currentPixelMath = inlineMath(`<mi>I</mi><mo>(</mo><mn>${currentPosition.x}</mn><mo>,</mo><mn>${currentPosition.y}</mn><mo>)</mo><mo>=</mo><mn>${currentGray}</mn>`);
-  const deviationMath = inlineMath(`<mi>δ</mi><mo>(</mo><mn>${currentPosition.x}</mn><mo>,</mo><mn>${currentPosition.y}</mn><mo>)</mo><mo>=</mo><mn>${deviationGray}</mn>`);
-  const differenceMath = inlineMath(`<mo>|</mo><mi>I</mi><mo>-</mo><mi>B</mi><mo>|</mo><mo>=</mo><mo>|</mo><mn>${currentGray}</mn><mo>-</mo><mn>${backgroundGray}</mn><mo>|</mo><mo>=</mo><mn>${diffGray}</mn>`);
+  const deviationMath = inlineMath(`<mi>σ</mi><mo>(</mo><mn>${currentPosition.x}</mn><mo>,</mo><mn>${currentPosition.y}</mn><mo>)</mo><mo>=</mo><mn>${deviationGray}</mn>`);
+  const differenceMath = model === 'singleGaussian'
+    ? inlineMath(`<mo>|</mo><mi>I</mi><mo>-</mo><mi>μ</mi><mo>|</mo><mo>=</mo><mo>|</mo><mn>${currentGray}</mn><mo>-</mo><mn>${backgroundGray}</mn><mo>|</mo><mo>=</mo><mn>${diffGray}</mn>`)
+    : inlineMath(`<mo>|</mo><mi>I</mi><mo>-</mo><mi>B</mi><mo>|</mo><mo>=</mo><mo>|</mo><mn>${currentGray}</mn><mo>-</mo><mn>${backgroundGray}</mn><mo>|</mo><mo>=</mo><mn>${diffGray}</mn>`);
   const decisionRuleMath = model === 'singleGaussian'
-    ? inlineMath('<mi>D</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>=</mo><mo>{</mo><mn>1</mn><mtext> 当 </mtext><mo>|</mo><mi>I</mi><mo>-</mo><mi>μ</mi><mo>|</mo><mo>&gt;</mo><mn>2.5</mn><mi>δ</mi><mo>;</mo><mn>0</mn><mtext> 其他</mtext><mo>}</mo>')
+    ? inlineMath('<mi>D</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>=</mo><mo>{</mo><mn>1</mn><mtext> 当 </mtext><mo>|</mo><mi>I</mi><mo>-</mo><mi>μ</mi><mo>|</mo><mo>&gt;</mo><mn>2.5</mn><mi>σ</mi><mo>;</mo><mn>0</mn><mtext> 其他</mtext><mo>}</mo>')
     : inlineMath('<msub><mi>D</mi><mi>t</mi></msub><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>=</mo><mo>{</mo><mn>1</mn><mtext> 当 </mtext><mo>|</mo><msub><mi>I</mi><mi>t</mi></msub><mo>-</mo><msub><mi>B</mi><mi>t</mi></msub><mo>|</mo><mo>&gt;</mo><mi>T</mi><mo>;</mo><mn>0</mn><mtext> 其他</mtext><mo>}</mo>');
   const comparisonMath = model === 'singleGaussian'
-    ? inlineMath(`<mo>|</mo><mi>I</mi><mo>-</mo><mi>μ</mi><mo>|</mo><mo>=</mo><mn>${diffGray}</mn><mo>,</mo><mn>2.5</mn><mi>δ</mi><mo>=</mo><mn>${gaussianLimit}</mn>`)
+    ? inlineMath(`<mo>|</mo><mi>I</mi><mo>-</mo><mi>μ</mi><mo>|</mo><mo>=</mo><mn>${diffGray}</mn><mo>,</mo><mn>2.5</mn><mi>σ</mi><mo>=</mo><mn>${gaussianLimit}</mn>`)
     : inlineMath(`<mo>|</mo><msub><mi>I</mi><mi>t</mi></msub><mo>-</mo><msub><mi>B</mi><mi>t</mi></msub><mo>|</mo><mo>=</mo><mn>${diffGray}</mn><mo>,</mo><mi>T</mi><mo>=</mo><mn>${threshold}</mn>`);
   const trainingWindowEnd = 7;
   const trainingWindowStart = 0;
@@ -436,7 +438,7 @@ export default function BackgroundModelingSubtractionPage() {
           ))}
         </div>
         <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
-          琥珀色缩略图表示当前像素参与背景建模的历史窗口，红色缩略图表示当前正在判定的第 {currentFrameIndex + 1} 帧。
+          琥珀色缩略图表示当前像素参与背景建模的历史窗口（前 8 帧），红色缩略图表示当前正在判定的第 {currentFrameIndex + 1} 帧。该窗口仅对均值模型严格对应 K=8 训练帧，对自适应/单高斯/混合高斯仅为图示历史。
         </div>
       </div>
 
@@ -585,7 +587,7 @@ export default function BackgroundModelingSubtractionPage() {
               {model === 'adaptive' ? (
                 <TeachingTerm term="学习率 α" explanation="学习率 α 决定新帧写入背景模型的速度，越大表示背景更新越快。" className="mx-1" />
               ) : model === 'singleGaussian' ? (
-                <TeachingTerm term="单高斯" explanation="单高斯假设同一个像素的背景灰度围绕一个均值上下波动，用 μ 和 δ 描述。" className="mx-1" />
+                <TeachingTerm term="单高斯" explanation="单高斯假设同一个像素的背景灰度围绕一个均值上下波动，用 μ 和 σ 描述。" className="mx-1" />
               ) : model === 'mixtureGaussian' ? (
                 <TeachingTerm term="混合高斯" explanation="混合高斯允许一个像素在时间上有多个常见背景值，适合动态背景。" className="mx-1" />
               ) : null}
@@ -678,7 +680,7 @@ export default function BackgroundModelingSubtractionPage() {
           </div>
         </div>
         <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
-          其中琥珀色高亮时间窗口表示当前像素参与背景建模的历史帧，红色边框表示当前正在判定的帧。
+          其中琥珀色高亮时间窗口表示当前像素参与背景建模的历史帧（前 8 帧），红色边框表示当前正在判定的帧；该窗口仅对均值模型严格对应 K=8 训练帧，其余模型仅为图示历史。
         </div>
       </TeachingCard>
     </div>
@@ -738,9 +740,19 @@ export default function BackgroundModelingSubtractionPage() {
     : 0;
   const trainingBackgroundLikeCount = trainingPixelValues.filter(value => Math.abs(value - trainingMeanGray) <= threshold).length;
   const trainingBackgroundMajority = trainingFrames.length > 0 && trainingBackgroundLikeCount > trainingFrames.length / 2;
-  const previousBackgroundImage = result.backgroundHistory[Math.max(0, currentFrameIndex - 1)] ?? result.background;
+  // 上一背景（递推输入）应取当前帧所对应的背景模型态 B(t)，
+  // 即 backgroundHistory[currentFrameIndex]（右图「背景模型 B(t)」同源），
+  // 而非 backgroundHistory[currentFrameIndex - 1]，否则 adaptiveUpdatedGray 会算成错误的下一帧背景。
+  const previousBackgroundImage = result.backgroundHistory[currentFrameIndex] ?? result.background;
   const previousBackgroundGray = grayAt(previousBackgroundImage, currentPosition.x, currentPosition.y);
   const adaptiveUpdatedGray = Math.round(alphaValue * currentGray + (1 - alphaValue) * previousBackgroundGray);
+  // 递推后的真实背景图：α·I_t + (1-α)·B(t)，供「更新后背景」卡片与数值同源展示
+  const updatedBackgroundImage: number[][] = result.current.map((row, y) =>
+    row.map((curr, x) => {
+      const prev = previousBackgroundImage[y]?.[x] ?? curr;
+      return Math.max(0, Math.min(1, alphaValue * curr + (1 - alphaValue) * prev));
+    })
+  );
   const lowerGaussianBound = Math.max(0, backgroundGray - gaussianLimit);
   const upperGaussianBound = Math.min(255, backgroundGray + gaussianLimit);
   const sortedMixtureComponents = [...result.mixtureComponents].sort(
@@ -844,8 +856,9 @@ export default function BackgroundModelingSubtractionPage() {
           </div>
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3">
             <div className="mb-2 text-xs font-semibold text-emerald-700">更新后背景</div>
-            <ImageCanvas image={result.background} maxDisplaySize={150} showGrid={false} highlightPixel={currentPosition} />
+            <ImageCanvas image={updatedBackgroundImage} maxDisplaySize={150} showGrid={false} highlightPixel={currentPosition} />
             <div className="mt-2 font-mono text-sm font-semibold text-emerald-700"><InlineMath mathML={inlineMath(`<msub><mi>B</mi><mi>t</mi></msub><mo>≈</mo><mn>${adaptiveUpdatedGray}</mn>`)} /></div>
+            <div className="mt-1 text-[11px] leading-4 text-emerald-700/80">此值为下一帧将使用的背景（已吸收当前帧的预测窗），与右侧“背景模型 B(t)”图像（未吸收当前帧的模型态）数值不同。</div>
           </div>
         </div>
         <FormulaCard
@@ -879,11 +892,11 @@ export default function BackgroundModelingSubtractionPage() {
           <div>
             <h2 className="text-sm font-semibold text-slate-800">单高斯模型动态推导</h2>
             <p className="mt-1 text-xs leading-5 text-slate-500">
-              当前像素用一个高斯分布描述背景，重点看 <InlineMath mathML={inlineMath('<msub><mi>I</mi><mi>t</mi></msub>')} /> 是否落在 <InlineMath mathML={inlineMath('<mi>μ</mi><mo>±</mo><mn>2.5</mn><mi>δ</mi>')} /> 区间内。
+              当前像素用一个高斯分布描述背景，重点看 <InlineMath mathML={inlineMath('<msub><mi>I</mi><mi>t</mi></msub>')} /> 是否落在 <InlineMath mathML={inlineMath('<mi>μ</mi><mo>±</mo><mn>2.5</mn><mi>σ</mi>')} /> 区间内。
             </p>
           </div>
           <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-800">
-            μ={backgroundGray} / δ={deviationGray}
+            μ={backgroundGray} / σ={deviationGray}
           </span>
         </div>
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
@@ -908,9 +921,9 @@ export default function BackgroundModelingSubtractionPage() {
               ))}
             </div>
             <div className="mt-3 grid gap-2 text-xs leading-5 text-slate-600 md:grid-cols-3">
-              <div className="rounded-xl bg-sky-50 px-3 py-2">下界 μ - 2.5δ = {lowerGaussianBound}</div>
+              <div className="rounded-xl bg-sky-50 px-3 py-2">下界 μ - 2.5σ = {lowerGaussianBound}</div>
               <div className="rounded-xl bg-sky-50 px-3 py-2">当前 <InlineMath mathML={inlineMath('<msub><mi>I</mi><mi>t</mi></msub>')} /> = {currentGray}</div>
-              <div className="rounded-xl bg-sky-50 px-3 py-2">上界 μ + 2.5δ = {upperGaussianBound}</div>
+              <div className="rounded-xl bg-sky-50 px-3 py-2">上界 μ + 2.5σ = {upperGaussianBound}</div>
             </div>
           </div>
           <div className="space-y-3">
@@ -918,25 +931,25 @@ export default function BackgroundModelingSubtractionPage() {
               label="像素时间分布"
               mathML={GAUSSIAN_PDF}
               tone="embedded"
-              note="每个像素的时间灰度值可看作随机过程，背景值集中在高斯分布的均值附近；δ 表示标准差，部分教材记作 σ。"
+              note="每个像素的时间灰度值可看作随机过程，背景值集中在高斯分布的均值附近；σ 表示标准差（σ² 为方差）。"
             />
             <FormulaCard
               label="模型初始化"
               mathML={GAUSSIAN_INIT}
               tone="embedded"
-              note="用前 N 帧训练像素初始化均值 μ 和标准差 δ。"
+              note="用前 N 帧训练像素初始化均值 μ 和标准差 σ。"
             />
             <FormulaCard
               label="单高斯前景判定"
               mathML={GAUSSIAN_DETECT}
               tone="embedded"
-              note={'当前 |I-μ| = ' + diffGray + '，2.5δ = ' + gaussianLimit + '，结果：' + decisionText + '。'}
+              note={'当前 |I-μ| = ' + diffGray + '，2.5σ = ' + gaussianLimit + '，结果：' + decisionText + '。'}
             />
             <FormulaCard
               label="单高斯模型更新"
               mathML={GAUSSIAN_UPDATE}
               tone="embedded"
-              note={'α = ' + alphaValue.toFixed(2) + '，当前 μ = ' + backgroundGray + '，δ = ' + deviationGray + '。'}
+              note={'α = ' + alphaValue.toFixed(2) + '，当前 μ = ' + backgroundGray + '，σ = ' + deviationGray + '。'}
             />
           </div>
         </div>
@@ -987,7 +1000,7 @@ export default function BackgroundModelingSubtractionPage() {
                         {matched ? '匹配' : '不匹配'}
                       </span>
                     </div>
-                    <div className="mt-1 text-slate-500">阈值 2.5δ = {limit}</div>
+                    <div className="mt-1 text-slate-500">阈值 2.5σ = {limit}</div>
                   </div>
                 );
               })}
@@ -996,17 +1009,17 @@ export default function BackgroundModelingSubtractionPage() {
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3">
             <div className="mb-2 text-xs font-semibold text-amber-700">2. 更新参数</div>
             <div className="space-y-2 text-xs leading-5 text-slate-700">
-              <div className="rounded-xl bg-amber-50 px-3 py-2">匹配分量：ω、μ、δ² 按 α 更新</div>
+              <div className="rounded-xl bg-amber-50 px-3 py-2">匹配分量：ω、μ、σ² 按 α 更新</div>
               <div className="rounded-xl bg-slate-50 px-3 py-2">未匹配分量：ω 按 (1-α) 衰减</div>
               <div className="rounded-xl bg-slate-50 px-3 py-2">当前 α = {alphaValue.toFixed(2)}</div>
             </div>
           </div>
           <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-3">
-            <div className="mb-2 text-xs font-semibold text-sky-700">3. 按 <InlineMath mathML={inlineMath('<mi>ω</mi><mo>/</mo><mi>δ</mi>')} /> 排序</div>
+            <div className="mb-2 text-xs font-semibold text-sky-700">3. 按 <InlineMath mathML={inlineMath('<mi>ω</mi><mo>/</mo><mi>σ</mi>')} /> 排序</div>
             <div className="space-y-2 text-xs leading-5">
               {sortedMixtureComponents.map((component, index) => (
                 <div key={`sort-${index}`} className="rounded-xl border border-sky-100 bg-sky-50 px-3 py-2">
-                  G{index + 1}: <InlineMath mathML={inlineMath(`<mi>ω</mi><mo>/</mo><mi>δ</mi><mo>=</mo><mn>${(component.weight / Math.max(0.001, component.sigma)).toFixed(2)}</mn>`)} />
+                  G{index + 1}: <InlineMath mathML={inlineMath(`<mi>ω</mi><mo>/</mo><mi>σ</mi><mo>=</mo><mn>${(component.weight / Math.max(0.001, component.sigma)).toFixed(2)}</mn>`)} />
                   <span className={component.background ? 'ml-2 font-semibold text-emerald-700' : 'ml-2 font-semibold text-red-600'}>
                     {component.background ? '背景' : '前景候选'}
                   </span>
@@ -1034,7 +1047,7 @@ export default function BackgroundModelingSubtractionPage() {
                 <div key={`mixture-peak-${index}`} className="rounded-lg border border-emerald-100 bg-emerald-50/70 px-3 py-2">
                   <div className="font-semibold text-slate-800">G{index + 1}</div>
                   <div className="mt-1 font-mono text-[11px] text-slate-500">
-                    ω={component.weight.toFixed(2)} / μ={grayValue(component.mean)} / δ={grayValue(component.sigma)}
+                    ω={component.weight.toFixed(2)} / μ={grayValue(component.mean)} / σ={grayValue(component.sigma)}
                   </div>
                   <div className={component.background ? 'mt-1 font-semibold text-emerald-700' : 'mt-1 font-semibold text-red-600'}>
                     {component.background ? '背景峰' : '前景候选'}
@@ -1061,7 +1074,7 @@ export default function BackgroundModelingSubtractionPage() {
             label="匹配条件"
             mathML={MIXTURE_MATCH}
             tone="embedded"
-            note="新像素先与各分量比较，距离落在 D·δ 范围内才认为匹配。"
+            note="新像素先与各分量比较，距离落在 D·σ 范围内才认为匹配。"
           />
           <FormulaCard
             label="匹配后的参数更新"
@@ -1073,7 +1086,7 @@ export default function BackgroundModelingSubtractionPage() {
             label="背景选择与前景检测"
             mathML={MIXTURE_DETECT_ALL}
             tone="embedded"
-            note={<><InlineMath mathML={inlineMath('<mi>ω</mi><mo>/</mo><mi>δ</mi>')} /> 排序后，累计权重大于阈值的分量视为背景分布。</>}
+            note={<><InlineMath mathML={inlineMath('<mi>ω</mi><mo>/</mo><mi>σ</mi>')} /> 排序后，累计权重大于阈值的分量视为背景分布。</>}
           />
         </div>
       </TeachingCard>
@@ -1125,7 +1138,7 @@ export default function BackgroundModelingSubtractionPage() {
                 <InlineMath mathML={deviationMath} />
               </div>
               <p className="mt-1 text-xs text-slate-500">
-                前景判定阈值 <InlineMath mathML={inlineMath(`<mi>D</mi><mo>·</mo><mi>δ</mi><mo>=</mo><mn>2.5</mn><mo>×</mo><mn>${deviationGray}</mn><mo>=</mo><mn>${Math.round(2.5 * deviationGray)}</mn>`)} />，<InlineMath mathML={inlineMath(`<mo>|</mo><mi>I</mi><mo>-</mo><mi>B</mi><mo>|</mo><mo>=</mo><mn>${diffGray}</mn>`)} />
+                前景判定阈值 <InlineMath mathML={inlineMath(`<mi>D</mi><mo>·</mo><mi>σ</mi><mo>=</mo><mn>2.5</mn><mo>×</mo><mn>${deviationGray}</mn><mo>=</mo><mn>${gaussianLimit}</mn>`)} />，<InlineMath mathML={inlineMath(`<mo>|</mo><mi>I</mi><mo>-</mo><mi>μ</mi><mo>|</mo><mo>=</mo><mn>${diffGray}</mn>`)} />
               </p>
             </div>
           ) : null}
@@ -1194,7 +1207,7 @@ export default function BackgroundModelingSubtractionPage() {
         <div className="space-y-3">
           <SliderParam label="学习率 α" value={learningRate} onChange={setLearningRate} min={1} max={40} step={1} unit="%" />
           <div className="rounded-2xl border border-sky-200 bg-sky-50 px-3 py-3 text-xs leading-5 text-sky-800">
-            单高斯演示使用 μ 和 δ 判定，不使用前景阈值 T。α 控制 μ/δ 的逐帧更新速度，λ 固定为 2.5。
+            单高斯演示使用 μ 和 σ 判定，不使用前景阈值 T。α 控制 μ/σ 的逐帧更新速度，λ 固定为 2.5。
           </div>
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="rounded-lg border border-sky-100 bg-sky-50/70 px-3 py-2">
@@ -1202,7 +1215,7 @@ export default function BackgroundModelingSubtractionPage() {
               <div className="mt-1 font-mono text-base font-semibold text-slate-800">{backgroundGray}</div>
             </div>
             <div className="rounded-lg border border-sky-100 bg-sky-50/70 px-3 py-2">
-              <div className="text-slate-500">2.5·δ</div>
+              <div className="text-slate-500">2.5·σ</div>
               <div className="mt-1 font-mono text-base font-semibold text-slate-800">{gaussianLimit}</div>
             </div>
           </div>
@@ -1230,7 +1243,7 @@ export default function BackgroundModelingSubtractionPage() {
                   </span>
                 </div>
                 <div className="mt-1 font-mono text-[11px] text-slate-500">
-                  ω={component.weight.toFixed(2)} / μ={Math.round(component.mean * 255)} / δ={Math.round(component.sigma * 255)}
+                  ω={component.weight.toFixed(2)} / μ={Math.round(component.mean * 255)} / σ={Math.round(component.sigma * 255)}
                 </div>
               </div>
             ))}

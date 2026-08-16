@@ -140,7 +140,11 @@ function gAt(x: number, y: number): string {
 }
 
 function numberNode(value: number | string): string {
-  return `<mn>${value}</mn>`;
+  const text = String(value);
+  const negative = text.startsWith('-');
+  return negative
+    ? `<mo>&minus;</mo><mn>${text.slice(1)}</mn>`
+    : `<mn>${text}</mn>`;
 }
 
 function normalizedToByte(value: number): number {
@@ -583,7 +587,7 @@ export default function ImageSharpeningPage() {
           <FormulaCard
             label="一阶梯度（边缘强度）公式"
             mathML={gradientFormulaML}
-            note="该模式展示梯度幅值（边缘强度图），是对锐化思想的简化；完整梯度锐化需将梯度加回原图。在离散图像中，偏导数用一阶差分近似。"
+            note={`该模式展示梯度幅值（边缘强度图），是对锐化思想的简化；完整梯度锐化需将梯度加回原图。在离散图像中，偏导数用一阶差分近似。${gradientMode === 'sum' ? '在 sum（L1）模式下，|fₓ′|+|fᵧ′| 的幅值上限约为 2，显示前会被截断饱和到 1，强边缘可能出现饱和而丢失区分度。' : ''}`}
           />
 
           {/* 当前像素代入 */}

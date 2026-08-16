@@ -229,8 +229,8 @@ export default function CameraModelPage() {
       x: clamp(Math.round(projection.pixel.x), 0, IMAGE_WIDTH - 1),
       y: clamp(Math.round(projection.pixel.y), 0, IMAGE_HEIGHT - 1),
       kernelSize: 1,
-      regionX: selectedCorner.col * BOARD_CELL_PIXELS,
-      regionY: selectedCorner.row * BOARD_CELL_PIXELS,
+      regionX: (selectedCorner.col + 1) * BOARD_CELL_PIXELS,
+      regionY: (selectedCorner.row + 1) * BOARD_CELL_PIXELS,
       regionWidth: 1,
       regionHeight: 1,
     }),
@@ -245,8 +245,8 @@ export default function CameraModelPage() {
 
   const handleInputRegionSelect = useCallback(
     (x: number, y: number) => {
-      const col = clamp(Math.round(x / BOARD_CELL_PIXELS), 0, boardSpec.cols - 1);
-      const row = clamp(Math.round(y / BOARD_CELL_PIXELS), 0, boardSpec.rows - 1);
+      const col = clamp(Math.round(x / BOARD_CELL_PIXELS) - 1, 0, boardSpec.cols - 1);
+      const row = clamp(Math.round(y / BOARD_CELL_PIXELS) - 1, 0, boardSpec.rows - 1);
       setSelectedCornerIndex(row * boardSpec.cols + col);
     },
     [boardSpec.cols, boardSpec.rows]
@@ -348,6 +348,9 @@ export default function CameraModelPage() {
             <div className="mt-3 grid gap-2 text-xs">
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">
                 当前深度 Zc={formatMatrixValue(projection.depth, 2)}
+              </div>
+              <div className="rounded-lg border border-amber-100 bg-amber-50/70 px-3 py-2 font-mono text-slate-700">
+                近/远参照深度 Zc±2.5 为演示用任意深度差，仅用于直观展示“深度越小成像越大”的透视效果。
               </div>
               <div className="rounded-lg border border-amber-100 bg-amber-50/70 px-3 py-2 font-mono text-slate-700">
                 (x,y)=({formatMatrixValue(projection.normalized.x, 3)}, {formatMatrixValue(projection.normalized.y, 3)})
@@ -496,6 +499,12 @@ export default function CameraModelPage() {
           和检测到的
           <MathText className="mx-1" mathML={math('<mi>m</mi>')} />
           ，才能反求 K 和每张图的 [R,t]。
+        </p>
+        <p className="mt-1 text-xs leading-5 text-slate-500">
+          记号约定：正文用普通记号 X<sub>w</sub>、m（三维世界点 / 二维图像点）；投影公式里带顶标
+          ~ 的 <MathText className="mx-1" mathML={math('<mover><mi>X</mi><mo>~</mo></mover>')} />、
+          <MathText className="mx-1" mathML={math('<mover><mi>m</mi><mo>~</mo></mover>')} /> 表示对应的
+          齐次坐标（多追加一个分量为 1）。
         </p>
       </TeachingCard>
 

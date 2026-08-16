@@ -74,7 +74,7 @@ const CORE_CODE_TS = `function rgbToHsv(r, g, b) {
 function computeColorHistogram(rgbImage, mode, binCount) {
   // 真实实现会根据显示模式归一化到对应通道（rgb/mask 默认统计 H）
   const channel = (mode === 'rgb' || mode === 'mask') ? 'h' : mode;
-  const bins = new Array(binCount).fill(0);
+  const counts = new Array(binCount).fill(0); // 累加的是原始像素计数；页面展示/讲解时再归一化为概率
   for (const row of rgbImage) {
     for (const [r, g, b] of row) {
       const hsv = rgbToHsv(r, g, b);
@@ -84,10 +84,10 @@ function computeColorHistogram(rgbImage, mode, binCount) {
         channel === 'r' ? r :
         channel === 'g' ? g : b;
       const bin = Math.min(binCount - 1, Math.floor(Math.max(0, Math.min(1, value)) * binCount));
-      bins[bin] += 1;
+      counts[bin] += 1;
     }
   }
-  return bins;
+  return counts;
 }
 
 function createHueMask(rgbImage, targetHue, thresholdDegrees) {
@@ -168,19 +168,15 @@ function operationLabel(mode: ColorDisplayMode): string {
 function formatPercent(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
 }
-
 function buildRgbNormalizeFormula(step: ColorSpaceStep): string {
-  const [r, g, b] = step.rgb255;
-  const nr = (r / 255).toFixed(3);
-  const ng = (g / 255).toFixed(3);
-  const nb = (b / 255).toFixed(3);
+  const [r, g, b] = step.rgb.map(v => v.toFixed(3));
   return buildInlineMathML(`
     <mrow>
-      <msup><mi>R</mi><mo>&#8242;</mo></msup><mo>=</mo><mfrac><mn>${r}</mn><mn>255</mn></mfrac><mo>=</mo><mn>${nr}</mn>
+      <msup><mi>R</mi><mo>&#8242;</mo></msup><mo>=</mo><mn>${r}</mn>
       <mo>,</mo>
-      <msup><mi>G</mi><mo>&#8242;</mo></msup><mo>=</mo><mfrac><mn>${g}</mn><mn>255</mn></mfrac><mo>=</mo><mn>${ng}</mn>
+      <msup><mi>G</mi><mo>&#8242;</mo></msup><mo>=</mo><mn>${g}</mn>
       <mo>,</mo>
-      <msup><mi>B</mi><mo>&#8242;</mo></msup><mo>=</mo><mfrac><mn>${b}</mn><mn>255</mn></mfrac><mo>=</mo><mn>${nb}</mn>
+      <msup><mi>B</mi><mo>&#8242;</mo></msup><mo>=</mo><mn>${b}</mn>
     </mrow>
   `);
 }
@@ -599,8 +595,8 @@ function HsvConeDiagram({ step }: { step: ColorSpaceStep }) {
       <div className="mt-4 grid gap-2 text-xs">
         {[
           { label: 'H', value: step.hsv.h / 360, text: `${step.hsv.h.toFixed(1)}°`, color: 'bg-amber-500', border: 'border-amber-200', tone: 'text-amber-800' },
-          { label: 'S', value: step.hsv.s, text: formatPercent(step.hsv.s), color: 'bg-sky-500', border: 'border-sky-200', tone: 'text-sky-800' },
-          { label: 'V', value: step.hsv.v, text: formatPercent(step.hsv.v), color: 'bg-emerald-500', border: 'border-emerald-200', tone: 'text-emerald-800' },
+          { label: 'S', value: step.hsv.s, text: step.hsv.s.toFixed(3), color: 'bg-sky-500', border: 'border-sky-200', tone: 'text-sky-800' },
+          { label: 'V', value: step.hsv.v, text: step.hsv.v.toFixed(3), color: 'bg-emerald-500', border: 'border-emerald-200', tone: 'text-emerald-800' },
         ].map(item => (
           <div key={item.label} className={`rounded-xl border ${item.border} bg-white px-3 py-2`}>
             <div className="mb-1 flex items-center justify-between">
@@ -778,8 +774,8 @@ export default function ColorSpaceHistogramPage() {
                 </div>
                 <div className="rounded-xl border border-amber-200 bg-white px-3 py-2 font-mono">
                   H = {currentStep.hsv.h.toFixed(1)}°<br />
-                  S = {formatPercent(currentStep.hsv.s)}<br />
-                  V = {formatPercent(currentStep.hsv.v)}
+                  S = {currentStep.hsv.s.toFixed(3)}<br />
+                  V = {currentStep.hsv.v.toFixed(3)}
                 </div>
               </div>
             </FlowNode>
@@ -790,6 +786,11 @@ export default function ColorSpaceHistogramPage() {
                 <span className="font-mono text-[11px] text-sky-700">bin {currentStep.histogramBin}</span>
               </div>
               <HistogramBars histogram={histogram} highlightedBin={currentStep.histogramBin} />
+              {displayMode === 'rgb' && (
+                <div className="mt-2 text-[11px] leading-4 text-amber-700">
+                  提示：RGB 彩图模式下直方图统计的是 H（色调）通道，而非 R/G/B 三通道分布。
+                </div>
+              )}
               <div className="mt-2 text-xs leading-5 text-slate-600">
                 当前 bin 有 {currentCount} 个像素，比例为 {formatPercent(currentProbability)}。
               </div>
@@ -842,7 +843,11 @@ export default function ColorSpaceHistogramPage() {
           <div className="mt-4 space-y-3">
             <FormulaCard label="归一化" mathML={buildRgbNormalizeFormula(currentStep)} />
             <FormulaCard label="极值与差值" mathML={buildHsvExtremaFormula(currentStep)} />
-            <FormulaCard label="HSV 结果" mathML={buildHsvResultFormula(currentStep)} />
+            <FormulaCard
+              label="HSV 结果"
+              mathML={buildHsvResultFormula(currentStep)}
+              note="HSV(x,y) 表示该像素坐标 (x,y) 处的 HSV 值（HSV 是像素颜色的函数，括号仅为标明作用对象）。"
+            />
           </div>
         </TeachingCard>
 
@@ -911,6 +916,7 @@ export default function ColorSpaceHistogramPage() {
         <div className="text-xs font-semibold text-emerald-800">阈值含义</div>
         <p className="mt-2 text-xs leading-5 text-emerald-800">
           在 HSV 色调环上，以目标像素 H0 为中心，按 0°/360° 相邻的循环最短距离选择不超过 {threshold}° 的像素作为目标颜色。
+          本演示仅按 H 阈值判定；实际工程中常需联合 S/V 下限约束，以排除低饱和灰度区域的误判。
         </p>
       </div>
 
@@ -932,7 +938,7 @@ export default function ColorSpaceHistogramPage() {
             <div className="space-y-1 font-mono text-[11px] text-amber-800">
               <div>坐标 ({currentStep.x}, {currentStep.y})</div>
               <div>RGB ({currentStep.rgb255.join(', ')})</div>
-              <div>HSV ({currentStep.hsv.h.toFixed(1)}°, {formatPercent(currentStep.hsv.s)}, {formatPercent(currentStep.hsv.v)})</div>
+              <div>HSV ({currentStep.hsv.h.toFixed(1)}°, {currentStep.hsv.s.toFixed(3)}, {currentStep.hsv.v.toFixed(3)})</div>
             </div>
           </div>
         </div>
