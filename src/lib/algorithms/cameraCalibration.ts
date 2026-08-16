@@ -621,8 +621,8 @@ export function estimateHomographyDLT(
  * 每张 H 提供 v12^T b = 0 和 (v11 - v22)^T b = 0 两条约束。
  */
 export function estimateIntrinsicsFromHomographies(homographies: number[][][]): CalibrationIntrinsics {
-  if (homographies.length < 2) {
-    throw new Error('estimateIntrinsicsFromHomographies: need at least 2 homographies');
+  if (homographies.length < 3) {
+    throw new Error('estimateIntrinsicsFromHomographies: need at least 3 homographies');
   }
 
   const V: number[][] = [];
@@ -653,7 +653,7 @@ export function estimateIntrinsicsFromHomographies(homographies: number[][][]): 
   const alpha = Math.sqrt(lambda / B11);
   const beta = Math.sqrt((lambda * B11) / (B11 * B22 - B12 * B12));
   const gamma = -(B12 * alpha * alpha * beta) / lambda;
-  const u0 = (gamma * v0) / alpha - (B13 * alpha * alpha) / lambda;
+  const u0 = (gamma * v0) / beta - (B13 * alpha * alpha) / lambda;
 
   return {
     alpha,

@@ -75,7 +75,7 @@ export interface TransformPointMapping {
 export const DEFAULT_GEOMETRIC_TRANSFORM_PARAMS: TransformParameters = {
   translateX: 0,
   translateY: 0,
-  rotationDeg: 18,
+  rotationDeg: 20,
   scaleX: 1,
   scaleY: 1,
   shearX: 0.2,

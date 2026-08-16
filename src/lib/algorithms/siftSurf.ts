@@ -42,13 +42,13 @@ export interface NeighborComparison {
 
 /** 26 邻域跨尺度比较明细 */
 export interface NeighborComparisonsData {
-  prevDogPatch: number[][];       // 上层 DoG 3×3 patch
+  prevDogPatch: number[][];       // 下层 DoG 3×3 patch（σ 更小，更清晰）
   currentDogPatch: number[][];    // 当前层 DoG 3×3 patch
-  nextDogPatch: number[][];       // 下层 DoG 3×3 patch
+  nextDogPatch: number[][];       // 上层 DoG 3×3 patch（σ 更大，更模糊）
   currentValue: number;
-  prevComparisons: NeighborComparison[];   // 上层 9 个邻居
+  prevComparisons: NeighborComparison[];   // 下层 9 个邻居
   sameComparisons: NeighborComparison[];   // 同层 8 个邻居
-  nextComparisons: NeighborComparison[];   // 下层 9 个邻居
+  nextComparisons: NeighborComparison[];   // 上层 9 个邻居
   isExtremum: boolean;
   extremumType: 'max' | 'min' | 'none';
 }
@@ -197,7 +197,7 @@ function detectExtremaCrossScale(
       // 同层已无法判定极值 → 跳过
       if (!allGreater && !allLess) continue;
 
-      // ---- 上层 9 邻域比较 ----
+      // ---- 下层 9 邻域比较（prevDog：σ 更小） ----
       for (let dy = -1; dy <= 1; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
           const nv = prevDog[y + dy][x + dx];
@@ -213,7 +213,7 @@ function detectExtremaCrossScale(
 
       if (!allGreater && !allLess) continue;
 
-      // ---- 下层 9 邻域比较 ----
+      // ---- 上层 9 邻域比较（nextDog：σ 更大） ----
       for (let dy = -1; dy <= 1; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
           const nv = nextDog[y + dy][x + dx];
@@ -354,6 +354,7 @@ function computeSiftDescriptor(
     }
   }
   // 最终 L2 归一化：标准 SIFT 对 128 维向量整体归一化
+  // （教学简化：标准 SIFT 还会「截断至 0.2 后再归一化」一次，此处省略以保持流程简洁）
   const norm = Math.sqrt(descriptor.reduce((s, v) => s + v * v, 0));
   if (norm > 0) {
     for (let i = 0; i < descriptor.length; i++) descriptor[i] /= norm;

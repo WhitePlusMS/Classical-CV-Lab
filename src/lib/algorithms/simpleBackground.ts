@@ -588,6 +588,7 @@ export function absoluteDifference(a: GrayscaleImage, b: GrayscaleImage): Graysc
 }
 
 function binarize(image: GrayscaleImage, threshold: number): GrayscaleImage {
+  // 约定：采用严格大于（pixel > T），差分等于阈值时判为背景
   return image.map(row => row.map(pixel => (pixel > threshold ? 1 : 0)));
 }
 
@@ -600,6 +601,8 @@ function intersectBinaryMasks(a: GrayscaleImage, b: GrayscaleImage): GrayscaleIm
 }
 
 function morphologicalClose(mask: GrayscaleImage): GrayscaleImage {
+  // 教学简化：闭运算 = 先膨胀后腐蚀；边界越界按背景 0 处理（?? 0），
+  // 未做标准形态学的边界填充/对称镜像
   return erode(dilate(mask));
 }
 

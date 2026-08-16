@@ -544,6 +544,7 @@ export function distortImage(source: RgbImage, coefficients: DistortionCoefficie
   const width = source[0]?.length ?? 0;
 
   return applyWarpFromInverseMap(source, width, height, (x, y) => {
+    // 逆映射写法：对目标(畸变)像素做畸变的逆变换得到源(理想)坐标，等价于正向推 p_ideal←p_distorted
     const distorted = normalizePoint({ x, y }, width, height);
     const undistorted = undistortNormalizedPoint(distorted, coefficients);
     return denormalizePoint(undistorted, width, height);

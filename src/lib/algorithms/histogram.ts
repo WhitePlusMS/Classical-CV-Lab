@@ -22,7 +22,11 @@ export function computeHistogram(image: GrayscaleImage): Histogram {
   return { bins, totalPixels };
 }
 
-/** 基于位置的确定性伪随机值 [0, 1) */
+/**
+ * 基于位置的确定性伪随机值 [0, 1)。
+ * 位置种子的 Park–Miller（Lehmer）线性同余伪随机，确定性、不依赖全局状态，
+ * 避免 SSR hydration 不一致。
+ */
 function posNoise(x: number, y: number): number {
   let h = (x * 17 + y * 53 + 7) % 2147483647;
   h = (h * 16807) % 2147483647;
@@ -69,38 +73,4 @@ export function generateExampleImage(type: 'dark' | 'bright' | 'lowContrast' | '
   }
 
   return image;
-}
-
-/**
- * 生成直方图计算的教学步骤
- * 遍历所有像素，累计直方图
- */
-export function* histogramSteps(image: GrayscaleImage): Generator<HistogramStep> {
-  if (!image || image.length === 0 || !image[0]) return;
-  const height = image.length;
-  const width = image[0].length;
-  const bins = new Array(256).fill(0);
-
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const gray = Math.round(clamp(image[y][x], 0, 1) * 255);
-      bins[gray]++;
-
-      yield {
-        x,
-        y,
-        currentGray: gray,
-        bins: [...bins],
-        totalPixels: height * width,
-      } as HistogramStep;
-    }
-  }
-}
-
-export interface HistogramStep {
-  x: number;
-  y: number;
-  currentGray: number;
-  bins: number[];
-  totalPixels: number;
 }

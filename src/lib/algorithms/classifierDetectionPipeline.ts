@@ -381,7 +381,7 @@ export function getDetectionWindowStep(
     featureVectorLength: config.mode === 'lbp-svm'
       ? lbpStep?.vectorLength ?? 0
       : config.mode === 'hog-svm'
-        ? 4 * 9
+        ? 4 * 9 // 教学简化的 HOG 维度：2×2 块 × 9 方向 bin；真实 HOG（如 Dalal-Triggs 64×128）维度远高于此
         : cascadeStages.length,
     haarStep,
     lbpStep,

@@ -417,6 +417,7 @@ function nonMaximumSuppression(
       const mag = magnitude[y][x];
 
       // Quantize angle to 4 directions: 0, 45, 90, 135
+      // 教学简化：梯度角最近量化至 0/45/90/135，未做梯度方向的插值细化
       let qAngle = Math.round(angle / 45) * 45;
       if (qAngle < 0) qAngle += 180;
       if (qAngle >= 180) qAngle -= 180;

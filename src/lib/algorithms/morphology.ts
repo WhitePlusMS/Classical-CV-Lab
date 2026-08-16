@@ -27,6 +27,7 @@ export function createStructElement(
           break;
         case 'ellipse':
           // 椭圆结构元素：用中心半径近似 OpenCV 的 MORPH_ELLIPSE 形状
+          // （各向同性圆近似，方形核下等价于 MORPH_ELLIPSE）
           se[y][x] = (dx * dx) / (center * center)
                    + (dy * dy) / (center * center) <= 1;
           break;

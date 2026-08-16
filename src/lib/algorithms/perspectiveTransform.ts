@@ -249,6 +249,12 @@ function solveLinearSystem(coefficients: number[][], constants: number[]): numbe
   return augmented.map(row => row[size]);
 }
 
+/**
+ * 用四对点求解 3×3 单应（透视）矩阵（直接法 DLT）。
+ * 教学简化：这里固定 h33=1，通过 Gauss-Jordan（含部分主元）解 8×8 线性方程组。
+ * 通用/稳健的实现通常采用"归一化 DLT + SVD"，且不把 h33 作为硬约束固定；
+ * 对本节"纸面/车道弱透视"数据，h33=1 假设恒成立，故结果不受影响。
+ */
 export function solvePerspectiveTransform(sourcePoints: PerspectivePoint[], destinationPoints: PerspectivePoint[]): number[][] {
   if (sourcePoints.length !== 4 || destinationPoints.length !== 4) {
     throw new Error('透视变换必须使用四对点。');
