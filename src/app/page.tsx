@@ -641,6 +641,7 @@ const learningChapters: LearningChapter[] = [
         source: '',
         concepts: [
           implementedCards.thresholdAutoThreshold,
+          implementedCards.otsu,
           implementedCards.frameDifferenceMotion,
           implementedCards.backgroundModelingSubtraction,
         ],

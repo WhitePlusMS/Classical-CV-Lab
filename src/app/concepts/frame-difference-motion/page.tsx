@@ -646,7 +646,7 @@ export default function FrameDifferenceMotionPage() {
       parameters={parameters}
       analysisPreview={analysisPreview}
       stepDetails={stepDetails}
-      codeTab={<CodeViewer languages={[{ name: 'Pseudo Code', code: FRAME_CODE_TS }]} />}
+      codeTab={<CodeViewer languages={[{ name: 'TypeScript', code: FRAME_CODE_TS }]} />}
       mainVisual={mainVisual}
       currentStep={{ x: currentPosition.x, y: currentPosition.y, kernelSize: 1 }}
       stepInfo={{ current: currentStepIndex, total: totalPixels }}

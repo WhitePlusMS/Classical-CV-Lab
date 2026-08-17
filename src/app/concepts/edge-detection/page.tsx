@@ -1317,14 +1317,14 @@ export default function EdgeDetectionPage() {
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
                 <div className="text-xs font-semibold text-emerald-600">强边缘</div>
                 <div className="mt-1 font-mono text-sm text-emerald-800">
-                  {'>'} {highThreshold}/255
+                  &gt;= {highThreshold}/255
                 </div>
                 <div className="mt-1 text-[10px] text-emerald-600">直接保留</div>
               </div>
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
                 <div className="text-xs font-semibold text-amber-600">弱边缘</div>
                 <div className="mt-1 font-mono text-sm text-amber-800">
-                  {lowThreshold}/255 ~ {highThreshold}/255
+                  {lowThreshold}/255 &lt;= x &lt; {highThreshold}/255
                 </div>
                 <div className="mt-1 text-[10px] text-amber-600">进入下一步判断</div>
               </div>
@@ -2022,6 +2022,7 @@ export default function EdgeDetectionPage() {
           <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-5 text-slate-600">
             <p>高阈值确定强边缘（直接保留）；低阈值用于弱边缘筛选。</p>
             <p className="mt-1">梯度幅值 &ge; 高阈值 = 强边缘；介于两者之间 = 弱边缘（需连通强边缘才保留）；非 &ge; 低阈值 = 丢弃。</p>
+            <p className="mt-1 text-amber-700">两个阈值已互锁：拖动其中一个触碰到另一个时，会自动调整另一个以保持 高阈值 ≥ 低阈值 + 5。</p>
           </div>
         </>
       )}
@@ -2051,8 +2052,8 @@ export default function EdgeDetectionPage() {
       originalRegionMarker={imageType === 'lena' ? 'dot' : 'frame'}
       imageHints={{
         input: imageType === 'lena'
-          ? `红点定位当前中心像素；下方展开实际参与计算的 ${currentStep?.kernelSize ?? 3}×${currentStep?.kernelSize ?? 3} 邻域。`
-          : `红框定位当前参与计算的 ${currentStep?.kernelSize ?? 3}×${currentStep?.kernelSize ?? 3} 输入窗口，可点击原图调整位置`,
+          ? `红点定位当前中心像素；下方展开实际参与计算的 ${currentStep && currentStep.kernelSize >= 1 ? `${currentStep.kernelSize}×${currentStep.kernelSize}` : '1×1（单像素）'} 邻域。`
+          : `红框定位当前参与计算的 ${currentStep && currentStep.kernelSize >= 1 ? `${currentStep.kernelSize}×${currentStep.kernelSize}` : '1×1（单像素）'} 输入窗口，可点击原图调整位置`,
         output: '绿框对应结果图中的当前像素，可点击结果图直接定位',
       }}
       navigationHintText="方向键移动 / 点击原图或结果图跳转"

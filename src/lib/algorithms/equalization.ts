@@ -1,5 +1,5 @@
 import { GrayscaleImage } from './types';
-import { computeHistogram } from './threshold';
+import { computeHistogram } from './histogram';
 import { clamp } from '../utils/imageProcessing';
 
 /** 直方图均衡化教学步骤 —— 按灰度级遍历 CDF 计算过程 */

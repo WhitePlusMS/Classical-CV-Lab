@@ -174,7 +174,8 @@ export function createColorCheckerboard(): ColorImage {
       const isWhite = (patternX + patternY) % 2 === 0;
 
       if (isWhite) {
-        row.push({ r: 1.0, g: 0.2, b: 0.2, gray: 0.53 });
+        // gray 按页面所教加权公式派生：0.299×1.0 + 0.587×0.2 + 0.114×0.2 = 0.4392
+        row.push({ r: 1.0, g: 0.2, b: 0.2, gray: 0.4392 });
       } else {
         row.push({ r: 0.1, g: 0.1, b: 0.1, gray: 0.1 });
       }

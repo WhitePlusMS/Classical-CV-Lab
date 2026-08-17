@@ -512,6 +512,9 @@ export default function CameraModelPage() {
         <div className="text-sm font-semibold text-slate-800">典型标定结果数值示例</div>
         <p className="mt-1 text-xs leading-5 text-slate-500">
           以下为一组常见量级的内参与某张标定图的外参，仅用于建立数值直觉。
+          注意：这里以真实相机像素为单位（如 α≈860），而上方面板中的交互滑块是
+          {IMAGE_WIDTH}×{IMAGE_HEIGHT} 演示画布下的示意坐标（α/β≈28–82、u0≈18–78、v0≈12–60），
+          两套数值属于不同分辨率/示意尺度，不代表控件断链或公式错误。
         </p>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <FormulaCard

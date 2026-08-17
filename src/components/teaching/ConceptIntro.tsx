@@ -152,7 +152,7 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
     ),
     observe: (
       <>
-        切换不同示例图，比较原图、原直方图、CDF 映射曲线和均衡化后的结果；拖动阈值观察灰度分布被拉开的过程，注意当原图灰度集中在一侧时，均衡化效果最明显，但噪声也可能被一起放大。
+        切换不同示例图，比较原图、原直方图、CDF 映射曲线和均衡化后的结果；对比原图与均衡化的灰度分布，观察集中在一侧的灰度如何被重新拉开（本页通过悬停/点击直方图追踪单个灰度的映射，无独立阈值控件），注意当原图灰度集中在一侧时，均衡化效果最明显，但噪声也可能被一起放大。
       </>
     ),
     image: {
@@ -306,6 +306,19 @@ export const CONCEPT_INTRO_CONTENT: Record<string, ConceptIntroProps> = {
       src: '/assets/concept-intro/threshold-auto-threshold-scikit.png',
       alt: '自动阈值分割示例',
       caption: '自动阈值方法根据灰度分布选择分割边界。',
+      sourceLabel: 'scikit-image thresholding 示例',
+      sourceHref: 'https://scikit-image.org/docs/stable/auto_examples/applications/plot_thresholding.html',
+    },
+  },
+  '/concepts/otsu': {
+    title: 'Otsu 自动阈值怎么选 T',
+    problem: '当光照或场景变化让固定阈值失效时，只能靠人反复调整。Otsu 想根据图像本身的灰度分布，自动挑出最能区分目标与背景的那个阈值 T。',
+    idea: 'Otsu 的做法是逐一遍历候选阈值 T：按 T 把像素分成背景（≤T）与前景（＞T）两类，计算两类的类间方差 σB²；类间方差越大，说明两类被拉得越开，取让它最大的 T 作为最佳阈值。',
+    observe: '拖动候选 T 观察两类统计量（ω0/μ0/ω1/μ1）与类间方差怎么随 T 变化；再切到“直接查看最佳 T”，对照 Otsu 最终选出的阈值和它的统计证据。',
+    image: {
+      src: '/assets/concept-intro/threshold-auto-threshold-scikit.png',
+      alt: 'Otsu 自动阈值分割示例',
+      caption: 'Otsu 通过最大化类间方差自动确定二值化阈值。',
       sourceLabel: 'scikit-image thresholding 示例',
       sourceHref: 'https://scikit-image.org/docs/stable/auto_examples/applications/plot_thresholding.html',
     },

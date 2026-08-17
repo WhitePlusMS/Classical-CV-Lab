@@ -128,7 +128,7 @@ function buildCascadeFormula(step: DetectionScanStep | null): string {
     <mrow>
       <msub><mi>S</mi><mn>${finalStage.stage}</mn></msub>
       <mo>:</mo>
-      <mo>|</mo><mi>V</mi><mo>|</mo><mo>&#x2265;</mo><msub><mi>T</mi><mn>${finalStage.stage}</mn></msub>
+      <mtext>归一化 </mtext><mo>|</mo><mi>V</mi><mo>|</mo><mo>&#x2265;</mo><msub><mi>T</mi><mn>${finalStage.stage}</mn></msub>
       <mo>=</mo><mn>${formatFeatureValue(finalStage.inputValue, 3)}</mn>
       <mo>&#x2265;</mo><mn>${formatFeatureValue(finalStage.threshold, 3)}</mn>
       <mo>&#x21D2;</mo><mtext>${finalStage.passed ? '通过' : '拒绝'}</mtext>
@@ -695,7 +695,7 @@ export default function ClassifierDetectionPipelinePage() {
           <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-600">任务目标</div>
           <h2 className="mt-2 text-xl font-semibold text-slate-900">在图像中找出一个目标区域</h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            训练样本让分类器学会区分目标和背景；检测时，滑动窗口逐个检查图像位置，
+            训练样本让分类器学会区分目标和背景（本页用固定示意阈值演示该流程、不进行真实训练）；检测时，滑动窗口逐个检查图像位置，
             每个窗口先提取 Haar 特征，再经过级联分类器过滤，最终保留候选检测框。
           </p>
         </div>
@@ -756,7 +756,7 @@ export default function ClassifierDetectionPipelinePage() {
               <p className="mt-3 text-xs leading-5">
                 标签 +1，用来告诉分类器这类外观应保留。
                 <span className="block mt-1 text-[10px] text-emerald-700/80">
-                  提示：当前页面级联阈值是教学示意值，并非从这两个样本训练得到，因此该窗口不一定被当前分类器判为目标。
+                  说明：本页级联阈值为固定示意值、不经过真实训练，仅演示训练流程；该窗口是否被判为目标由固定阈值决定。
                 </span>
               </p>
             </div>
@@ -892,7 +892,7 @@ export default function ClassifierDetectionPipelinePage() {
                       <p className="mt-2 leading-5">
                         包含目标的窗口，用来告诉分类器“这类外观应保留”。
                         <span className="block mt-1 text-[10px] text-emerald-700/80">
-                          提示：当前级联阈值是教学示意值，未从这两个样本训练得到。
+                          说明：本页级联阈值为固定示意值、仅演示训练流程。
                         </span>
                       </p>
                     </div>
@@ -929,7 +929,7 @@ export default function ClassifierDetectionPipelinePage() {
                   <div className="grid grid-cols-2 gap-2">
                     <MetricCard label="黑区和" value={String(currentWindowStep.haarStep?.blackSum ?? 0)} />
                     <MetricCard label="白区和" value={String(currentWindowStep.haarStep?.whiteSum ?? 0)} />
-                    <MetricCard label="特征值 V" value={String(currentWindowStep.featureSummary.haarFeatureValue)} tone="amber" />
+                    <MetricCard label="原始特征值 V（Σ黑−Σ白）" value={String(currentWindowStep.featureSummary.haarFeatureValue)} tone="amber" />
                     <MetricCard label="归一化 |V|" value={formatFeatureValue(currentWindowStep.featureSummary.haarAbsoluteValue, 3)} />
                   </div>
                 ) : (
@@ -1011,20 +1011,24 @@ export default function ClassifierDetectionPipelinePage() {
         <TeachingCard>
           <h2 className="mb-3 text-sm font-semibold text-slate-800">分类器从样本中来</h2>
           <p className="text-xs leading-6 text-slate-600">
-            训练阶段先准备正样本和负样本。每个样本窗口都要转换成同一种特征表达，
-            然后用标签训练分类器。检测阶段不再重新学习，只把新窗口送入已经训练好的分类器。
+            真实流程里，训练阶段先准备正样本和负样本，把每个样本窗口转成同一种特征表达后，
+            用标签训练分类器，训练产物就是分类器参数。
+            <span className="mt-1 block">
+              本页为教学演示：级联各阶段阈值是<strong>固定示意值</strong>，不经过真实样本训练，
+              仅用来展示“正样本 → 特征 → 级联阈值分组过滤”这条训练流程的含义。
+            </span>
           </p>
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             <MetricCard label="正样本标签" value="+1 目标" tone="emerald" />
             <MetricCard label="负样本标签" value="-1 背景" />
-            <MetricCard label="训练产物" value="分类器参数" tone="amber" />
+            <MetricCard label="本页级联阈值" value="固定示意值" tone="amber" />
           </div>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4">
               <div className="mb-2 text-xs font-semibold text-emerald-700">正样本窗口</div>
               <ImageCanvas image={positiveTrainingSample} maxDisplaySize={130} showGrid />
               <p className="mt-2 text-xs leading-5 text-slate-600">
-                该窗口覆盖目标中心区域，标签为 +1。当前级联阈值是教学示意值，并非从这两个样本训练得到，因此分类器行为可能与样本标签不完全一致。
+                该窗口覆盖目标中心区域，标签为 +1，示意“目标外观”；本页用它演示训练流程，级联阈值为固定示意值，不参与真实参数训练。
               </p>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
@@ -1061,7 +1065,7 @@ export default function ClassifierDetectionPipelinePage() {
           <FormulaCard
             label="当前 Cascade 阶段判定"
             mathML={buildCascadeFormula(currentScanStep)}
-            note="任一级拒绝后，后续级不再计算；只有全部通过的窗口才进入候选集合。单一 |V| 阈值法仅为便于课堂教学的近似，真实 Cascade 是对弱分类器输出和做阈值比较；当前级联阈值是教学示意值，未从上述训练样本学习得到。"
+            note="任一级拒绝后，后续级不再计算；只有全部通过的窗口才进入候选集合。单一 |V| 阈值法仅为便于课堂教学的近似，真实 Cascade 是对弱分类器输出和做阈值比较；本页级联阈值为固定示意值、仅演示训练流程。"
             tone="embedded"
           />
           </TeachingCard>

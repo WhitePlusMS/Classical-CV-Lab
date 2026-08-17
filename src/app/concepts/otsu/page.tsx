@@ -14,7 +14,8 @@ import {
   SliderParam,
   TeachingCard,
 } from '@/components';
-import { computeHistogram, fixedThreshold, otsuSteps, otsuThreshold } from '@/lib/algorithms/threshold';
+import { computeHistogram } from '@/lib/algorithms/histogram';
+import { fixedThreshold, otsuSteps, otsuThreshold } from '@/lib/algorithms/threshold';
 import { sampleImages, type SampleImageType } from '@/lib/utils/sampleImages';
 import { useLenaGrayscaleImage } from '@/hooks/useLenaGrayscaleImage';
 
@@ -67,9 +68,11 @@ export default function OtsuPage() {
   const bestThreshold = useMemo(() => Math.round(otsuResult.threshold * 255), [otsuResult.threshold]);
   const steps = useMemo(() => Array.from(otsuSteps(originalImage)), [originalImage]);
   const safeThreshold = clamp(candidateThreshold, 0, 255);
-  const currentStep = steps.find(step => step.currentThreshold === safeThreshold) ?? steps[steps.length - 1] ?? null;
-
   const activeThreshold = mode === 'best' ? bestThreshold : safeThreshold;
+  // currentStep 必须与页面正在展示的阈值 activeThreshold 一致：
+  // 在 best 模式下 activeThreshold=bestThreshold，统计量与“正在测试 T”都落到最佳阈值上，
+  // 避免此前“顶部 T 显示最佳值、统计量却来自候选滑块”的脱节。
+  const currentStep = steps.find(step => step.currentThreshold === activeThreshold) ?? steps[steps.length - 1] ?? null;
   const resultImage = useMemo(() => fixedThreshold(originalImage, activeThreshold / 255).image, [activeThreshold, originalImage]);
 
   const bestVariance = useMemo(
@@ -94,7 +97,7 @@ export default function OtsuPage() {
   // 当候选 T 超过最后一个 step 的阈值时，说明没有灰度高于 T（ω0=1、ω1=0、σB²=0），
   // currentStep 只能回退到最后一步，需单独提示并对齐显示。
   const lastStepForStats = steps[steps.length - 1] ?? null;
-  const isAboveGrayRange = lastStepForStats !== null && safeThreshold > lastStepForStats.currentThreshold;
+  const isAboveGrayRange = lastStepForStats !== null && activeThreshold > lastStepForStats.currentThreshold;
   const previousBestStep = useMemo(() => {
     let best = steps[0] ?? null;
     for (const step of steps) {
@@ -303,16 +306,20 @@ export default function OtsuPage() {
         onChange={value => setMode(value as OtsuMode)}
         options={MODE_OPTIONS.map(option => ({ value: option.value, label: option.label }))}
       />
-      <SliderParam
-        label="候选阈值 T"
-        value={candidateThreshold}
-        onChange={setCandidateThreshold}
-        min={0}
-        max={255}
-        step={1}
-      />
+      {mode === 'scan' && (
+        <SliderParam
+          label="候选阈值 T"
+          value={candidateThreshold}
+          onChange={setCandidateThreshold}
+          min={0}
+          max={255}
+          step={1}
+        />
+      )}
       <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs leading-5 text-slate-600">
-        当前候选 T={activeThreshold}，历史最佳 T={previousBestStep?.currentThreshold ?? bestThreshold}，最终 Otsu 最佳 T={bestThreshold}。
+        {mode === 'best'
+          ? `正在查看 Otsu 最佳结果：T=${activeThreshold}，类间方差 σ²=${currentVariance.toFixed(2)}；切回“候选 T 扫描”可拖动阈值观察统计量变化。`
+          : `当前候选 T=${activeThreshold}，历史最佳 T=${previousBestStep?.currentThreshold ?? bestThreshold}，最终 Otsu 最佳 T=${bestThreshold}。`}
       </div>
     </div>
   );
@@ -330,7 +337,7 @@ export default function OtsuPage() {
       analysisPreview={analysisPreview}
       stepDetails={stepDetails}
       mainVisual={histogramPreview}
-      codeTab={<CodeViewer languages={[{ name: 'TypeScript', code: OTSU_CODE_TS }]} />}
+      codeTab={<CodeViewer languages={[{ name: 'TypeScript', code: OTSU_CODE_TS }]} currentLine={7} />}
       imageLabels={{ input: '原始灰度图', output: '当前候选 T 的二值结果' }}
       imageHints={{
         input: '切换图像时重新观察直方图双峰是否明显',

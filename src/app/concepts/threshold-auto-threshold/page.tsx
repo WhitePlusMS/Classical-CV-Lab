@@ -13,7 +13,8 @@ import {
   TeachingCard,
   buildInlineMathML,
 } from '@/components';
-import { computeHistogram, otsuThreshold } from '@/lib/algorithms/threshold';
+import { computeHistogram } from '@/lib/algorithms/histogram';
+import { otsuThreshold } from '@/lib/algorithms/threshold';
 import {
   ThresholdOutputMode,
   ThresholdSceneType,

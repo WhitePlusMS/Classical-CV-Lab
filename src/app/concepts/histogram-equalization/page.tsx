@@ -11,7 +11,7 @@ import {
   ProcessRail,
   buildInlineMathML,
 } from '@/components';
-import { computeHistogram } from '@/lib/algorithms/threshold';
+import { computeHistogram } from '@/lib/algorithms/histogram';
 import { generateExampleImage } from '@/lib/algorithms/histogram';
 import {
   equalizeHistogram,
@@ -478,6 +478,34 @@ export default function HistogramEqualizationPage() {
             <div className="text-sm font-semibold text-amber-700 mb-3">
               课程示例 3×3 图像均衡化映射表
             </div>
+            <div className="mb-4">
+              <div className="mb-2 text-[11px] font-medium text-amber-700">3×3 像素格（点击格子可选中该灰度，联动下方映射行与公式）</div>
+              <div className="grid w-fit grid-cols-3 gap-1.5">
+                {originalImage.map((row, ry) =>
+                  row.map((val, rx) => {
+                    const g = Math.round(val * 255);
+                    const mapped = mapping[g];
+                    const isActive = activeGray === g;
+                    return (
+                      <button
+                        key={`eq-cell-${ry}-${rx}`}
+                        type="button"
+                        onClick={() => setPinnedGray(g)}
+                        className={`flex h-12 w-12 flex-col items-center justify-center rounded-lg border font-mono text-xs transition-colors ${
+                          isActive
+                            ? 'border-amber-400 bg-amber-100 text-amber-900'
+                            : 'border-slate-200 bg-white text-slate-700 hover:border-amber-300 hover:bg-amber-50'
+                        }`}
+                        style={isActive ? { boxShadow: '0 0 0 2px rgba(245,158,11,0.35)' } : undefined}
+                      >
+                        <span className="font-semibold">{g}</span>
+                        <span className="text-[9px] text-emerald-600">→ {mapped ?? g}</span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs border-collapse">
                 <thead>
@@ -550,7 +578,7 @@ export default function HistogramEqualizationPage() {
         </TeachingCard>
       </div>
     );
-  }, [exampleType, activeGray, currentFormulaML, originalBins, cdf, mapping, totalPixels]);
+  }, [exampleType, activeGray, currentFormulaML, originalBins, cdf, mapping, totalPixels, originalImage, setPinnedGray]);
 
   // —— 图像提示 ——
 

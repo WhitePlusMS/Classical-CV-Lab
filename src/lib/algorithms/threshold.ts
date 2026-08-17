@@ -1,9 +1,8 @@
 import { GrayscaleImage, ThresholdResult } from './types';
 import { clamp, create2DArray } from '../utils/imageProcessing';
 
-// computeHistogram 已迁移至 ./histogram，此处为内部使用 + 向后兼容导出
+// computeHistogram 定义于 ./histogram，此处仅内部使用
 import { computeHistogram } from './histogram';
-export { computeHistogram };
 
 export function fixedThreshold(image: GrayscaleImage, threshold: number): ThresholdResult {
   const height = image.length;

@@ -92,9 +92,10 @@ export default function DistortionCorrectionPage() {
   );
 
   const coefficients = useMemo<DistortionCoefficients>(() => {
-    // OpenCV 标准：k1>0 产生桶形畸变，k1<0 产生枕形畸变
+    // OpenCV 标准：k1<0 产生桶形畸变（直线向外鼓出），k1>0 产生枕形畸变（直线向内凹陷）。
+    // 因径向因子 s = 1 + k1·r² ，正 k1 使半径放大（角点外拉）→ 枕形；负 k1 使半径缩小（角点内收）→ 桶形。
     // 完整畸变模型还含切向项 p1、p2（p1/p2 表示切向/偏心畸变），本演示取 p1=p2=0（径向主导）
-    const sign = distortionMode === 'barrel' ? 1 : -1;
+    const sign = distortionMode === 'barrel' ? -1 : 1;
     return {
       k1: sign * strength,
       k2: sign * strength * 0.18,
@@ -152,7 +153,7 @@ export default function DistortionCorrectionPage() {
       <div className="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-800">
         当前模式：{distortionMode === 'barrel' ? '桶形畸变校正' : '枕形畸变校正'}
           <div className="mt-1 text-[11px] leading-4 text-violet-600">
-            桶形（k₁&gt;0）使直线向外鼓出，枕形（k₁&lt;0）使直线向内凹陷。
+            桶形（k₁&lt;0）使直线向外鼓出，枕形（k₁&gt;0）使直线向内凹陷。
           </div>
       </div>
     </div>
@@ -312,6 +313,12 @@ export default function DistortionCorrectionPage() {
         step={0.02}
         onChange={setStrength}
       />
+      <div className="rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-xs leading-5 text-violet-800">
+        当前有符号 k1 = <span className="font-mono font-semibold">{coefficients.k1.toFixed(3)}</span>
+        <span className="ml-1">
+          （{distortionMode === 'barrel' ? '桶形 ⇒ k1&lt;0，直线向外鼓出' : '枕形 ⇒ k1&gt;0，直线向内凹陷'}）
+        </span>
+      </div>
       <div className="border-t border-slate-200 pt-3 text-xs leading-6 text-slate-600">
         畸变图显示镜头畸变后的观测图像，校正图显示按照当前系数执行坐标校正后的结果。当前解释对象是校正图绿色框输出像素如何反向映射回畸变图采样位置；请优先观察直线边界是否恢复。
       </div>

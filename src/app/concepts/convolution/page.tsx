@@ -106,7 +106,7 @@ const KERNEL_PRESET_FAMILIES: KernelPresetFamily[] = [
     principle: '无论核大小是多少，只有中心位置权重为 1，其余位置全为 0，因此邻域像素不会参与输出。',
     origin: '它对应离散情形下的单位冲激思想：只保留中心项时，卷积结果尽量保持原信号本身。',
     formulaMathML: buildInlineMathML('<mrow><mi>G</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>=</mo><mi>f</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo></mrow>'),
-    formulaNote: '扩大到 5×5、7×7 或 11×11 时，本质仍然不变：只有中心项真正生效。无补零时输出为原图的平移拷贝，补 same 边界时即 f(x,y)。',
+    formulaNote: '扩大到 5×5、7×7 或 11×11 时，本质仍然不变：只有中心项真正生效。由于除中心外其余权重全为 0，无论是否补零，输出都只取自原位置像素值 f(x,y)，并不涉及邻域、也不产生平移。',
     visualTitle: '响应图示',
     visualLabels: ['邻域忽略', '中心保留', '原样输出'],
   },

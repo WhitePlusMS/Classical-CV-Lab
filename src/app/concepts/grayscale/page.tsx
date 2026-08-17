@@ -241,7 +241,8 @@ export default function GrayscalePage() {
     const rContribution = (r * weights.r * 255).toFixed(1);
     const gContribution = (g * weights.g * 255).toFixed(1);
     const bContribution = (b * weights.b * 255).toFixed(1);
-    // 让“输出结果”与“三项贡献之和”在视觉和数值上严格相等
+    // 三项贡献分别保留 1 位小数后再求和，确保“输出结果”与三项贡献卡片在视觉和数值上严格相等；
+    // 代价是相对精确加权值（0.299R+0.587G+0.114B）存在 ≤0.2/255 的显示舍入差，属演示层的缩放取整，不影响算法正确性。
     const currentOutput255 = (parseFloat(rContribution) + parseFloat(gContribution) + parseFloat(bContribution)).toFixed(1);
     const currentOutput = parseFloat(currentOutput255) / 255;
 

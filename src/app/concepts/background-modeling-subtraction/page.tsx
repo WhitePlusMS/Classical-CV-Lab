@@ -129,8 +129,8 @@ interface GaussianComponent {
 /**
  * 混合高斯单像素处理流程
  *
- * 教学说明：教学演示中的前景掩膜使用简化阈值判定 |I-B|>T；
- * 下方函数展示完整 GMM 的匹配、更新与背景选择逻辑，用于理解多分布建模思想。
+ * 教学说明：本页混合高斯模型对连续帧执行真实 GMM 匹配/更新/背景选择，
+ * 前景掩膜由“当前像素是否匹配任一背景分量”判定（见下方 ①～④）。
  *
  * ① 匹配：按 ω/σ 降序，检查 |I_t - μ_i| ≤ D·σ_i
  * ② 更新：匹配分布更新 μ、σ²、ω；不匹配分布 ω 按 (1-α) 衰减
@@ -148,7 +148,7 @@ function mixtureGaussianProcess(
   );
   const matchedIndex = sorted.findIndex(c => Math.abs(pixel - c.mean) <= D * c.sigma);
   const matchedWeight = matchedIndex >= 0 ? sorted[matchedIndex].weight : 0.05;
-  const rho = alpha / Math.max(matchedWeight, 0.01);
+  const rho = Math.min(1, alpha / Math.max(matchedWeight, 0.01));
   let matched = false;
 
   const updated = sorted.map((comp) => {
@@ -158,8 +158,10 @@ function mixtureGaussianProcess(
         weight: (1 - alpha) * comp.weight + alpha,
         mean: (1 - rho) * comp.mean + rho * pixel,
         sigma: Math.sqrt(
-          (1 - rho) * comp.sigma ** 2 +
-          rho * (pixel - comp.mean) ** 2
+          Math.max(0.0001,
+            (1 - rho) * comp.sigma ** 2 +
+            rho * (pixel - comp.mean) ** 2
+          )
         ),
       };
     }
@@ -373,25 +375,42 @@ export default function BackgroundModelingSubtractionPage() {
   const alphaValue = learningRate / 100;
   const gaussianLimit = Math.round(2.5 * (result.deviation[currentPosition.y]?.[currentPosition.x] ?? 0) * 255);
   const activeLimit = model === 'singleGaussian' ? gaussianLimit : threshold;
+  const mixtureBackgroundComps = model === 'mixtureGaussian'
+    ? result.mixtureComponents.filter(c => c.background)
+    : [];
+  const mixtureMatchedBackground = mixtureBackgroundComps.some(c =>
+    Math.abs(currentGray - grayValue(c.mean)) <= Math.max(1, Math.round(2.5 * grayValue(c.sigma))));
   const activeRuleText = model === 'singleGaussian'
     ? '|I-μ| > 2.5·σ'
-    : '|I-B| > T';
+    : model === 'mixtureGaussian'
+      ? '匹配背景分量（|I-μ_b| ≤ 2.5·σ_b）'
+      : '|I-B| > T';
   const activeComparisonText = model === 'singleGaussian'
     ? `|${currentGray} - ${backgroundGray}| = ${diffGray}，2.5·σ = ${gaussianLimit}`
-    : `|${currentGray} - ${backgroundGray}| = ${diffGray}，T = ${threshold}`;
+    : model === 'mixtureGaussian'
+      ? (mixtureMatchedBackground ? '匹配背景分量 → 背景' : '未匹配任一背景分量 → 前景')
+      : `|${currentGray} - ${backgroundGray}| = ${diffGray}，T = ${threshold}`;
   const decisionText = maskValue > 0 ? '前景运动目标（D=1）' : '背景（D=0）';
   const decisionClassName = maskValue > 0 ? 'font-semibold text-red-600' : 'font-semibold text-emerald-600';
   const currentPixelMath = inlineMath(`<mi>I</mi><mo>(</mo><mn>${currentPosition.x}</mn><mo>,</mo><mn>${currentPosition.y}</mn><mo>)</mo><mo>=</mo><mn>${currentGray}</mn>`);
   const deviationMath = inlineMath(`<mi>σ</mi><mo>(</mo><mn>${currentPosition.x}</mn><mo>,</mo><mn>${currentPosition.y}</mn><mo>)</mo><mo>=</mo><mn>${deviationGray}</mn>`);
   const differenceMath = model === 'singleGaussian'
     ? inlineMath(`<mo>|</mo><mi>I</mi><mo>-</mo><mi>μ</mi><mo>|</mo><mo>=</mo><mo>|</mo><mn>${currentGray}</mn><mo>-</mo><mn>${backgroundGray}</mn><mo>|</mo><mo>=</mo><mn>${diffGray}</mn>`)
-    : inlineMath(`<mo>|</mo><mi>I</mi><mo>-</mo><mi>B</mi><mo>|</mo><mo>=</mo><mo>|</mo><mn>${currentGray}</mn><mo>-</mo><mn>${backgroundGray}</mn><mo>|</mo><mo>=</mo><mn>${diffGray}</mn>`);
+    : model === 'mixtureGaussian'
+      ? inlineMath(`<mo>|</mo><mi>I</mi><mo>-</mo><msub><mi>B</mi><mi>b</mi></msub><mo>|</mo><mo>=</mo><mo>|</mo><mn>${currentGray}</mn><mo>-</mo><mn>${backgroundGray}</mn><mo>|</mo><mo>=</mo><mn>${diffGray}</mn>`)
+      : inlineMath(`<mo>|</mo><mi>I</mi><mo>-</mo><mi>B</mi><mo>|</mo><mo>=</mo><mo>|</mo><mn>${currentGray}</mn><mo>-</mo><mn>${backgroundGray}</mn><mo>|</mo><mo>=</mo><mn>${diffGray}</mn>`);
   const decisionRuleMath = model === 'singleGaussian'
     ? inlineMath('<mi>D</mi><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>=</mo><mo>{</mo><mn>1</mn><mtext> 当 </mtext><mo>|</mo><mi>I</mi><mo>-</mo><mi>μ</mi><mo>|</mo><mo>&gt;</mo><mn>2.5</mn><mi>σ</mi><mo>;</mo><mn>0</mn><mtext> 其他</mtext><mo>}</mo>')
-    : inlineMath('<msub><mi>D</mi><mi>t</mi></msub><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>=</mo><mo>{</mo><mn>1</mn><mtext> 当 </mtext><mo>|</mo><msub><mi>I</mi><mi>t</mi></msub><mo>-</mo><msub><mi>B</mi><mi>t</mi></msub><mo>|</mo><mo>&gt;</mo><mi>T</mi><mo>;</mo><mn>0</mn><mtext> 其他</mtext><mo>}</mo>');
+    : model === 'mixtureGaussian'
+      ? inlineMath('<mrow><mi>D</mi><mo>=</mo><mn>1</mn><mtext> 当未匹配任一背景分量（|I-μ_b|&gt;2.5σ_b）</mtext><mo>;</mo><mn>0</mn><mtext> 否则</mtext></mrow>')
+      : inlineMath('<msub><mi>D</mi><mi>t</mi></msub><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo><mo>=</mo><mo>{</mo><mn>1</mn><mtext> 当 </mtext><mo>|</mo><msub><mi>I</mi><mi>t</mi></msub><mo>-</mo><msub><mi>B</mi><mi>t</mi></msub><mo>|</mo><mo>&gt;</mo><mi>T</mi><mo>;</mo><mn>0</mn><mtext> 其他</mtext><mo>}</mo>');
   const comparisonMath = model === 'singleGaussian'
     ? inlineMath(`<mo>|</mo><mi>I</mi><mo>-</mo><mi>μ</mi><mo>|</mo><mo>=</mo><mn>${diffGray}</mn><mo>,</mo><mn>2.5</mn><mi>σ</mi><mo>=</mo><mn>${gaussianLimit}</mn>`)
-    : inlineMath(`<mo>|</mo><msub><mi>I</mi><mi>t</mi></msub><mo>-</mo><msub><mi>B</mi><mi>t</mi></msub><mo>|</mo><mo>=</mo><mn>${diffGray}</mn><mo>,</mo><mi>T</mi><mo>=</mo><mn>${threshold}</mn>`);
+    : model === 'mixtureGaussian'
+      ? inlineMath(mixtureMatchedBackground
+          ? '<mrow><mtext>匹配背景分量 → 背景</mtext></mrow>'
+          : '<mrow><mtext>未匹配任一背景分量 → 前景</mtext></mrow>')
+      : inlineMath(`<mo>|</mo><msub><mi>I</mi><mi>t</mi></msub><mo>-</mo><msub><mi>B</mi><mi>t</mi></msub><mo>|</mo><mo>=</mo><mn>${diffGray}</mn><mo>,</mo><mi>T</mi><mo>=</mo><mn>${threshold}</mn>`);
   const trainingWindowEnd = 7;
   const trainingWindowStart = 0;
   const mainVisual = (
@@ -467,7 +486,7 @@ export default function BackgroundModelingSubtractionPage() {
 
         <div className="rounded-2xl border border-amber-200 bg-white px-3 py-3 shadow-sm">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <span className="text-xs font-semibold text-amber-700">背景模型 B(t)</span>
+            <span className="text-xs font-semibold text-amber-700">背景模型 B(t−1)</span>
             <span className="text-[11px] text-amber-700">{MODEL_OPTIONS.find(item => item.value === model)?.label}</span>
           </div>
           <div className="flex justify-center">
@@ -521,7 +540,8 @@ export default function BackgroundModelingSubtractionPage() {
               showGrid={false}
               interactive
               onRegionSelect={handlePixelSelect}
-              highlightPixel={currentPosition}
+              selectedRegion={selectedPixelRegion}
+              selectedRegionMarker="dot"
               containerClassName="bg-anchor-mask-main"
             />
           </div>
@@ -604,7 +624,9 @@ export default function BackgroundModelingSubtractionPage() {
                 |{currentGray} - {backgroundGray}| = {diffGray}
               </div>
               <div className="mt-2 text-xs leading-5 text-slate-600">
-                判定阈值 = {activeLimit}；{maskValue > 0 ? '差分超过阈值，写入前景。' : '差分未超过阈值，保留为背景。'}
+                {model === 'mixtureGaussian'
+                  ? (maskValue > 0 ? '当前像素未匹配任一背景分量，写入前景。' : '当前像素匹配背景分量，保留为背景。')
+                  : (<>{'判定阈值 = ' + activeLimit + '；'}{maskValue > 0 ? '差分超过阈值，写入前景。' : '差分未超过阈值，保留为背景。'}</>)}
               </div>
             </div>
           </FlowNode>
@@ -738,15 +760,13 @@ export default function BackgroundModelingSubtractionPage() {
   const trainingMeanGray = trainingPixelValues.length > 0
     ? Math.round(trainingPixelValues.reduce((sum, value) => sum + value, 0) / trainingPixelValues.length)
     : 0;
-  const trainingBackgroundLikeCount = trainingPixelValues.filter(value => Math.abs(value - trainingMeanGray) <= threshold).length;
-  const trainingBackgroundMajority = trainingFrames.length > 0 && trainingBackgroundLikeCount > trainingFrames.length / 2;
-  // 上一背景（递推输入）应取当前帧所对应的背景模型态 B(t)，
-  // 即 backgroundHistory[currentFrameIndex]（右图「背景模型 B(t)」同源），
+  // 上一背景（递推输入）应取当前帧所对应的背景模型态 B(t−1)，
+  // 即 backgroundHistory[currentFrameIndex]（右图「背景模型 B(t−1)」同源），
   // 而非 backgroundHistory[currentFrameIndex - 1]，否则 adaptiveUpdatedGray 会算成错误的下一帧背景。
   const previousBackgroundImage = result.backgroundHistory[currentFrameIndex] ?? result.background;
   const previousBackgroundGray = grayAt(previousBackgroundImage, currentPosition.x, currentPosition.y);
   const adaptiveUpdatedGray = Math.round(alphaValue * currentGray + (1 - alphaValue) * previousBackgroundGray);
-  // 递推后的真实背景图：α·I_t + (1-α)·B(t)，供「更新后背景」卡片与数值同源展示
+  // 递推后的真实背景图：α·I_t + (1-α)·B(t−1)，供「更新后背景」卡片与数值同源展示
   const updatedBackgroundImage: number[][] = result.current.map((row, y) =>
     row.map((curr, x) => {
       const prev = previousBackgroundImage[y]?.[x] ?? curr;
@@ -799,11 +819,9 @@ export default function BackgroundModelingSubtractionPage() {
               <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2">
                 <div className="font-semibold text-amber-800">前提假设</div>
                 <div className="mt-1">
-                  前 K 帧中该像素多数时间应呈现背景值。当前统计：{trainingBackgroundLikeCount}/{trainingFrames.length} 帧接近均值，
-                  <span className={trainingBackgroundMajority ? 'font-semibold text-emerald-700' : 'font-semibold text-red-600'}>
-                    {trainingBackgroundMajority ? '满足' : '不满足'}
-                  </span>
-                  多数背景假设。
+                  均值模型成立的前提是该像素在多数训练帧中保持背景值：背景稳定、目标只在少数帧出现，
+                  因此对前 K 帧求平均能得到可靠的背景估计。若目标长时间停留在该像素，均值会被目标灰度拖偏，
+                  背景估计随之失准——这正是均值模型对“背景占多数”的依赖。
                 </div>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
@@ -858,7 +876,7 @@ export default function BackgroundModelingSubtractionPage() {
             <div className="mb-2 text-xs font-semibold text-emerald-700">更新后背景</div>
             <ImageCanvas image={updatedBackgroundImage} maxDisplaySize={150} showGrid={false} highlightPixel={currentPosition} />
             <div className="mt-2 font-mono text-sm font-semibold text-emerald-700"><InlineMath mathML={inlineMath(`<msub><mi>B</mi><mi>t</mi></msub><mo>≈</mo><mn>${adaptiveUpdatedGray}</mn>`)} /></div>
-            <div className="mt-1 text-[11px] leading-4 text-emerald-700/80">此值为下一帧将使用的背景（已吸收当前帧的预测窗），与右侧“背景模型 B(t)”图像（未吸收当前帧的模型态）数值不同。</div>
+            <div className="mt-1 text-[11px] leading-4 text-emerald-700/80">此值为下一帧将使用的背景（已吸收当前帧的预测窗），与右侧“背景模型 B(t−1)”图像（未吸收当前帧的模型态）数值不同。</div>
           </div>
         </div>
         <FormulaCard
@@ -975,7 +993,7 @@ export default function BackgroundModelingSubtractionPage() {
             <h2 className="text-sm font-semibold text-slate-800">混合高斯模型动态流程</h2>
             <p className="mt-1 text-xs leading-5 text-slate-500">
               不再使用静态“流程图”截图；这里直接用当前像素和当前分量展示匹配、排序、背景选择和前景判定。
-              以下分量是为教学演示预设的，用于展示匹配、排序与背景选择规则，并非由在线迭代真实生成。
+              以下分量由本页对连续帧执行真实 GMM 匹配/更新/背景选择得到，随所选帧与当前像素变化。
             </p>
           </div>
           <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800">
@@ -1030,7 +1048,7 @@ export default function BackgroundModelingSubtractionPage() {
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3">
             <div className="mb-2 text-xs font-semibold text-emerald-700">4. 输出判定</div>
             <div className="rounded-xl bg-emerald-50 px-3 py-3 text-xs leading-6 text-slate-700">
-              当前像素与背景模型差分为 {diffGray}，阈值 T = {threshold}。
+              前景掩膜由 GMM 判定：当前像素匹配任一背景分量（|I-μ_b| ≤ 2.5·σ_b）则为背景，否则为前景。
               <div className={`mt-2 text-sm ${decisionClassName}`}>{decisionText}</div>
             </div>
           </div>
@@ -1223,14 +1241,11 @@ export default function BackgroundModelingSubtractionPage() {
       ) : null}
       {model === 'mixtureGaussian' ? (
         <>
-          <SliderParam label="前景阈值 T" value={threshold} onChange={setThreshold} min={10} max={120} step={1} />
           <SliderParam label="学习率 α" value={learningRate} onChange={setLearningRate} min={1} max={40} step={1} unit="%" />
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-xs leading-5 text-emerald-800">
-            混合高斯教学版按连续帧更新背景分量；T 控制掩膜，α 控制分量吸收新像素的速度。
-            教学演示中的前景掩膜使用简化阈值判定 |I-B|&gt;T；右侧代码展示完整 GMM 匹配/更新/背景选择逻辑。
-            当前 α = {alphaValue.toFixed(2)}，为稳定性实际更新速率已缩放为 {(alphaValue * 0.55).toFixed(3)}。
-            当前匹配到的
-            <TeachingTerm term="匹配分量" explanation="匹配分量就是当前像素落入阈值范围内的那一个高斯分布，它会优先被更新。" className="mx-1" />
+            混合高斯模型对连续帧做真实 GMM 匹配/更新/背景选择：当前像素与背景分量匹配则判为背景，否则为前景。
+            当前 α = {alphaValue.toFixed(2)}，控制分量吸收新像素的速度。当前匹配到的
+            <TeachingTerm term="匹配分量" explanation="匹配分量就是当前像素落入阈值范围内（|I-μ|≤2.5σ）的那一个高斯分布，它会优先被更新。" className="mx-1" />
             会在下方动态流程中直接显示。
           </div>
           <div className="space-y-2">

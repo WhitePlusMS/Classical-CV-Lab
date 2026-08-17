@@ -347,6 +347,149 @@ export function createBackgroundModel(
   return createBackgroundTeachingSequence(method, threshold, learningRate, 12);
 }
 
+// ============================
+// 混合高斯：逐像素真实 GMM 迭代
+// （与页面同源：教学在连续帧上执行匹配/更新/替换/背景选择/前景判定）
+// ============================
+
+const GMM_K = 5;      // 高斯分量个数
+const GMM_D = 2.5;    // 匹配阈值倍数（|I-μ| ≤ D·σ）
+const GMM_T_BG = 0.7; // 背景权重累计阈值
+
+interface GmmCompState {
+  weight: number; // ω
+  mean: number;   // μ
+  sigma: number;  // σ
+}
+
+function gmmWeightSigma(a: GmmCompState, b: GmmCompState): number {
+  return b.weight / Math.max(0.001, b.sigma) - a.weight / Math.max(0.001, a.sigma);
+}
+
+/**
+ * 单个像素的单步 GMM：匹配 → 更新/替换 → 权值归一化 → 背景选择 → 前景判定。
+ * 返回更新后的分量、背景值（背景分量的加权均值）与是否前景。
+ */
+function gmmPixelStep(
+  pixel: number,
+  comps: GmmCompState[],
+  alpha: number
+): { comps: GmmCompState[]; bg: number; isForeground: boolean; bgCount: number } {
+  // ① 按 ω/σ 降序
+  const sorted = [...comps].sort(gmmWeightSigma);
+  let matched = false;
+  const updated = sorted.map((c) => {
+    if (!matched && Math.abs(pixel - c.mean) <= GMM_D * c.sigma) {
+      matched = true;
+      const rho = Math.min(1, alpha / Math.max(c.weight, 0.01));
+      return {
+        weight: (1 - alpha) * c.weight + alpha,
+        mean: (1 - rho) * c.mean + rho * pixel,
+        sigma: Math.max(0.0001, Math.sqrt(Math.max(0.0009, (1 - rho) * c.sigma * c.sigma + rho * (pixel - c.mean) ** 2))),
+      };
+    }
+    return { ...c, weight: (1 - alpha) * c.weight };
+  });
+  // ② 无匹配 → 替换权重最小的分量
+  if (!matched) {
+    const minIdx = updated.reduce((idx, c, i, arr) => (c.weight < arr[idx].weight ? i : idx), 0);
+    updated[minIdx] = { weight: 0.05, mean: pixel, sigma: 0.2 };
+  }
+  // ③ 权值归一化后按 ω/σ 重排
+  const total = updated.reduce((s, c) => s + c.weight, 0) || 1;
+  const norm = updated.map((c) => ({ ...c, weight: c.weight / total })).sort(gmmWeightSigma);
+  // ④ 背景选择：累计权重达 T_BG 的前置分量视为背景
+  let cum = 0;
+  let bgCount = 0;
+  for (const c of norm) {
+    if (cum >= GMM_T_BG) break;
+    cum += c.weight;
+    bgCount++;
+  }
+  bgCount = Math.max(1, bgCount);
+  const bgComps = norm.slice(0, bgCount);
+  const bgWeight = bgComps.reduce((s, c) => s + c.weight, 0) || 1;
+  const bg = bgComps.reduce((s, c) => s + c.weight * c.mean, 0) / bgWeight;
+  // ⑤ 前景判定：当前像素不匹配任一背景分量
+  const isForeground = !norm.slice(0, bgCount).some((c) => Math.abs(pixel - c.mean) <= GMM_D * c.sigma);
+  return { comps: norm, bg, isForeground, bgCount };
+}
+
+/** 用前 8 帧训练统计初始化单个像素的 K 个分量（数据驱动的起点） */
+function initPixelGmm(mean: number, std: number): GmmCompState[] {
+  const sigma = Math.max(0.03, std);
+  const offsets = [0, 0.6, -0.6, 1.2, -1.2];
+  const weights = [0.5, 0.22, 0.18, 0.06, 0.04];
+  return Array.from({ length: GMM_K }, (_, i) => ({
+    weight: weights[i],
+    mean: clamp(mean + offsets[i] * sigma, 0, 1),
+    sigma,
+  }));
+}
+
+/** 对整个序列跑逐像素 GMM，得到每帧背景图与前景掩膜 */
+function runGmmOverSequence(
+  frames: GrayscaleImage[],
+  mean: GrayscaleImage,
+  deviation: GrayscaleImage,
+  alpha: number
+): { backgroundHistory: GrayscaleImage[]; maskHistory: GrayscaleImage[] } {
+  const height = frames[0]?.length || 0;
+  const width = frames[0]?.[0]?.length || 0;
+  let state: GmmCompState[][][] = Array.from({ length: height }, (_, y) =>
+    Array.from({ length: width }, (_, x) => initPixelGmm(mean[y][x], deviation[y][x]))
+  );
+  const backgroundHistory: GrayscaleImage[] = [];
+  const maskHistory: GrayscaleImage[] = [];
+  for (const frame of frames) {
+    const bgImg = create2DArray(height, width, 0);
+    const maskImg = create2DArray(height, width, 0);
+    const next: GmmCompState[][][] = Array.from({ length: height }, () => Array.from({ length: width }, () => []));
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const r = gmmPixelStep(frame[y][x], state[y][x], alpha);
+        next[y][x] = r.comps;
+        bgImg[y][x] = r.bg;
+        maskImg[y][x] = r.isForeground ? 1 : 0;
+      }
+    }
+    backgroundHistory.push(bgImg);
+    maskHistory.push(maskImg);
+    state = next;
+  }
+  return { backgroundHistory, maskHistory };
+}
+
+/** 对选中像素跑 GMM 到指定帧，返回带背景标记的分量，用于页面展示 */
+function runGmmAtPixel(
+  frames: GrayscaleImage[],
+  x: number,
+  y: number,
+  mean: GrayscaleImage,
+  deviation: GrayscaleImage,
+  alpha: number,
+  frameIndex: number
+): GaussianComponent[] {
+  const height = frames[0]?.length || 0;
+  const width = frames[0]?.[0]?.length || 0;
+  const safeY = Math.max(0, Math.min(y, height - 1));
+  const safeX = Math.max(0, Math.min(x, Math.max(0, width - 1)));
+  let comps = initPixelGmm(mean[safeY][safeX], deviation[safeY][safeX]);
+  let lastBgCount = 1;
+  const end = Math.max(0, Math.min(frameIndex, frames.length - 1));
+  for (let t = 0; t <= end; t++) {
+    const r = gmmPixelStep(frames[t][safeY][safeX], comps, alpha);
+    comps = r.comps;
+    lastBgCount = r.bgCount;
+  }
+  return comps.map((c, i) => ({
+    weight: c.weight,
+    mean: c.mean,
+    sigma: c.sigma,
+    background: i < lastBgCount,
+  }));
+}
+
 export function createBackgroundTeachingSequence(
   method: BackgroundModelType,
   threshold: number,
@@ -369,20 +512,37 @@ export function createBackgroundTeachingSequence(
   const trainingFrames = sequence.frames.slice(0, 8);
   const mean = meanImage(trainingFrames);
   const deviation = stdImage(trainingFrames, mean);
-  const backgroundHistory = createBackgroundHistory(method, sequence.frames, sequence.backgroundFrames, mean, alpha);
-  const deviationHistory = createDeviationHistory(method, sequence.frames, mean, deviation, alpha);
-  const maskHistory = sequence.frames.map((frame, index) => {
-    if (method === 'singleGaussian') {
-      return gaussianForegroundMask(frame, backgroundHistory[index], deviationHistory[index], 2.5);
-    }
-    return binarize(absoluteDifference(frame, backgroundHistory[index]), normalizedThreshold);
-  });
+
+  let backgroundHistory: GrayscaleImage[];
+  let deviationHistory: GrayscaleImage[];
+  let maskHistory: GrayscaleImage[];
+  let mixtureComponents: GaussianComponent[];
+
+  if (method === 'mixtureGaussian') {
+    // 混合高斯：对连续帧做真实逐像素 GMM 迭代，得到背景历史与前景掩膜
+    const gmm = runGmmOverSequence(sequence.frames, mean, deviation, alpha);
+    backgroundHistory = gmm.backgroundHistory;
+    maskHistory = gmm.maskHistory;
+    deviationHistory = createDeviationHistory(method, sequence.frames, mean, deviation, alpha);
+    // 选中像素在指定帧的分量：与整图 GMM 同一初始化/迭代，逐像素独立故结果一致
+    mixtureComponents = runGmmAtPixel(sequence.frames, pixel.x, pixel.y, mean, deviation, alpha, safeFrameIndex);
+  } else {
+    backgroundHistory = createBackgroundHistory(method, sequence.frames, sequence.backgroundFrames, mean, alpha);
+    deviationHistory = createDeviationHistory(method, sequence.frames, mean, deviation, alpha);
+    maskHistory = sequence.frames.map((frame, index) => {
+      if (method === 'singleGaussian') {
+        return gaussianForegroundMask(frame, backgroundHistory[index], deviationHistory[index], 2.5);
+      }
+      return binarize(absoluteDifference(frame, backgroundHistory[index]), normalizedThreshold);
+    });
+    mixtureComponents = [];
+  }
+
   const foregroundCounts = maskHistory.map(countForegroundPixels);
   const current = sequence.frames[safeFrameIndex];
   const background = backgroundHistory[safeFrameIndex];
   const difference = absoluteDifference(current, background);
   const mask = maskHistory[safeFrameIndex];
-  const mixtureComponents = createTeachingMixtureComponents(current, background, sequence.objectMasks[safeFrameIndex]);
 
   return {
     current,
@@ -433,13 +593,13 @@ function createBackgroundHistory(
     return history;
   }
 
-  const effectiveAlpha = method === 'mixtureGaussian' ? alpha * 0.55 : alpha;
+  // 自适应背景：B_t = α·I_t + (1-α)·B_{t-1}
   const history: GrayscaleImage[] = [];
   let background = cloneImage(backgroundFrames[0]);
 
   for (const frame of frames) {
     history.push(cloneImage(background));
-    background = blendImages(frame, background, effectiveAlpha);
+    background = blendImages(frame, background, alpha);
   }
 
   return history;
@@ -544,33 +704,6 @@ function createFrameDifferencePixelTimeline(
         : previousMask > 0 && nextMask > 0 ? 1 : 0,
     };
   });
-}
-
-function createTeachingMixtureComponents(
-  current: GrayscaleImage,
-  background: GrayscaleImage,
-  objectMask: GrayscaleImage
-): GaussianComponent[] {
-  const backgroundMean = meanOfImage(background);
-  let objectSum = 0;
-  let objectCount = 0;
-
-  for (let y = 0; y < current.length; y++) {
-    for (let x = 0; x < (current[0]?.length ?? 0); x++) {
-      if ((objectMask[y]?.[x] ?? 0) > 0) {
-        objectSum += current[y][x];
-        objectCount++;
-      }
-    }
-  }
-
-  const objectMean = objectCount > 0 ? objectSum / objectCount : 0.82;
-
-  return [
-    { weight: 0.58, mean: backgroundMean, sigma: 0.05, background: true },
-    { weight: 0.28, mean: clamp(backgroundMean + 0.12, 0, 1), sigma: 0.08, background: true },
-    { weight: 0.14, mean: objectMean, sigma: 0.06, background: false },
-  ];
 }
 
 export function absoluteDifference(a: GrayscaleImage, b: GrayscaleImage): GrayscaleImage {
